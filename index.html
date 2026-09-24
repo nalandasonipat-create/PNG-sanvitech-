@@ -1,0 +1,2463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PNG Enterprise</title>
+<meta name="theme-color" content="#0D904F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PNG Enterprise">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230D904F'/%3E%3Ctext x='50' y='65' font-size='55' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230D904F'/%3E%3Ctext x='50' y='65' font-size='55' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22PNG%20Enterprise%22%2C%22short_name%22%3A%22PNG%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f3f4f6%22%2C%22theme_color%22%3A%22%230D904F%22%7D">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{ --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); }
+  html,body{height:100%;}
+  body{background:#f3f4f6; height:100vh; height:100dvh;}
+  #appScreen{height:100vh; height:100dvh;}
+  header{padding-top: calc(1rem + var(--safe-top));}
+  footer{padding-bottom: calc(0.75rem + var(--safe-bottom));}
+  .task-enter{animation:slideIn .25s ease;}
+  @keyframes slideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+  .spin{animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  ::-webkit-scrollbar{width:0;height:0;}
+  .ff-input{border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;width:100%;font-size:14px;}
+  .ff-input:focus{outline:none;border-color:#0D904F;box-shadow:0 0 0 2px rgba(13,144,79,.15);}
+  .ff-input-line{border:none;border-bottom:1.5px solid #c7ccd1;border-radius:0;padding:8px 2px;width:100%;font-size:15px;background:transparent;}
+  .ff-input-line:focus{outline:none;border-bottom-color:#0D904F;}
+  .ff-label{font-size:12px;font-weight:700;color:#374151;margin-bottom:2px;display:block;}
+  .ff-section-heading{font-size:16px;font-weight:700;color:#1f2937;margin-top:22px;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #0D904F;}
+  table.ff-table{border-collapse:collapse;width:100%;font-size:12px;}
+  table.ff-table th, table.ff-table td{border:1px solid #9ca3af;padding:4px 6px;}
+  table.ff-table th{background:#e5f4ec;font-weight:700;}
+  table.ff-table td input, table.ff-table td select{width:100%;border:none;font-size:12px;padding:2px;background:transparent;}
+  table.ff-table td input:focus{outline:1px solid #0D904F;background:#fff;}
+  #printHost{position:fixed;left:-99999px;top:0;width:794px;background:#fff;}
+  .role-tab{text-align:center;padding:8px 2px;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;line-height:1.3;}
+  .role-tab.active{background:#fff;color:#0D904F;}
+  .role-tab:not(.active){color:#d1fae5;}
+</style>
+</head>
+<body class="font-sans flex flex-col overflow-hidden">
+
+<!-- ================= LOGIN SCREEN ================= -->
+<div id="loginScreen" class="h-full flex flex-col items-center justify-center bg-[#0D904F] p-6" style="padding-top: calc(1.5rem + var(--safe-top)); padding-bottom: calc(1.5rem + var(--safe-bottom));">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-6">
+      <div class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl font-bold text-[#0D904F]">P</div>
+      <h1 class="text-white text-2xl font-bold tracking-wide">PNG ENTERPRISE</h1>
+      <p class="text-green-100 text-sm">Universal Automation Engine</p>
+    </div>
+
+    <div class="grid grid-cols-4 gap-1 bg-white/15 rounded-xl p-1 mb-4">
+      <div class="role-tab active" data-role="technician" onclick="selectLoginRole('technician')">👷<br>Tech</div>
+      <div class="role-tab" data-role="surveyor" onclick="selectLoginRole('surveyor')">🧭<br>Survey</div>
+      <div class="role-tab" data-role="store" onclick="selectLoginRole('store')">📦<br>Store</div>
+      <div class="role-tab" data-role="admin" onclick="selectLoginRole('admin')">🛡️<br>Admin</div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-5">
+      <label class="block text-sm font-bold text-gray-700 mb-1">Username</label>
+      <input id="loginUser" type="text" placeholder="Enter username" class="w-full border rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-[#0D904F]">
+      <label class="block text-sm font-bold text-gray-700 mb-1">Password</label>
+      <input id="loginPass" type="password" placeholder="Enter password" class="w-full border rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-[#0D904F]">
+      <p id="loginError" class="text-red-600 text-sm mb-2 hidden">Wrong username or password for this role.</p>
+      <button onclick="doLogin()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold active:scale-[0.98] transition">LOGIN</button>
+      <p id="loginDemoHint" class="text-xs text-gray-400 text-center mt-3">Apni Technician ID se login karein</p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MAIN APP ================= -->
+<div id="appScreen" class="hidden h-full flex flex-col">
+  <header class="bg-[#0D904F] text-white p-4 shadow-md shrink-0">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 id="headerTitle" class="text-xl font-bold tracking-wide">PNG ENTERPRISE</h1>
+        <p id="dbStatus" class="text-xs text-green-100">⚪ Connecting...</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="userBadge" class="text-xs bg-white/15 px-2 py-1 rounded-full"></span>
+        <button onclick="doLogout()" class="bg-white/15 rounded-full p-2 active:scale-95 transition text-sm px-3">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="mainContent" class="flex-1 overflow-y-auto p-4"></main>
+
+  <footer id="bottomNav" class="bg-white border-t p-2 flex justify-around shadow-inner shrink-0"></footer>
+</div>
+
+<div id="printHost"></div>
+
+<script>
+/* ============ LAZY SCRIPT LOADER ============ */
+const _loadedScripts = {};
+function loadScriptOnce(src){
+  if(_loadedScripts[src]) return _loadedScripts[src];
+  _loadedScripts[src] = new Promise((resolve, reject)=>{
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = ()=>resolve();
+    s.onerror = ()=>{ delete _loadedScripts[src]; reject(new Error("Failed to load "+src)); };
+    document.head.appendChild(s);
+  });
+  return _loadedScripts[src];
+}
+async function ensurePdfLibs(){
+  await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+  await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+}
+async function ensureXlsxLib(){
+  await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+}
+function showToast(msg){
+  const el = document.createElement("div");
+  el.textContent = msg;
+  el.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.3);";
+  document.body.appendChild(el);
+  return el;
+}
+function hideToast(el){ if(el && el.parentNode) el.parentNode.removeChild(el); }
+
+/* ============ SEED DATA ============ */
+const SEED_USERS = [
+  {username:"naveen", password:"Nave@7328", role:"admin", name:"Naveen", active:true},
+  {username:"kalki", password:"Kalk%2992", role:"store", name:"Kalki Avtar", active:true},
+  {username:"ronak", password:"Rona!6580", role:"technician", name:"Ronak", active:true},
+  {username:"akash", password:"Akas#1858", role:"technician", name:"Akash", active:true},
+  {username:"ajay", password:"Ajay!3152", role:"surveyor", name:"Ajay", active:true},
+];
+const SEED_INVENTORY = [
+  {itemName:"GI Pipe 1/2\"", unit:"Mtrs", stockQty:800},
+  {itemName:"GI Pipe 3/4\"", unit:"Mtrs", stockQty:600},
+  {itemName:"GI Pipe 1\"", unit:"Mtrs", stockQty:400},
+  {itemName:"Copper Pipe 12mm", unit:"Mtrs", stockQty:300},
+  {itemName:"Gas Meter", unit:"Nos", stockQty:150},
+  {itemName:"Elbow 1/2\"", unit:"Nos", stockQty:400},
+  {itemName:"MDPE Pipe 20mm", unit:"Mtrs", stockQty:2000},
+  {itemName:"Regulator", unit:"Nos", stockQty:150},
+];
+// Demo material already issued to technicians, so "My Stock" isn't empty on first login
+const SEED_ISSUES = [
+  {technicianUsername:"ronak", itemName:"GI Pipe 1/2\"", unit:"Mtrs", qty:50, issuedAt:new Date().toISOString(), issuedBy:"kalki"},
+  {technicianUsername:"ronak", itemName:"Gas Meter", unit:"Nos", qty:5, issuedAt:new Date().toISOString(), issuedBy:"kalki"},
+  {technicianUsername:"akash", itemName:"GI Pipe 3/4\"", unit:"Mtrs", qty:40, issuedAt:new Date().toISOString(), issuedBy:"kalki"},
+  {technicianUsername:"akash", itemName:"Gas Meter", unit:"Nos", qty:4, issuedAt:new Date().toISOString(), issuedBy:"kalki"},
+];
+// Demo customers: some pending (from surveyor), some already assigned
+const WORK_STATUS_OPTIONS = ["Pending", "GI Done", "RFC Done", "Meter Installed", "NG Charged", "Completed"];
+const PAYMENT_PLAN_OPTIONS = ["Installment Scheme", "Upfront Payment", "NON FLEXI STANDARD SCHEME", "Flexi Payment Option"];
+const WORK_STAGE_STATUS_OPTIONS = ["Pending", "Done", "Tested"];
+const PAPER_STAGE_STATUS_OPTIONS = ["Pending", "Done"];
+
+const SEED_CUSTOMERS = [
+  {name:"Rahul Sharma", phone:"9876500001", address:"Sector 14, Main Market, Sonipat", bpNo:"5000090001",
+   houseNo:"507/19", society:"Individual House", street:"Gali No. 2, Sector 14", area:"Sector 14", landmark:"Near Anand Cinema", pinCode:"131001", email:"",
+   fatherHusbandName:"Om Parkash", startAt:"2026-09-01", formNumber:"F-1001",
+   workStatus:"GI Done", meterCompany:"GRECO", meterSerialNumber:"022021080460", switchOnDate:"", paymentPlan:"Installment Scheme", agencyName:"GALVIN SOLUTIONS", registerBy:"ajay", sdAmount:500,
+   slWork:"Done", slPaper:"Done", giWork:"Pending", giPaper:"Tested", ngWork:"Done", ngPaper:"Done", restoreWork:"Done", restorePaper:"Pending", jmrStatus:"Done", remark:"",
+   status:"pending", addedBy:"ajay", addedByRole:"surveyor", assignedTechnician:null, geotag:{lat:28.9931,lng:77.0151,accuracy:15,capturedAt:new Date().toISOString()}, createdAt:new Date().toISOString()},
+
+  {name:"Priya Verma", phone:"9876500002", address:"Sector 9, Housing Board, Sonipat", bpNo:"5000090002",
+   houseNo:"84/11", society:"Individual House", street:"Ground Floor, Housing Board", area:"Sector 9", landmark:"Near GVM Girls School", pinCode:"131001", email:"priya.verma@example.com",
+   fatherHusbandName:"Ishwar Chand", startAt:"2026-09-09", formNumber:"F-1002",
+   workStatus:"RFC Done", meterCompany:"RAYCHEM", meterSerialNumber:"21253564", switchOnDate:"", paymentPlan:"NON FLEXI STANDARD SCHEME", agencyName:"GALVIN SOLUTIONS", registerBy:"ajay", sdAmount:5500,
+   slWork:"Done", slPaper:"Done", giWork:"Pending", giPaper:"Tested", ngWork:"Done", ngPaper:"Done", restoreWork:"Done", restorePaper:"Done", jmrStatus:"Done", remark:"",
+   status:"pending", addedBy:"ajay", addedByRole:"surveyor", assignedTechnician:null, geotag:{lat:28.9950,lng:77.0180,accuracy:12,capturedAt:new Date().toISOString()}, createdAt:new Date().toISOString()},
+
+  {name:"Amit Kumar", phone:"9876500003", address:"Old Bus Stand Road, Sonipat", bpNo:"98273822",
+   houseNo:"216", society:"Individual House", street:"1st Floor, Old Bus Stand Road", area:"Old Bus Stand Road", landmark:"", pinCode:"131001", email:"",
+   fatherHusbandName:"Karan Singh", startAt:"2026-09-10", formNumber:"F-1003",
+   workStatus:"Meter Installed", meterCompany:"M/S Capital Innotech Pvt Ltd", meterSerialNumber:"20250218110", switchOnDate:"", paymentPlan:"Upfront Payment", agencyName:"VENTURER ASHISH", registerBy:"ajay", sdAmount:4500,
+   slWork:"Done", slPaper:"Pending", giWork:"Done", giPaper:"Done", ngWork:"Pending", ngPaper:"Pending", restoreWork:"Pending", restorePaper:"Pending", jmrStatus:"Pending", remark:"Customer not available for JMR",
+   status:"assigned", addedBy:"ajay", addedByRole:"surveyor", assignedTechnician:"ronak", geotag:{lat:28.9900,lng:77.0120,accuracy:10,capturedAt:new Date().toISOString()}, createdAt:new Date().toISOString()},
+
+  {name:"Sunita Devi", phone:"9876500004", address:"Green Park Colony, Sonipat", bpNo:"98273955",
+   houseNo:"247", society:"Individual House", street:"Ground Floor, Green Park Colony", area:"Green Park Colony", landmark:"Near Shiv Mandir", pinCode:"131001", email:"sunita.devi@example.com",
+   fatherHusbandName:"Vinod Kumar", startAt:"2026-08-24", formNumber:"F-1004",
+   workStatus:"Completed", meterCompany:"ELSTER", meterSerialNumber:"01091912083", switchOnDate:"2025-06-24", paymentPlan:"Flexi Payment Option", agencyName:"GALVIN SOLUTIONS", registerBy:"naveen", sdAmount:500,
+   slWork:"Done", slPaper:"Done", giWork:"Done", giPaper:"Done", ngWork:"Done", ngPaper:"Done", restoreWork:"Done", restorePaper:"Done", jmrStatus:"Done", remark:"Job fully closed",
+   status:"assigned", addedBy:"naveen", addedByRole:"admin", assignedTechnician:"akash", geotag:{lat:28.9970,lng:77.0200,accuracy:9,capturedAt:new Date().toISOString()}, createdAt:new Date().toISOString()},
+];
+
+/* ============ LOGIN ============ */
+let loginRole = "technician";
+const ROLE_DEMO_HINT = {
+  technician: "Apni Technician ID se login karein",
+  surveyor: "Apni Surveyor ID se login karein",
+  store: "Apni Store ID se login karein",
+  admin: "Apni Admin ID se login karein",
+};
+function selectLoginRole(role){
+  loginRole = role;
+  document.querySelectorAll(".role-tab").forEach(t=>t.classList.toggle("active", t.dataset.role===role));
+  document.getElementById("loginDemoHint").textContent = ROLE_DEMO_HINT[role];
+  document.getElementById("loginError").classList.add("hidden");
+}
+
+let db = null;
+let dbReady = false;
+let currentUser = null; // {username, role, name}
+let allUsers = [];
+let inventory = [];
+let issues = [];
+let consumption = [];
+let submissions = [];
+let customers = [];
+let tasks = [];
+let attendance = [];
+let safetyChecks = [];
+
+async function doLogin(){
+  const user = document.getElementById("loginUser").value.trim();
+  const pass = document.getElementById("loginPass").value.trim();
+  const errorEl = document.getElementById("loginError");
+  errorEl.classList.add("hidden");
+
+  if(!db){ await initDb(); }
+
+  let found = null;
+  if(db){
+    try{
+      const snap = await db.collection("users").where("username","==",user).get();
+      found = snap.docs.map(d=>({id:d.id, ...d.data()})).find(u=>u.password===pass && u.role===loginRole);
+    }catch(e){ console.error(e); }
+  }
+  if(!found){
+    found = SEED_USERS.find(u=>u.username===user && u.password===pass && u.role===loginRole);
+  }
+
+  if(!found){
+    errorEl.textContent = "Wrong username or password for this role.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+  if(found.active === false){
+    errorEl.textContent = "Ye login access remove kar diya gaya hai. Admin se sampark karein.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+  currentUser = {username: found.username, role: found.role, name: found.name};
+  try{ localStorage.setItem("png_user", JSON.stringify(currentUser)); }catch(e){}
+  showApp();
+}
+
+function doLogout(){
+  try{ localStorage.removeItem("png_user"); }catch(e){}
+  currentUser = null;
+  document.getElementById("appScreen").classList.add("hidden");
+  document.getElementById("appScreen").classList.remove("flex");
+  document.getElementById("loginScreen").classList.remove("hidden");
+  document.getElementById("loginUser").value = "";
+  document.getElementById("loginPass").value = "";
+}
+
+/* ============ FIREBASE CONFIG ============
+   Paste the config object from Firebase Console → Project Settings → Your apps → (web app) here.
+   These values are NOT secret — Firebase apps are meant to ship this client-side; real protection
+   comes from Firestore Security Rules (see the rules block given alongside this file). */
+const firebaseConfig = {
+  apiKey: "AIzaSyD0AV3LXDYq0V1HdZ0IxuOHoE-AlfWmOeg",
+  authDomain: "pngpro-7b98e.firebaseapp.com",
+  databaseURL: "https://pngpro-7b98e-default-rtdb.firebaseio.com",
+  projectId: "pngpro-7b98e",
+  storageBucket: "pngpro-7b98e.firebasestorage.app",
+  messagingSenderId: "850233153786",
+  appId: "1:850233153786:web:4fb2546e3bc856f5d7d143",
+  measurementId: "G-0FHMGQL3KF"
+};
+
+/* ============ DATABASE INIT (Firebase Firestore, independent of claude.ai) ============ */
+async function initDb(){
+  try{
+    if(firebaseConfig.apiKey === "PASTE_YOUR_API_KEY_HERE"){
+      throw new Error("Firebase config not filled in yet");
+    }
+    if(!window.firebase){
+      await loadScriptOnce("https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js");
+      await loadScriptOnce("https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js");
+      await loadScriptOnce("https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js");
+    }
+    if(!firebase.apps.length){ firebase.initializeApp(firebaseConfig); }
+    await firebase.auth().signInAnonymously(); // silent — lets Firestore Security Rules require "signed in", no UI shown
+    db = firebase.firestore();
+  }catch(e){ console.error("Firebase init error", e); db = null; }
+  if(!db){ updateDbBadge(false); return; }
+  updateDbBadge(true);
+
+  try{
+    const snap = await db.collection("users").get();
+    if(snap.empty){ for(const u of SEED_USERS){ await db.collection("users").doc(u.username).set(u); } }
+  }catch(e){ console.error("seed users error", e); }
+  try{
+    const snap = await db.collection("inventory").get();
+    if(snap.empty){ for(const it of SEED_INVENTORY){ await db.collection("inventory").add(it); } }
+  }catch(e){ console.error("seed inventory error", e); }
+  try{
+    const snap = await db.collection("issues").get();
+    if(snap.empty){ for(const it of SEED_ISSUES){ await db.collection("issues").add(it); } }
+  }catch(e){ console.error("seed issues error", e); }
+  try{
+    const snap = await db.collection("customers").get();
+    if(snap.empty){ for(const c of SEED_CUSTOMERS){ await db.collection("customers").add(c); } }
+  }catch(e){ console.error("seed customers error", e); }
+
+  db.collection("users").onSnapshot(snap=>{ allUsers = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("inventory").onSnapshot(snap=>{ inventory = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("issues").onSnapshot(snap=>{ issues = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("consumption").onSnapshot(snap=>{ consumption = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("submissions").onSnapshot(snap=>{ submissions = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("customers").onSnapshot(snap=>{ customers = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("attendance").onSnapshot(snap=>{ attendance = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("safety_checks").onSnapshot(snap=>{ safetyChecks = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  dbReady = true;
+}
+function updateDbBadge(connected, errored){
+  const el = document.getElementById("dbStatus");
+  if(!el) return;
+  if(errored){ el.textContent = "⚠️ Offline mode"; el.className="text-xs text-yellow-200"; }
+  else if(connected){ el.textContent = "🟢 Synced"; el.className="text-xs text-green-100"; }
+  else { el.textContent = "⚪ Local demo data"; el.className="text-xs text-green-100"; }
+}
+
+async function showApp(){
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("appScreen").classList.remove("hidden");
+  document.getElementById("appScreen").classList.add("flex");
+  document.getElementById("userBadge").textContent = `${currentUser.name} (${currentUser.role})`;
+  if(!db){ await initDb(); }
+  // Re-check the account hasn't been deactivated since the last saved session
+  if(db){
+    try{
+      const snap = await db.doc("users/"+currentUser.username).get();
+      if(snap && snap.exists && snap.data().active === false){
+        alert("Aapka login access remove kar diya gaya hai. Admin se sampark karein.");
+        doLogout();
+        return;
+      }
+    }catch(e){ console.error(e); }
+  }
+  setupBottomNav();
+  renderMain();
+  markAttendanceIfNeeded();
+}
+
+/* Restore session on reload - runs at very end of script (after everything is defined) */
+function restoreSession(){
+  let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem("png_user")||"null"); }catch(e){}
+  if(saved){ currentUser = saved; showApp(); }
+}
+
+/* ============ BOTTOM NAV (role-specific) ============ */
+let currentView = null;
+
+function setupBottomNav(){
+  const nav = document.getElementById("bottomNav");
+  const title = document.getElementById("headerTitle");
+  if(currentUser.role === "store"){
+    title.textContent = "PNG ENTERPRISE — STORE";
+    nav.innerHTML = `
+      <button onclick="setView('inventory')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>Inventory</button>
+      <button onclick="setView('issue')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🚚</span>Issue Material</button>
+      <button onclick="setView('history')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📜</span>History</button>`;
+    currentView = "inventory";
+  } else if(currentUser.role === "technician"){
+    title.textContent = "PNG ENTERPRISE — TECHNICIAN";
+    nav.innerHTML = `
+      <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>My Customers</button>
+      <button onclick="setView('stock')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🎒</span>My Stock</button>
+      <button onclick="setView('myjobs')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📋</span>My Jobs</button>`;
+    currentView = "customers";
+  } else if(currentUser.role === "surveyor"){
+    title.textContent = "PNG ENTERPRISE — SURVEYOR";
+    nav.innerHTML = `
+      <button onclick="setView('addCustomer')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">➕</span>Add Customer</button>
+      <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>My Customers</button>
+      <button onclick="setView('mySurveys')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧭</span>My Surveys</button>`;
+    currentView = "addCustomer";
+  } else if(currentUser.role === "admin"){
+    title.textContent = "PNG ENTERPRISE — ADMIN";
+    nav.innerHTML = `
+      <button onclick="setView('overview')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📊</span>Overview</button>
+      <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>Customers</button>
+      <button onclick="setView('employees')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">👥</span>Employees</button>
+      <button onclick="setView('storereport')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>Store</button>`;
+    currentView = "overview";
+  }
+  const defaultView = currentView;
+  highlightNav();
+  setView(defaultView);
+}
+function setView(view){
+  currentView = view; highlightNav(); renderMain();
+  if(view==="addCustomer" && currentUser && currentUser.role==="surveyor"){
+    surveyGeotag = null;
+    getGeoTag().then(geo=>{
+      surveyGeotag = geo;
+      const s = document.getElementById("surveyGeoStatus");
+      if(s) s.textContent = geo ? `📍 Location captured: ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)} (±${Math.round(geo.accuracy)}m)` : "⚠️ Location not available (permission denied?)";
+    });
+  }
+}
+function highlightNav(){
+  document.querySelectorAll(".nav-btn").forEach(b=>{
+    const label = b.textContent.trim();
+    b.classList.toggle("text-[#0D904F]", false);
+  });
+}
+
+/* ============ MAIN ROUTER ============ */
+function renderMain(){
+  if(!currentUser) return;
+  const el = document.getElementById("mainContent");
+
+  // Safety-kit gate: technicians must submit today's selfie + full-body PPE photos before anything else
+  if(currentUser.role === "technician" && !hasSafetyCheckToday(currentUser.username)){
+    el.innerHTML = renderSafetyCheckScreen();
+    return;
+  }
+
+  if(currentView==="customerDetail"){ el.innerHTML = renderTechCustomerDetail(activeCustomerId); return; }
+  if(currentView==="formEntry"){ return; /* rendered by openFormEntry directly */ }
+
+  if(currentUser.role === "store"){
+    if(currentView==="inventory") el.innerHTML = renderStoreInventory();
+    else if(currentView==="issue") el.innerHTML = renderStoreIssue();
+    else if(currentView==="history") el.innerHTML = renderStoreHistory();
+  } else if(currentUser.role === "technician"){
+    if(currentView==="customers") el.innerHTML = renderTechCustomers();
+    else if(currentView==="stock") el.innerHTML = renderTechStock();
+    else if(currentView==="myjobs") el.innerHTML = renderTechMyJobs();
+  } else if(currentUser.role === "surveyor"){
+    if(currentView==="addCustomer") el.innerHTML = renderSurveyorAddCustomer();
+    else if(currentView==="mySurveys") el.innerHTML = renderSurveyorMySurveys();
+  } else if(currentUser.role === "admin"){
+    if(currentView==="overview") el.innerHTML = renderAdminOverview();
+    else if(currentView==="employees") el.innerHTML = renderAdminEmployees();
+    else if(currentView==="storereport") el.innerHTML = renderAdminStoreReport();
+    else if(currentView==="customers") el.innerHTML = renderAdminCustomers();
+  }
+}
+
+
+function customerName(id){
+  const c = customers.find(c=>c.id===id);
+  return c ? c.name : "Unknown";
+}
+
+function techName(username){
+  const u = allUsers.find(u=>u.username===username) || SEED_USERS.find(u=>u.username===username);
+  return u ? u.name : username;
+}
+function technicianList(){
+  const fromDb = allUsers.filter(u=>u.role==="technician");
+  if(fromDb.length) return fromDb;
+  return SEED_USERS.filter(u=>u.role==="technician");
+}
+// Only technicians whose login access is still active — used wherever NEW work/material is handed out
+function activeTechnicianList(){
+  return technicianList().filter(t=>t.active !== false);
+}
+function employeeList(){
+  const fromDb = allUsers.filter(u=>u.role!=="admin");
+  if(fromDb.length) return fromDb;
+  return SEED_USERS.filter(u=>u.role!=="admin");
+}
+
+/* ============ ATTENDANCE (geotagged login) ============ */
+async function reverseGeocode(lat, lng){
+  try{
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(), 6000);
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=0`, {signal: controller.signal, headers:{"Accept":"application/json"}});
+    clearTimeout(timer);
+    if(!res.ok) return null;
+    const j = await res.json();
+    return j.display_name || null;
+  }catch(e){ return null; } // best-effort only — coordinates are shown either way
+}
+async function markAttendanceIfNeeded(){
+  if(!currentUser) return;
+  try{
+    const today = new Date().toISOString().slice(0,10);
+    if(db){
+      const snap = await db.collection("attendance").where("username","==",currentUser.username).get();
+      const already = snap.docs.some(d=>(d.data().loginAt||"").slice(0,10)===today);
+      if(already) return;
+    } else {
+      const already = attendance.some(a=>a.username===currentUser.username && (a.loginAt||"").slice(0,10)===today);
+      if(already) return;
+    }
+    const geo = await getGeoTag();
+    const address = geo ? await reverseGeocode(geo.lat, geo.lng) : null;
+    const record = { username: currentUser.username, name: currentUser.name, role: currentUser.role, geotag: geo, address, loginAt: new Date().toISOString() };
+    if(db){ await db.collection("attendance").add(record); }
+    else { attendance.push({id:"local_"+Date.now(), ...record}); }
+  }catch(e){ console.error("attendance error", e); }
+}
+
+/* ============ SAFETY KIT VERIFICATION (technician daily gate: helmet + hi-vis jacket) ============
+   Camera-only capture (no gallery/file attach) via the HTML "capture" attribute — this reliably opens
+   the device camera directly on Android Chrome; some desktop browsers may not honour it the same way. */
+let safetyPhotoDraft = {selfie:null, body:null};
+
+function hasSafetyCheckToday(username){
+  const today = new Date().toISOString().slice(0,10);
+  return safetyChecks.some(s=>s.username===username && s.date===today);
+}
+
+function fileToResizedDataURL(file, maxDim, quality){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w = img.width, h = img.height;
+        if(w >= h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
+        else if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = ()=>reject(new Error("Could not read image"));
+      img.src = e.target.result;
+    };
+    reader.onerror = ()=>reject(new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+}
+// Shrinks the photo (dimensions + JPEG quality) until it comfortably fits inside a database document
+async function captureCompressedPhoto(file){
+  let maxDim = 640, quality = 0.7;
+  let dataUrl = await fileToResizedDataURL(file, maxDim, quality);
+  for(let attempt=0; attempt<5 && dataUrl.length*0.75 > 70000; attempt++){
+    quality = Math.max(0.3, quality - 0.15);
+    maxDim = Math.max(240, Math.round(maxDim * 0.8));
+    dataUrl = await fileToResizedDataURL(file, maxDim, quality);
+  }
+  return dataUrl;
+}
+
+function renderSafetyCheckScreen(){
+  return `
+    <div class="bg-white rounded-lg shadow p-4 mb-4 text-center">
+      <div class="text-4xl mb-2">🦺</div>
+      <h2 class="font-bold text-gray-800 text-lg mb-1">Safety Kit Verification</h2>
+      <p class="text-sm text-gray-500">Kaam shuru karne se pehle apni safety kit verify karein — ye roz login ke baad ek baar zaroori hai.</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <p class="text-sm font-bold text-gray-700 mb-2">Required PPE:</p>
+      <ul class="text-sm text-gray-600 list-disc pl-5 space-y-1">
+        <li>Safety Helmet pehna hua</li>
+        <li>Reflector / Hi-Vis Jacket (Yellow / Orange / Green / Blue) pehna hua</li>
+      </ul>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4 mb-3">
+      <label class="ff-label">1. Selfie (chehra + helmet saaf dikhe)</label>
+      <div id="selfiePreviewWrap" class="mb-2"></div>
+      <input type="file" id="safetySelfieInput" accept="image/*" capture="user" class="hidden" onchange="onSafetyPhotoSelected('selfie', this)">
+      <button type="button" onclick="document.getElementById('safetySelfieInput').click()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">📷 Selfie Lein (Camera)</button>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4 mb-3">
+      <label class="ff-label">2. Full Body Photo (helmet + jacket dono dikhein)</label>
+      <div id="bodyPreviewWrap" class="mb-2"></div>
+      <input type="file" id="safetyBodyInput" accept="image/*" capture="environment" class="hidden" onchange="onSafetyPhotoSelected('body', this)">
+      <button type="button" onclick="document.getElementById('safetyBodyInput').click()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">📷 Full Photo Lein (Camera)</button>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+      <label class="flex items-start gap-2 text-sm">
+        <input type="checkbox" id="safetyConfirmCheck" class="w-4 h-4 mt-0.5 accent-[#0D904F]">
+        <span>Main confirm karta/karti hoon ki maine apna Safety Helmet aur Reflector Jacket pehan liya hai.</span>
+      </label>
+      <p id="safetySubmitError" class="text-red-600 text-xs mt-2 hidden"></p>
+      <button onclick="submitSafetyCheck()" class="w-full bg-[#8430CE] text-white py-2.5 rounded-lg font-bold mt-3">✅ Verify & Start Work</button>
+    </div>`;
+}
+
+async function onSafetyPhotoSelected(kind, inputEl){
+  const file = inputEl.files && inputEl.files[0];
+  if(!file) return;
+  const wrap = document.getElementById(kind==="selfie" ? "selfiePreviewWrap" : "bodyPreviewWrap");
+  if(wrap) wrap.innerHTML = `<p class="text-xs text-gray-400">Photo process ho rahi hai...</p>`;
+  try{
+    const dataUrl = await captureCompressedPhoto(file);
+    safetyPhotoDraft[kind] = dataUrl;
+    if(wrap) wrap.innerHTML = `<img src="${dataUrl}" class="w-full rounded-lg border" style="max-height:220px;object-fit:cover;">`;
+  }catch(e){
+    console.error(e);
+    if(wrap) wrap.innerHTML = `<p class="text-xs text-red-500">Photo process nahi ho payi, dobara try karein.</p>`;
+  }
+  inputEl.value = "";
+}
+
+async function submitSafetyCheck(){
+  const errEl = document.getElementById("safetySubmitError");
+  errEl.classList.add("hidden");
+  if(!safetyPhotoDraft.selfie || !safetyPhotoDraft.body){
+    errEl.textContent = "Dono photos (selfie + full body) lena zaroori hai.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  const confirmed = document.getElementById("safetyConfirmCheck").checked;
+  if(!confirmed){
+    errEl.textContent = "Kripya confirm karein ki aapne safety kit pehan li hai.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  const record = {
+    username: currentUser.username, name: currentUser.name,
+    date: new Date().toISOString().slice(0,10),
+    selfiePhoto: safetyPhotoDraft.selfie, bodyPhoto: safetyPhotoDraft.body,
+    confirmedKit: true, submittedAt: new Date().toISOString()
+  };
+  if(db){
+    try{ await db.collection("safety_checks").add(record); }
+    catch(e){ console.error(e); errEl.textContent = "Save nahi ho paya, dobara try karein."; errEl.classList.remove("hidden"); return; }
+  } else {
+    safetyChecks.push({id:"local_"+Date.now(), ...record});
+  }
+  safetyPhotoDraft = {selfie:null, body:null};
+  showToast("Safety kit verified! Kaam shuru kar sakte hain.");
+  renderMain();
+}
+
+/* ============ EMPLOYEE CREATION HELPERS ============ */
+function generateUsername(name){
+  const base = (name||"user").trim().toLowerCase().replace(/[^a-z]/g,"").slice(0,10) || "user";
+  const existing = new Set((allUsers.length?allUsers:SEED_USERS).map(u=>u.username));
+  let uname = base, i = 1;
+  while(existing.has(uname)){ uname = base + (i++); }
+  return uname;
+}
+function generatePassword(name){
+  const raw = (name||"User").trim().slice(0,4) || "User";
+  const cap = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  const symbols = ["@","#","$","!","%"];
+  const sym = symbols[Math.floor(Math.random()*symbols.length)];
+  const digits = Math.floor(1000 + Math.random()*9000);
+  return `${cap}${sym}${digits}`;
+}
+
+/* ============ STORE MODULE ============ */
+function renderStoreInventory(){
+  const rows = inventory.length ? inventory : SEED_INVENTORY.map((it,i)=>({id:"seed"+i, ...it}));
+  return `
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <h2 class="font-bold text-gray-800 mb-3">➕ Add New Item</h2>
+      <div class="grid grid-cols-1 gap-2">
+        <input id="newItemName" placeholder="Item name" class="ff-input">
+        <div class="flex gap-2">
+          <input id="newItemUnit" placeholder="Unit (Mtrs/Nos)" class="ff-input">
+          <input id="newItemQty" type="number" placeholder="Opening Qty" class="ff-input">
+        </div>
+        <button onclick="addInventoryItem()" class="bg-[#0D904F] text-white py-2 rounded-lg font-bold">Add Item</button>
+      </div>
+    </div>
+    <h2 class="font-bold text-gray-800 mb-2">📦 Current Inventory</h2>
+    <div class="space-y-2">
+      ${rows.map(it=>`
+        <div class="bg-white rounded-lg shadow p-3 flex items-center justify-between">
+          <div>
+            <p class="font-bold text-sm">${it.itemName}</p>
+            <p class="text-xs text-gray-500">${it.stockQty} ${it.unit} in stock</p>
+          </div>
+          <button onclick="addStock('${it.id}')" class="text-xs bg-[#EA8600] text-white px-3 py-1.5 rounded font-bold">+ Add Stock</button>
+        </div>`).join("")}
+    </div>`;
+}
+async function addInventoryItem(){
+  const name = document.getElementById("newItemName").value.trim();
+  const unit = document.getElementById("newItemUnit").value.trim() || "Nos";
+  const qty = parseFloat(document.getElementById("newItemQty").value) || 0;
+  if(!name){ alert("Item name required"); return; }
+  const item = {itemName:name, unit, stockQty:qty};
+  if(db){ await db.collection("inventory").add(item); }
+  else { inventory.push({id:"local_"+Date.now(), ...item}); renderMain(); }
+}
+async function addStock(id){
+  const qty = parseFloat(prompt("Add how much quantity?"));
+  if(!qty || qty<=0) return;
+  const item = inventory.find(i=>i.id===id);
+  if(!item) return;
+  const newQty = (item.stockQty||0) + qty;
+  if(db){ await db.doc("inventory/"+id).update({stockQty:newQty}); }
+  else { item.stockQty = newQty; renderMain(); }
+}
+
+function renderStoreIssue(){
+  const techs = activeTechnicianList();
+  const rows = inventory.length ? inventory : SEED_INVENTORY.map((it,i)=>({id:"seed"+i, ...it}));
+  return `
+    <div class="bg-white rounded-lg shadow p-4">
+      <h2 class="font-bold text-gray-800 mb-3">🚚 Issue Material to Technician</h2>
+      <label class="ff-label">Technician</label>
+      <select id="issueTech" class="ff-input mb-3">${techs.map(t=>`<option value="${t.username}">${t.name} (${t.username})</option>`).join("")}</select>
+      <label class="ff-label">Item</label>
+      <select id="issueItem" class="ff-input mb-3">${rows.map(it=>`<option value="${it.id}">${it.itemName} — ${it.stockQty} ${it.unit} avail</option>`).join("")}</select>
+      <label class="ff-label">Quantity</label>
+      <input id="issueQty" type="number" class="ff-input mb-3" placeholder="Qty to issue">
+      <button onclick="issueMaterial()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Issue Material</button>
+    </div>`;
+}
+async function issueMaterial(){
+  const techUsername = document.getElementById("issueTech").value;
+  const itemId = document.getElementById("issueItem").value;
+  const qty = parseFloat(document.getElementById("issueQty").value);
+  if(!techUsername || !itemId || !qty || qty<=0){ alert("Fill all fields correctly"); return; }
+  const item = inventory.find(i=>i.id===itemId) || SEED_INVENTORY[0];
+  if(qty > (item.stockQty||0)){ alert("Not enough stock! Available: "+item.stockQty); return; }
+  const record = {
+    technicianUsername: techUsername, itemName: item.itemName, unit: item.unit||"Nos",
+    qty, issuedAt: new Date().toISOString(), issuedBy: currentUser.username
+  };
+  if(db){
+    await db.collection("issues").add(record);
+    await db.doc("inventory/"+itemId).update({stockQty: item.stockQty - qty});
+    showToast("Material issued!");
+  } else {
+    issues.push({id:"local_"+Date.now(), ...record});
+    item.stockQty -= qty;
+    renderMain();
+  }
+  document.getElementById("issueQty").value = "";
+}
+
+function renderStoreHistory(){
+  const sorted = [...issues].sort((a,b)=>(b.issuedAt||"").localeCompare(a.issuedAt||""));
+  if(sorted.length===0) return `<p class="text-gray-400 text-center mt-10">No issues recorded yet.</p>`;
+  return `<h2 class="font-bold text-gray-800 mb-3">📜 Issue History</h2>
+    <div class="space-y-2">
+      ${sorted.map(i=>`
+        <div class="bg-white rounded-lg shadow p-3">
+          <p class="font-bold text-sm">${i.itemName} — ${i.qty} ${i.unit||""}</p>
+          <p class="text-xs text-gray-500">To: ${techName(i.technicianUsername)} • ${i.issuedAt ? new Date(i.issuedAt).toLocaleString() : ""}</p>
+        </div>`).join("")}
+    </div>`;
+}
+
+/* ============ TECHNICIAN: STOCK ============ */
+function getTechBalances(username){
+  const issuedMap = {};
+  issues.filter(i=>i.technicianUsername===username).forEach(i=>{
+    issuedMap[i.itemName] = issuedMap[i.itemName] || {issued:0, unit:i.unit||"Nos"};
+    issuedMap[i.itemName].issued += Number(i.qty)||0;
+  });
+  consumption.filter(c=>c.technicianUsername===username).forEach(c=>{
+    issuedMap[c.itemName] = issuedMap[c.itemName] || {issued:0, unit:c.unit||"Nos"};
+    issuedMap[c.itemName].consumed = (issuedMap[c.itemName].consumed||0) + (Number(c.qty)||0);
+  });
+  return Object.keys(issuedMap).map(name=>({
+    itemName:name, unit:issuedMap[name].unit,
+    issued: issuedMap[name].issued||0,
+    consumed: issuedMap[name].consumed||0,
+    balance: (issuedMap[name].issued||0) - (issuedMap[name].consumed||0)
+  }));
+}
+function renderTechStock(){
+  const bal = getTechBalances(currentUser.username);
+  if(bal.length===0) return `<p class="text-gray-400 text-center mt-10">Abhi tak koi material issue nahi hua. Store se contact karein.</p>`;
+  return `<h2 class="font-bold text-gray-800 mb-3">🎒 My Issued Material</h2>
+    <div class="space-y-2">
+      ${bal.map(b=>`
+        <div class="bg-white rounded-lg shadow p-3">
+          <div class="flex justify-between items-center">
+            <p class="font-bold text-sm">${b.itemName}</p>
+            <span class="text-xs font-bold ${b.balance>0?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'} px-2 py-1 rounded">${b.balance} ${b.unit} left</span>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Issued: ${b.issued} • Used: ${b.consumed}</p>
+        </div>`).join("")}
+    </div>`;
+}
+
+/* ============ TECHNICIAN: MY CUSTOMERS (forms live inside each customer, not a separate menu) ============ */
+let activeCustomerId = null;
+
+function renderTechCustomers(){
+  const isSurveyor = currentUser.role === "surveyor";
+  const mine = isSurveyor
+    ? customers.filter(c=>c.addedBy===currentUser.username)
+    : customers.filter(c=>c.assignedTechnician===currentUser.username);
+  const sorted = [...mine].sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+  const heading = isSurveyor ? "🧾 Customers I Added" : "🧾 My Assigned Customers";
+  const emptyMsg = isSurveyor ? "Abhi tak koi customer add nahi kiya." : "Abhi tak koi customer assign nahi hua. Admin se contact karein.";
+  if(sorted.length===0) return `<p class="text-gray-400 text-center mt-10">${emptyMsg}</p>`;
+  return `<h2 class="font-bold text-gray-800 mb-3">${heading}</h2>
+    <div class="space-y-2">
+      ${sorted.map(c=>{
+        const filledCount = submissions.filter(s=>s.customerId===c.id).length;
+        const statusBadge = c.status==="completed" ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-bold">Completed</span>' : `<span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded font-bold">${filledCount}/6 forms</span>`;
+        return `<button onclick="openCustomerDetail('${c.id}')" class="w-full text-left bg-white rounded-lg shadow p-4 border-l-4 border-[#0D904F] active:scale-[0.98] transition">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-gray-800">${c.name}</h3>
+              <p class="text-xs text-gray-500">${c.address||""}</p>
+              <p class="text-xs text-gray-400">📞 ${c.phone||"—"}</p>
+            </div>
+            ${statusBadge}
+          </div>
+        </button>`;
+      }).join("")}
+    </div>`;
+}
+
+function openCustomerDetail(customerId){
+  activeCustomerId = customerId;
+  setView("customerDetail");
+}
+
+async function updateWorkProgress(customerId){
+  const workStatus = document.getElementById("wp_status_"+customerId).value;
+  const meterCompany = document.getElementById("wp_meterco_"+customerId).value.trim();
+  const meterSerialNumber = document.getElementById("wp_meterno_"+customerId).value.trim();
+  const switchOnDate = document.getElementById("wp_switchon_"+customerId).value;
+  const slWork = document.getElementById("wp_slwork_"+customerId).value;
+  const giWork = document.getElementById("wp_giwork_"+customerId).value;
+  const ngWork = document.getElementById("wp_ngwork_"+customerId).value;
+  const restoreWork = document.getElementById("wp_restorework_"+customerId).value;
+  const restorePaper = document.getElementById("wp_restorepaper_"+customerId).value;
+  const remark = document.getElementById("wp_remark_"+customerId).value.trim();
+  // Note: slPaper, giPaper, ngPaper, jmrStatus are NOT set here — they auto-update
+  // from saveCurrentForm() when the matching form (Service Line Job Card / Installation
+  // Report / Conversion Report / Joint Meter Reading Sheet) is submitted for this customer.
+  const update = {
+    workStatus, meterCompany, meterSerialNumber, switchOnDate,
+    slWork, giWork, ngWork, restoreWork, restorePaper, remark
+  };
+  if(workStatus === "Completed") update.status = "completed";
+  if(db){
+    try{ await db.doc("customers/"+customerId).update(update); showToast("Progress updated!"); }
+    catch(e){ console.error(e); alert("Update failed."); }
+  } else {
+    const c = customers.find(c=>c.id===customerId);
+    if(c){ Object.assign(c, update); renderMain(); }
+    showToast("Progress updated (local)!");
+  }
+}
+
+function renderTechCustomerDetail(customerId){
+  const c = customers.find(c=>c.id===customerId);
+  if(!c) return `<p class="text-gray-400 text-center mt-10">Customer not found.</p>`;
+  const mySubs = submissions.filter(s=>s.customerId===customerId);
+  return `
+    <div class="bg-white rounded-lg shadow p-3 mb-3 flex items-center gap-3">
+      <button onclick="setView('customers')" class="text-[#0D904F] font-bold text-xl">←</button>
+      <h2 class="font-bold text-gray-800">${c.name}</h2>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4 mb-3">
+      <p class="text-sm"><span class="font-bold">Address:</span> ${c.address||"—"}</p>
+      <p class="text-sm"><span class="font-bold">Phone:</span> ${c.phone||"—"}</p>
+      ${c.bpNo ? `<p class="text-sm"><span class="font-bold">BP No:</span> ${c.bpNo}</p>` : ""}
+      ${c.email ? `<p class="text-sm"><span class="font-bold">Email:</span> ${c.email}</p>` : ""}
+      ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-sm"><span class="font-bold">Pending Work:</span> ${c.pendingWork.join(", ")}</p>` : ""}
+      ${(c.connectionType&&c.connectionType.length) ? `<p class="text-sm"><span class="font-bold">Connection Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
+      <p class="text-xs text-gray-400 mt-1">${c.geotag ? `📍 Survey location: ${c.geotag.lat.toFixed(5)}, ${c.geotag.lng.toFixed(5)}` : "📍 No geotag on file"}</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-4 mb-3">
+      <h3 class="ff-section-heading">WORK PROGRESS UPDATE</h3>
+      <label class="ff-label">Work Status (overall)</label>
+      <select id="wp_status_${c.id}" class="ff-input-line mb-2">
+        ${WORK_STATUS_OPTIONS.map(o=>`<option value="${o}" ${c.workStatus===o?"selected":""}>${o}</option>`).join("")}
+      </select>
+      <label class="ff-label">Meter Company</label>
+      <input id="wp_meterco_${c.id}" class="ff-input-line mb-2" value="${c.meterCompany||""}" placeholder="e.g. GRECO, RAYCHEM, ELSTER">
+      <label class="ff-label">Meter Serial Number</label>
+      <input id="wp_meterno_${c.id}" class="ff-input-line mb-2" value="${c.meterSerialNumber||""}" placeholder="Meter serial no.">
+      <label class="ff-label">Switch On Date</label>
+      <input id="wp_switchon_${c.id}" type="date" class="ff-input-line mb-3" value="${c.switchOnDate||""}">
+
+      <div class="border-t pt-3 mt-1">
+        <p class="text-xs font-bold text-gray-500 mb-2">STAGE-WISE WORK / PAPER STATUS</p>
+        <p class="text-xs text-gray-400 mb-2">Paper status auto-updates jab us stage ka form bhara jaata hai — sirf "Work" (field pe hua kaam) manually set karein.</p>
+        ${[
+          {key:"sl", label:"SL (Service Line)", formLabel:"Service Line Job Card"},
+          {key:"gi", label:"GI (Piping)", formLabel:"PNG Installation Completion Report"},
+          {key:"ng", label:"NG (Charging)", formLabel:"Conversion Report"},
+        ].map(({key,label,formLabel})=>{
+          const paperVal = c[key+"Paper"] || "Pending";
+          return `<div class="grid grid-cols-2 gap-2 mb-2 items-end">
+            <div>
+              <label class="ff-label">${label} — Work</label>
+              <select id="wp_${key}work_${c.id}" class="ff-input-line">
+                ${WORK_STAGE_STATUS_OPTIONS.map(o=>`<option value="${o}" ${c[key+"Work"]===o?"selected":""}>${o}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label class="ff-label">${label} — Paper <span class="text-gray-400 font-normal">(auto)</span></label>
+              <div class="px-3 py-2 rounded ${paperVal==='Done'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'} text-sm font-bold" title="Auto-set when ${formLabel} is filled">
+                ${paperVal==='Done' ? '✓ Done' : 'Pending'}
+              </div>
+            </div>
+          </div>`;
+        }).join("")}
+
+        <div class="grid grid-cols-2 gap-2 mb-2 items-end">
+          <div>
+            <label class="ff-label">Restoration — Work</label>
+            <select id="wp_restorework_${c.id}" class="ff-input-line">
+              ${WORK_STAGE_STATUS_OPTIONS.map(o=>`<option value="${o}" ${c.restoreWork===o?"selected":""}>${o}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label class="ff-label">Restoration — Paper</label>
+            <select id="wp_restorepaper_${c.id}" class="ff-input-line">
+              ${PAPER_STAGE_STATUS_OPTIONS.map(o=>`<option value="${o}" ${c.restorePaper===o?"selected":""}>${o}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 -mt-1 mb-2">Restoration ke liye koi dedicated form abhi list mein nahi hai, isliye ye manual hai.</p>
+
+        <label class="ff-label">JMR Status <span class="text-gray-400 font-normal">(auto)</span></label>
+        <div class="px-3 py-2 rounded mb-2 ${(c.jmrStatus==='Done')?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'} text-sm font-bold" title="Auto-set when Joint Meter Reading Sheet is filled">
+          ${c.jmrStatus==='Done' ? '✓ Done' : 'Pending'}
+        </div>
+        <label class="ff-label">Remark</label>
+        <textarea id="wp_remark_${c.id}" class="ff-input-line mb-3" rows="2" placeholder="Any remark">${c.remark||""}</textarea>
+      </div>
+      <button onclick="updateWorkProgress('${c.id}')" class="w-full bg-[#EA8600] text-white py-2 rounded-lg font-bold text-sm">Update Progress</button>
+    </div>
+
+    <h3 class="font-bold text-gray-800 mb-2">📝 Fill a Form for this Customer</h3>
+    <div class="grid grid-cols-1 gap-3 mb-4">
+      ${Object.keys(FORMS).map(id=>{
+        const f = FORMS[id];
+        const done = mySubs.filter(s=>s.formType===id).length;
+        return `<button onclick="openFormEntry('${id}','${customerId}')" class="text-left bg-white rounded-lg shadow p-4 border-l-4 ${done?'border-green-500':'border-[#0D904F]'} active:scale-[0.98] transition">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">${f.icon}</span>
+            <div class="flex-1">
+              <h3 class="font-bold text-gray-800">${f.title}</h3>
+              <p class="text-xs text-gray-500">${done>0 ? `✓ Filled ${done} time(s)` : "Not filled yet"}</p>
+            </div>
+            <span class="text-gray-300 text-xl">›</span>
+          </div>
+        </button>`;
+      }).join("")}
+    </div>
+    ${mySubs.length ? `<h3 class="font-bold text-gray-800 mb-2">Submitted Forms</h3>
+      <div class="space-y-2">
+        ${mySubs.map(s=>{
+          const f = FORMS[s.formType];
+          return `<div class="bg-white rounded-lg shadow p-3 flex justify-between items-center">
+            <span class="text-sm font-bold">${f?f.title:s.formType}</span>
+            <button onclick="previewSubmissionPdf('${s.id}')" class="text-xs bg-gray-700 text-white px-3 py-1 rounded font-bold">View</button>
+            <button onclick="downloadSubmissionPdf('${s.id}')" class="text-xs bg-[#8430CE] text-white px-3 py-1 rounded font-bold">PDF</button>
+          </div>`;
+        }).join("")}
+      </div>` : ""}
+  `;
+}
+
+function renderTechMyJobs(){
+  const mine = submissions.filter(s=>s.technicianUsername===currentUser.username);
+  const sorted = [...mine].sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+  if(sorted.length===0) return `<p class="text-gray-400 text-center mt-10">Aapne abhi tak koi form submit nahi kiya.</p>`;
+  return `<h2 class="font-bold text-gray-800 mb-3">📋 My Completed Jobs</h2>
+    <div class="space-y-2">
+      ${sorted.map(s=>{
+        const f = FORMS[s.formType];
+        const custName = s.customerId ? customerName(s.customerId) : ((s.data.sections && (s.data.sections.consumer_name || s.data.sections.customer_name)) || "—");
+        const geo = s.geotag ? `📍 ${s.geotag.lat.toFixed(5)}, ${s.geotag.lng.toFixed(5)}` : "📍 Not captured";
+        return `<div class="bg-white rounded-lg shadow p-3">
+          <p class="font-bold text-sm">${f ? f.title : s.formType}</p>
+          <p class="text-xs text-gray-600">${custName}</p>
+          <p class="text-xs text-gray-400">${geo} • ${s.createdAt ? new Date(s.createdAt).toLocaleString() : ""}</p>
+          <button onclick="previewSubmissionPdf('${s.id}')" class="mt-2 text-xs bg-gray-700 text-white px-3 py-1 rounded font-bold">View</button>
+          <button onclick="downloadSubmissionPdf('${s.id}')" class="mt-2 text-xs bg-[#8430CE] text-white px-3 py-1 rounded font-bold">Download PDF</button>
+        </div>`;
+      }).join("")}
+    </div>`;
+}
+
+
+/* ============ FORM DEFINITIONS (6 GAIL Gas forms) ============ */
+const FORMS = {
+  conversion_report: {
+    title: "Conversion Report",
+    icon: "📄",
+    sections: [
+      { heading:"Project Info", fields:[
+        {key:"project", label:"Project", type:"text", def:"CNG AND CITY GAS DISTRIBUTION PROJECT, SONIPAT"},
+        {key:"client", label:"Client", type:"text", def:"GAIL GAS LIMITED"},
+        {key:"consultant", label:"Consultant", type:"text", def:"REPL"},
+        {key:"contractor_top", label:"Contractor", type:"text"},
+      ]},
+      { heading:"Consumer Details", fields:[
+        {key:"contractor_name", label:"Name of Contractor", type:"text"},
+        {key:"consumer_name", label:"Name of Consumer", type:"text"},
+        {key:"bp_no", label:"B.P No", type:"text"},
+        {key:"contact_no", label:"Contact No. (Tel.)", type:"text"},
+        {key:"mobile", label:"Mobile", type:"text"},
+        {key:"address", label:"Address/Society/Area", type:"textarea"},
+      ]},
+      { heading:"Meter Details", fields:[
+        {key:"meter_make", label:"Manufacturer/Make", type:"text"},
+        {key:"meter_type", label:"Type (Nor/Rev)", type:"text"},
+        {key:"meter_number", label:"Meter Number", type:"text"},
+        {key:"initial_reading", label:"Initial Meter Reading", type:"text"},
+      ]},
+      { heading:"Customer Satisfaction Certificate", fields:[
+        {key:"conversion_date", label:"Conversion Date", type:"date"},
+        {key:"consumer_sign_name", label:"Consumer Signature", type:"signature"},
+        {key:"cert_date", label:"Certificate Date", type:"date"},
+      ]},
+    ],
+    tables: [
+      { key:"conversion_details", heading:"Conversion Details", columns:["JMR No","NG Charge Date","No. of Burners","No. of Grills","No. of Oven","Remarks"], rows:2 },
+    ]
+  },
+
+  expense_estimate: {
+    title: "Additional Expense Estimate",
+    icon: "💰",
+    sections: [
+      { heading:"Customer Info", fields:[
+        {key:"bp_no", label:"Business Partner No", type:"text"},
+        {key:"customer_name", label:"Name of Customer", type:"text"},
+        {key:"address", label:"Address", type:"textarea"},
+        {key:"phone_no", label:"Phone No", type:"text"},
+      ]},
+      { heading:"Agreement", fields:[
+        {key:"agree_name", label:"Customer Name (in agreement)", type:"text"},
+        {key:"agree_amount", label:"Amount Agreed (Rs)", type:"text"},
+      ]},
+      { heading:"Signatures", fields:[
+        {key:"sign_contractor", label:"Sign of Contractor", type:"signature"},
+        {key:"sign_site_incharge", label:"Signature of Project Site In-charge", type:"signature"},
+        {key:"sign_customer", label:"Sign of Customer", type:"signature"},
+      ]},
+    ],
+    tables: [
+      { key:"expenses", heading:"Details of Additional Expenses (Within 10 meters)",
+        columns:["SI No","Item","Qty(Mtrs)","Rate(Rs/Mtrs)","Amount","Remarks"],
+        rows:3,
+        prefill:{0:{"SI No":"1","Item":"GI piping (1/2\"/3/4\")","Rate(Rs/Mtrs)":"350"},1:{"SI No":"2","Item":"GST 18%"},2:{"Item":"Total"}}
+      },
+    ]
+  },
+
+  joint_meter: {
+    title: "Joint Meter Reading Sheet",
+    icon: "📊",
+    sections: [
+      { heading:"Details", fields:[
+        {key:"customer_name", label:"Customer Name", type:"text"},
+        {key:"address", label:"Address", type:"textarea"},
+        {key:"bp_no", label:"Business Partner No", type:"text"},
+        {key:"telephone_no", label:"Telephone No", type:"text"},
+        {key:"ready_for_conversion", label:"Ready for Conversion", type:"select", options:["Yes","No"]},
+        {key:"meter_no", label:"Meter No", type:"text"},
+        {key:"initial_reading", label:"Initial Meter Reading", type:"text"},
+        {key:"meter_make", label:"Meter Make", type:"text"},
+      ]},
+      { heading:"Signatures & Dates", fields:[
+        {key:"customer_sign", label:"Customer's Signature", type:"signature"},
+        {key:"date1", label:"Date", type:"date"},
+        {key:"site_incharge_sign", label:"Project Site In-Charge Signature", type:"signature"},
+        {key:"date2", label:"Date", type:"date"},
+        {key:"contractor_sign", label:"Contractor Signature", type:"signature"},
+        {key:"date3", label:"Date", type:"date"},
+      ]},
+    ],
+    tables: []
+  },
+
+  installation_report: {
+    title: "PNG Installation Completion Report",
+    icon: "🔧",
+    sections: [
+      { heading:"Consumer Details", fields:[
+        {key:"contractor_name", label:"Name of Contractor", type:"text"},
+        {key:"serial_no", label:"Serial No", type:"text"},
+        {key:"consumer_name", label:"Name of Consumer", type:"text"},
+        {key:"bp_no", label:"B.P No", type:"text"},
+        {key:"contact_no", label:"Contact No. (Tel.)", type:"text"},
+        {key:"mobile", label:"Mobile", type:"text"},
+        {key:"address", label:"Address", type:"textarea"},
+      ]},
+      { heading:"Meter Details", fields:[
+        {key:"meter_make", label:"Manufacturer/Make", type:"text"},
+        {key:"meter_type", label:"Type (RHS/LHS)", type:"text"},
+        {key:"meter_number", label:"Meter Number", type:"text"},
+        {key:"initial_reading", label:"Initial Meter Reading", type:"text"},
+      ]},
+      { heading:"Customer Satisfaction Certificate", fields:[
+        {key:"conversion_date", label:"Conversion Date", type:"date"},
+        {key:"consumer_sign_name", label:"Consumer Signature", type:"signature"},
+        {key:"cert_date", label:"Certificate Date", type:"date"},
+      ]},
+    ],
+    tables: [
+      { key:"gi_material", heading:"Material Installation Details (GI Pipes & Fittings)",
+        columns:["Size","Pipe(Mtrs)","Elbow-E","Elbow-M/F","Elbow-RE","Socket-Plain","Socket-RS","HexNipple-2\"","HexNipple-3\"","Tee","Hole","A.V","I.V","U/N","Fl.Hose","Reg."],
+        rows:3, prefill:{0:{"Size":"1/2\""},1:{"Size":"3/4\""},2:{"Size":"1\""}}
+      },
+      { key:"copper", heading:"Copper Pipe & Fittings / Brass Union Connector",
+        columns:["Copper Pipe","Pipe(Mtrs)","Elbow","Tee","Coupler","Brass Union 3/4\"","Brass Union 1/2\"","Brass Adapter","WP"],
+        rows:1, prefill:{0:{"Copper Pipe":"12mm"}}
+      },
+      { key:"gi_checklist", heading:"GI Check List",
+        columns:["NG Date","Burners","No. of Grills","No. of Oven","Rubber Tube Type-IV","PVC Sleeve","TF with Pedestal","GI Sleeve","Sand Filling","Meter Clamp","GI Painting","Remarks"],
+        rows:1
+      },
+    ]
+  },
+
+  isometric_graph: {
+    title: "Isometric Graph",
+    icon: "📐",
+    sections: [
+      { heading:"Details", fields:[
+        {key:"customer_name", label:"Customer Name", type:"text"},
+        {key:"bp_no", label:"B.P No", type:"text"},
+        {key:"address", label:"Address", type:"textarea"},
+        {key:"contractor_name", label:"Contractor Name", type:"text"},
+      ]},
+      { heading:"Pressure Gauge Info", fields:[
+        {key:"calibration_cert_no", label:"Calibration Certificate No", type:"text"},
+        {key:"instrument_make_serial", label:"Instrument Make/Serial No", type:"text"},
+        {key:"calibration_due_date", label:"Calibration Due Date", type:"date"},
+      ]},
+    ],
+    tables: [
+      { key:"pipe_lengths", heading:"Pipe Lengths",
+        columns:["1/2\" GI Pipe(Mtrs)","3/4\" GI Pipe(Mtrs)","1\" GI Pipe(Mtrs)","12mm Cu(Mtrs)","Total(Mtrs)"], rows:1 },
+      { key:"pressure_readings", heading:"Pressure Gauge Readings",
+        columns:["Time","PG-1","PG-2","Date","Remarks"], rows:5 },
+    ],
+    hasSketch: true
+  },
+
+  service_line_card: {
+    title: "Service Line Job Card",
+    icon: "🛠️",
+    sections: [
+      { heading:"Project Info", fields:[
+        {key:"client", label:"Client", type:"text", def:"GAIL GAS"},
+        {key:"consultant", label:"Consultant", type:"text", def:"REPL"},
+        {key:"contractor", label:"Contractor", type:"text"},
+        {key:"serial_no", label:"Serial No", type:"text"},
+        {key:"date", label:"Date", type:"date"},
+      ]},
+      { heading:"Consumer Details", fields:[
+        {key:"consumer_name", label:"Name of Consumer", type:"text"},
+        {key:"bp_no", label:"B.P No", type:"text"},
+        {key:"contact_no", label:"Contact No. (Tel.)", type:"text"},
+        {key:"mobile_no", label:"Mobile No", type:"text"},
+        {key:"address", label:"Address", type:"textarea"},
+        {key:"latitude", label:"Latitude", type:"text"},
+        {key:"longitude", label:"Longitude", type:"text"},
+      ]},
+      { heading:"Pipe Length & Excavation", fields:[
+        {key:"vertical_pipe_length", label:"Vertical Pipe Length (M)", type:"text"},
+        {key:"horizontal_pipe_length", label:"Horizontal Pipe Length (M)", type:"text"},
+        {key:"breaking", label:"Breaking (M)", type:"text"},
+        {key:"restoration", label:"Restoration (M)", type:"text"},
+      ]},
+      { heading:"Pit Details", fields:[
+        {key:"pit1_details", label:"PIT.1 — TP Point (PCC, Open, Depth, W.M, Reducer, Restoration)", type:"textarea"},
+        {key:"pit2_details", label:"PIT.2 (T Joint, Coupler, PCC, Open, Depth, W.M, Restoration)", type:"textarea"},
+      ]},
+    ],
+    tables: [
+      { key:"fittings", heading:"Fittings Used",
+        columns:["MDPE Pipe(20MM)","Reducer(32x20MM)","Saddle 63x20MM","Saddle 32x20MM","Saddle 20MM","T.F(20MM)","Tee 32MM","Tee 20MM","Coupler 32MM","Coupler 20MM","Plug(1/2\")","Warning Mat","NOR","MOL","TOTAL"],
+        rows:1 },
+      { key:"pipe_details", heading:"Pipe & Testing Details (numbered as per original form)",
+        columns:["#","Detail","Value"],
+        rows:9,
+        prefill:{
+          0:{"#":"-","Detail":"Gauge Certificate No"},
+          1:{"#":"1","Detail":"Sizes of MDPE Pipe"},
+          2:{"#":"2","Detail":"Total Length of the Pipe"},
+          3:{"#":"3","Detail":"Testing Medium"},
+          4:{"#":"4","Detail":"Testing Pressure"},
+          5:{"#":"5","Detail":"Holding Time"},
+          6:{"#":"6","Detail":"Pressure Gauge Make/No"},
+          7:{"#":"7","Detail":"Gauge Calibration Validity"},
+          8:{"#":"8","Detail":"Result"},
+        }
+      },
+      { key:"pressure_observation", heading:"Pressure Observation Chart",
+        columns:["Time","Reading (kg/cm2)"],
+        rows:5 },
+    ],
+    hasSketch: true
+  },
+};
+
+function renderFieldHTML(formId, field){
+  const id = fieldInputId(formId, field.key);
+  const val = field.def || "";
+  if(field.type==="signature"){
+    return `<div><label class="ff-label">${field.label}</label>
+      <canvas id="${id}" width="500" height="120" class="border rounded w-full touch-none" style="background:#fff;"></canvas>
+      <button type="button" onclick="clearSignature('${id}')" class="mt-1 text-xs bg-gray-100 px-2 py-1 rounded font-bold">Clear Signature</button>
+    </div>`;
+  }
+  if(field.type==="textarea"){
+    return `<div><label class="ff-label">${field.label}</label><textarea id="${id}" class="ff-input-line" rows="2">${val}</textarea></div>`;
+  }
+  if(field.type==="date"){
+    return `<div><label class="ff-label">${field.label}</label><input id="${id}" type="date" class="ff-input-line" value="${val}"></div>`;
+  }
+  if(field.type==="select"){
+    const opts = (field.options||[]).map(o=>`<option value="${o}">${o}</option>`).join("");
+    return `<div><label class="ff-label">${field.label}</label><select id="${id}" class="ff-input-line"><option value="">-- Select --</option>${opts}</select></div>`;
+  }
+  return `<div><label class="ff-label">${field.label}</label><input id="${id}" type="text" class="ff-input-line" value="${val}"></div>`;
+}
+
+function renderTableEntryHTML(formId, table){
+  const rows = [];
+  for(let r=0;r<table.rows;r++){
+    const prefillRow = (table.prefill && table.prefill[r]) || {};
+    rows.push(`<tr>${table.columns.map((col,c)=>{
+      const pv = prefillRow[col] || "";
+      return `<td><input id="${tableCellId(formId,table.key,r,c)}" type="text" value="${pv}"></td>`;
+    }).join("")}</tr>`);
+  }
+  return `<div class="bg-white rounded-lg shadow p-3">
+    <h3 class="font-bold text-sm text-gray-800 mb-2">${table.heading}</h3>
+    <div class="overflow-x-auto">
+      <table class="ff-table">
+        <thead><tr>${table.columns.map(c=>`<th>${c}</th>`).join("")}</tr></thead>
+        <tbody>${rows.join("")}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ============ TECHNICIAN: FORM ENTRY (with geotag + material consumption) ============ */
+let currentFormId = null;
+let currentCustomerId = null;
+let currentGeotag = null;
+
+function getGeoTag(){
+  return new Promise((resolve)=>{
+    if(!navigator.geolocation){ resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos=>resolve({lat:pos.coords.latitude, lng:pos.coords.longitude, accuracy:pos.coords.accuracy, capturedAt:new Date().toISOString()}),
+      err=>{ console.warn("geo error", err); resolve(null); },
+      {enableHighAccuracy:true, timeout:10000}
+    );
+  });
+}
+
+async function openFormEntry(formId, customerId){
+  currentFormId = formId;
+  currentCustomerId = customerId || null;
+  currentGeotag = null;
+  currentView = "formEntry";
+  const form = FORMS[formId];
+  const el = document.getElementById("mainContent");
+  const cust = currentCustomerId ? customers.find(c=>c.id===currentCustomerId) : null;
+
+  // Prefill defaults from customer record (only if not already set)
+  if(cust){
+    form.sections.forEach(sec=>sec.fields.forEach(f=>{
+      if(["consumer_name","customer_name"].includes(f.key) && !f.def) f.def = cust.name;
+      if(["address"].includes(f.key) && !f.def) f.def = cust.address;
+      if(["contact_no","phone_no","telephone_no","mobile","mobile_no"].includes(f.key) && !f.def) f.def = cust.phone;
+      if(["bp_no"].includes(f.key) && cust.bpNo && !f.def) f.def = cust.bpNo;
+    }));
+  }
+
+  let html = `<div class="bg-white rounded-lg shadow p-3 mb-3 flex items-center gap-3">
+    <button onclick="${currentCustomerId ? `openCustomerDetail('${currentCustomerId}')` : `setView('customers')`}" class="text-[#0D904F] font-bold text-xl">←</button>
+    <h2 class="font-bold text-gray-800">${form.title}${cust ? ` — ${cust.name}` : ""}</h2>
+  </div>`;
+
+  html += `<div class="bg-white rounded-lg shadow p-4 mb-3">
+    <h1 class="text-center text-xl font-bold text-[#0D904F] tracking-wide">${form.title.toUpperCase()}</h1>
+    <p class="text-center text-xs text-gray-500 mt-1">GAIL Gas Limited • Resonance Energy</p>
+    <p id="geoStatus" class="text-center text-xs mt-2 text-gray-500">📍 Capturing location...</p>
+  </div>`;
+
+  form.sections.forEach(sec=>{
+    html += `<div class="bg-white rounded-lg shadow px-4 pb-4 mb-3">
+      ${sec.heading ? `<h3 class="ff-section-heading">${sec.heading.toUpperCase()}</h3>` : `<div class="pt-4"></div>`}
+      <div class="grid grid-cols-1 gap-1">${sec.fields.map(f=>renderFieldHTML(formId,f)).join("")}</div>
+    </div>`;
+  });
+  (form.tables||[]).forEach(t=>{ html += renderTableEntryHTML(formId, t) + `<div class="mb-3"></div>`; });
+
+  if(form.hasSketch){
+    html += `<div class="bg-white rounded-lg shadow p-3 mb-3">
+      <h3 class="font-bold text-sm text-gray-800 mb-2">Isometric Sketch</h3>
+      <div class="flex flex-wrap items-center gap-2 mb-2">
+        <button data-tool="pen" onclick="setSketchTool('pen')" class="sketch-tool-btn bg-[#0D904F] text-white text-xs font-bold px-3 py-1.5 rounded">✏️ Pen</button>
+        <button data-tool="line" onclick="setSketchTool('line')" class="sketch-tool-btn bg-gray-100 text-xs font-bold px-3 py-1.5 rounded">📏 Line</button>
+        <button data-tool="box" onclick="setSketchTool('box')" class="sketch-tool-btn bg-gray-100 text-xs font-bold px-3 py-1.5 rounded">▭ Box</button>
+        <button data-tool="text" onclick="setSketchTool('text')" class="sketch-tool-btn bg-gray-100 text-xs font-bold px-3 py-1.5 rounded">🔤 Text</button>
+        <span class="border-l h-5 mx-1"></span>
+        <button onclick="setSketchColor('#111111')" class="w-6 h-6 rounded-full border-2 border-gray-300" style="background:#111111"></button>
+        <button onclick="setSketchColor('#0D904F')" class="w-6 h-6 rounded-full border-2 border-gray-300" style="background:#0D904F"></button>
+        <button onclick="setSketchColor('#dc2626')" class="w-6 h-6 rounded-full border-2 border-gray-300" style="background:#dc2626"></button>
+        <button onclick="clearSketch()" class="ml-auto text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-bold">🗑 Clear</button>
+      </div>
+      <canvas id="sketchCanvas" width="700" height="450" class="border rounded w-full touch-none" style="background:#fff;"></canvas>
+    </div>`;
+  }
+
+  // Material consumption section
+  const bal = getTechBalances(currentUser.username).filter(b=>b.balance>0);
+  html += `<div class="bg-white rounded-lg shadow p-4 mb-3">
+    <h3 class="ff-section-heading">MATERIAL USED FOR THIS JOB</h3>
+    <div id="materialUsedRows" class="space-y-2 mb-2"></div>
+    <button type="button" onclick="addMaterialUsedRow()" class="text-xs bg-gray-100 px-3 py-1.5 rounded font-bold">+ Add Item</button>
+    ${bal.length===0 ? `<p class="text-xs text-orange-500 mt-2">Aapke paas abhi koi issued material nahi hai.</p>` : ""}
+  </div>`;
+
+  html += `<div class="bg-white rounded-lg shadow p-3 flex flex-col gap-2 mb-6">
+    <div class="flex gap-2">
+      <button onclick="saveCurrentForm()" class="flex-1 bg-[#0D904F] text-white py-2.5 rounded-lg font-bold active:scale-[0.98] transition">💾 Save</button>
+      <button onclick="previewCurrentFormPdf()" class="flex-1 bg-gray-700 text-white py-2.5 rounded-lg font-bold active:scale-[0.98] transition">👁 View</button>
+      <button onclick="downloadCurrentFormPdf()" class="flex-1 bg-[#8430CE] text-white py-2.5 rounded-lg font-bold active:scale-[0.98] transition">📄 PDF</button>
+    </div>
+    <button onclick="clearCurrentForm()" class="w-full bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-sm active:scale-[0.98] transition">CLEAR FORM</button>
+  </div>`;
+
+  el.innerHTML = html;
+
+  form.sections.forEach(sec=>{
+    sec.fields.forEach(f=>{
+      if(f.type==="signature"){ setTimeout(()=>initSignaturePad(fieldInputId(formId, f.key)), 30); }
+    });
+  });
+  if(form.hasSketch){ setTimeout(initSketchCanvas, 50); }
+
+  // Capture geotag
+  getGeoTag().then(geo=>{
+    currentGeotag = geo;
+    const s = document.getElementById("geoStatus");
+    if(!s) return;
+    s.textContent = geo ? `📍 Location captured: ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)} (±${Math.round(geo.accuracy)}m)` : "⚠️ Location not available (permission denied?)";
+  });
+}
+
+/* Material used dynamic rows */
+let materialUsedRowCount = 0;
+function addMaterialUsedRow(){
+  const bal = getTechBalances(currentUser.username).filter(b=>b.balance>0);
+  const container = document.getElementById("materialUsedRows");
+  const rid = "mu_"+(materialUsedRowCount++);
+  const opts = bal.map(b=>`<option value="${b.itemName}" data-balance="${b.balance}" data-unit="${b.unit}">${b.itemName} (${b.balance} ${b.unit} left)</option>`).join("");
+  const row = document.createElement("div");
+  row.id = rid;
+  row.className = "flex gap-2 items-center";
+  row.innerHTML = `
+    <select class="ff-input flex-1 mu-item">${opts}</select>
+    <input type="number" class="ff-input w-24 mu-qty" placeholder="Qty">
+    <button type="button" onclick="document.getElementById('${rid}').remove()" class="text-red-500 font-bold px-2">✕</button>`;
+  container.appendChild(row);
+}
+
+
+/* ============ SKETCH + SIGNATURE (isometric graph tool + signature pads) ============ */
+function drawIsoGrid(ctx,w,h,size){
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle = "#d7dde3";
+  ctx.lineWidth = 1;
+  for(let x=0;x<=w;x+=size){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  const slope = Math.tan(Math.PI/6); // 30 degrees, standard isometric angle
+  const span = h/slope;
+  const startOffset = -Math.ceil(span/size)*size;
+  for(let offset=startOffset; offset<=w+span; offset+=size){
+    ctx.beginPath(); ctx.moveTo(offset,0); ctx.lineTo(offset+span,h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(offset,0); ctx.lineTo(offset-span,h); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function initSketchCanvas(){
+  const canvas = document.getElementById("sketchCanvas");
+  if(!canvas) return;
+  sketchCtx = canvas.getContext("2d");
+  drawIsoGrid(sketchCtx, canvas.width, canvas.height, 20);
+  sketchBase = sketchCtx.getImageData(0,0,canvas.width,canvas.height);
+  sketchCtx.lineWidth = 2.5;
+  sketchCtx.lineCap = "round";
+  sketchCtx.lineJoin = "round";
+
+  const getPos = (e)=>{
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    return {x: cx * (canvas.width/rect.width), y: cy * (canvas.height/rect.height)};
+  };
+
+  const start = (e)=>{
+    e.preventDefault();
+    const p = getPos(e);
+    if(sketchTool === "text"){
+      const txt = prompt("Enter text:");
+      if(txt){
+        sketchCtx.fillStyle = sketchColor;
+        sketchCtx.font = "bold 16px Arial";
+        sketchCtx.fillText(txt, p.x, p.y);
+        sketchBase = sketchCtx.getImageData(0,0,canvas.width,canvas.height);
+      }
+      return;
+    }
+    sketching = true;
+    sketchStart = p;
+    sketchBase = sketchCtx.getImageData(0,0,canvas.width,canvas.height);
+    if(sketchTool === "pen"){
+      sketchCtx.strokeStyle = sketchColor;
+      sketchCtx.beginPath();
+      sketchCtx.moveTo(p.x,p.y);
+    }
+  };
+  const move = (e)=>{
+    if(!sketching) return;
+    e.preventDefault();
+    const p = getPos(e);
+    if(sketchTool === "pen"){
+      sketchCtx.lineTo(p.x,p.y);
+      sketchCtx.stroke();
+    } else if(sketchTool === "line" || sketchTool === "box"){
+      sketchCtx.putImageData(sketchBase,0,0);
+      sketchCtx.strokeStyle = sketchColor;
+      sketchCtx.beginPath();
+      if(sketchTool === "line"){
+        sketchCtx.moveTo(sketchStart.x, sketchStart.y);
+        sketchCtx.lineTo(p.x, p.y);
+      } else {
+        sketchCtx.rect(Math.min(sketchStart.x,p.x), Math.min(sketchStart.y,p.y), Math.abs(p.x-sketchStart.x), Math.abs(p.y-sketchStart.y));
+      }
+      sketchCtx.stroke();
+    }
+  };
+  const end = ()=>{
+    if(!sketching) return;
+    sketching = false;
+    sketchBase = sketchCtx.getImageData(0,0,canvas.width,canvas.height);
+  };
+  canvas.addEventListener("mousedown", start);
+  canvas.addEventListener("mousemove", move);
+  canvas.addEventListener("mouseup", end);
+  canvas.addEventListener("mouseleave", end);
+  canvas.addEventListener("touchstart", start, {passive:false});
+  canvas.addEventListener("touchmove", move, {passive:false});
+  canvas.addEventListener("touchend", end);
+}
+
+function setSketchTool(tool){
+  sketchTool = tool;
+  document.querySelectorAll(".sketch-tool-btn").forEach(b=>{
+    const active = b.dataset.tool===tool;
+    b.classList.toggle("bg-[#0D904F]", active);
+    b.classList.toggle("text-white", active);
+    b.classList.toggle("bg-gray-100", !active);
+  });
+}
+function setSketchColor(color){ sketchColor = color; }
+function clearSketch(){
+  const canvas = document.getElementById("sketchCanvas");
+  if(!canvas || !sketchCtx) return;
+  drawIsoGrid(sketchCtx, canvas.width, canvas.height, 20);
+  sketchBase = sketchCtx.getImageData(0,0,canvas.width,canvas.height);
+}
+
+/* ===== Signature pad (reusable for any signature-type field) ===== */
+function initSignaturePad(canvasId){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = "#111111"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  let drawing = false;
+  const getPos = (e)=>{
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    return {x: cx * (canvas.width/rect.width), y: cy * (canvas.height/rect.height)};
+  };
+  const start = (e)=>{ drawing=true; const p=getPos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); };
+  const move = (e)=>{ if(!drawing) return; const p=getPos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); e.preventDefault(); };
+  const end = ()=>{ drawing=false; };
+  canvas.addEventListener("mousedown", start);
+  canvas.addEventListener("mousemove", move);
+  canvas.addEventListener("mouseup", end);
+  canvas.addEventListener("mouseleave", end);
+  canvas.addEventListener("touchstart", start, {passive:false});
+  canvas.addEventListener("touchmove", move, {passive:false});
+  canvas.addEventListener("touchend", end);
+}
+function clearSignature(canvasId){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+/* Collect data from the visible entry form */
+
+/* ============ DATA COLLECTION + SAVE ============ */
+function fieldInputId(formId, key){ return `f_${formId}_${key}`; }
+function tableCellId(formId, tableKey, r, c){ return `t_${formId}_${tableKey}_${r}_${c}`; }
+
+function collectCurrentFormData(){
+  const form = FORMS[currentFormId];
+  const data = {sections:{}, tables:{}};
+  form.sections.forEach(sec=>{
+    sec.fields.forEach(f=>{
+      if(f.type==="signature"){
+        const canvas = document.getElementById(fieldInputId(currentFormId, f.key));
+        data.sections[f.key] = canvas ? canvas.toDataURL("image/png") : "";
+      } else {
+        const elx = document.getElementById(fieldInputId(currentFormId, f.key));
+        data.sections[f.key] = elx ? elx.value : "";
+      }
+    });
+  });
+  (form.tables||[]).forEach(t=>{
+    const rows = [];
+    for(let r=0;r<t.rows;r++){
+      const row = {};
+      t.columns.forEach((col,c)=>{
+        const elx = document.getElementById(tableCellId(currentFormId, t.key, r, c));
+        row[col] = elx ? elx.value : "";
+      });
+      rows.push(row);
+    }
+    data.tables[t.key] = rows;
+  });
+  if(form.hasSketch){
+    const canvas = document.getElementById("sketchCanvas");
+    data.sketch = canvas ? canvas.toDataURL("image/png") : null;
+  }
+  return data;
+}
+
+function collectMaterialUsed(){
+  const rows = document.querySelectorAll("#materialUsedRows > div");
+  const used = [];
+  rows.forEach(r=>{
+    const sel = r.querySelector(".mu-item");
+    const qtyEl = r.querySelector(".mu-qty");
+    if(!sel || !qtyEl) return;
+    const qty = parseFloat(qtyEl.value);
+    if(sel.value && qty > 0){
+      used.push({itemName: sel.value, qty, unit: sel.selectedOptions[0]?.dataset.unit || "Nos"});
+    }
+  });
+  return used;
+}
+
+function clearCurrentForm(){
+  if(!confirm("Clear all fields in this form?")) return;
+  const form = FORMS[currentFormId];
+  form.sections.forEach(sec=>{
+    sec.fields.forEach(f=>{
+      if(f.type==="signature"){ clearSignature(fieldInputId(currentFormId, f.key)); }
+      else{
+        const elx = document.getElementById(fieldInputId(currentFormId, f.key));
+        if(elx) elx.value = f.def || "";
+      }
+    });
+  });
+  (form.tables||[]).forEach(t=>{
+    for(let r=0;r<t.rows;r++){
+      t.columns.forEach((col,c)=>{
+        const elx = document.getElementById(tableCellId(currentFormId, t.key, r, c));
+        if(elx) elx.value = (t.prefill && t.prefill[r] && t.prefill[r][col]) || "";
+      });
+    }
+  });
+  if(form.hasSketch){ clearSketch(); }
+  const container = document.getElementById("materialUsedRows");
+  if(container) container.innerHTML = "";
+}
+
+// Which form submission automatically marks which "Paper" stage as Done
+const FORM_TO_PAPER_FIELD = {
+  service_line_card: "slPaper",
+  installation_report: "giPaper",
+  conversion_report: "ngPaper",
+  joint_meter: "jmrStatus",
+};
+
+async function saveCurrentForm(){
+  const data = collectCurrentFormData();
+  const materialUsed = collectMaterialUsed();
+
+  // validate against balances
+  const bal = getTechBalances(currentUser.username);
+  for(const m of materialUsed){
+    const b = bal.find(x=>x.itemName===m.itemName);
+    if(!b || m.qty > b.balance){
+      alert(`Not enough balance for ${m.itemName}. Available: ${b?b.balance:0}`);
+      return;
+    }
+  }
+
+  const record = {
+    formType: currentFormId,
+    data,
+    technicianUsername: currentUser.username,
+    customerId: currentCustomerId || null,
+    geotag: currentGeotag || null,
+    materialUsed,
+    createdAt: new Date().toISOString()
+  };
+
+  const paperField = FORM_TO_PAPER_FIELD[currentFormId];
+
+  if(db){
+    try{
+      const ref = await db.collection("submissions").add(record);
+      for(const m of materialUsed){
+        await db.collection("consumption").add({
+          technicianUsername: currentUser.username, itemName: m.itemName, qty: m.qty, unit: m.unit,
+          consumedAt: new Date().toISOString(), submissionId: ref.id
+        });
+      }
+      if(currentCustomerId && paperField){
+        await db.doc("customers/"+currentCustomerId).update({ [paperField]: "Done" });
+      }
+      showToast("Saved! Form, material aur paper-status sync ho gaya.");
+      if(currentCustomerId){ openCustomerDetail(currentCustomerId); } else { setView("myjobs"); }
+    }catch(e){
+      console.error(e);
+      alert("Could not save. Check connection and try again.");
+    }
+  } else {
+    record.id = "local_"+Date.now();
+    submissions.push(record);
+    materialUsed.forEach(m=>consumption.push({id:"local_"+Date.now()+Math.random(), technicianUsername:currentUser.username, itemName:m.itemName, qty:m.qty, unit:m.unit, consumedAt:new Date().toISOString()}));
+    if(currentCustomerId && paperField){
+      const c = customers.find(c=>c.id===currentCustomerId);
+      if(c) c[paperField] = "Done";
+    }
+    showToast("Saved locally (no live database connected).");
+    if(currentCustomerId){ openCustomerDetail(currentCustomerId); } else { setView("myjobs"); }
+  }
+}
+
+async function deleteSubmission(id){
+  if(!confirm("Delete this submission?")) return;
+  if(db){ try{ await db.doc("submissions/"+id).delete(); }catch(e){ console.error(e); } }
+  else { submissions = submissions.filter(s=>s.id!==id); renderMain(); }
+}
+
+/* ============ PDF GENERATION (A4) ============ */
+function buildPrintHTML(formId, record){
+  const form = FORMS[formId];
+  const data = record.data || record; // support raw data too
+  let rowsHtml = "";
+  form.sections.forEach(sec=>{
+    rowsHtml += `<tr><td colspan="2" style="background:#e5f4ec;font-weight:bold;padding:6px 8px;border:1px solid #999;">${sec.heading||form.title}</td></tr>`;
+    sec.fields.forEach(f=>{
+      const v = (data.sections && data.sections[f.key]) || "";
+      if(f.type==="signature"){
+        rowsHtml += `<tr><td style="width:35%;font-weight:bold;padding:5px 8px;border:1px solid #999;">${f.label}</td><td style="padding:5px 8px;border:1px solid #999;">${v ? `<img src="${v}" style="height:45px;">` : ""}</td></tr>`;
+      } else {
+        rowsHtml += `<tr><td style="width:35%;font-weight:bold;padding:5px 8px;border:1px solid #999;">${f.label}</td><td style="padding:5px 8px;border:1px solid #999;">${v}</td></tr>`;
+      }
+    });
+  });
+
+  let tablesHtml = "";
+  (form.tables||[]).forEach(t=>{
+    const rows = (data.tables && data.tables[t.key]) || [];
+    tablesHtml += `<div style="margin-top:14px;font-weight:bold;">${t.heading}</div>
+      <table style="width:100%;border-collapse:collapse;margin-top:4px;font-size:11px;">
+        <thead><tr>${t.columns.map(c=>`<th style="border:1px solid #999;background:#e5f4ec;padding:4px;">${c}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map(r=>`<tr>${t.columns.map(c=>`<td style="border:1px solid #999;padding:4px;text-align:center;">${r[c]||""}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>`;
+  });
+
+  let sketchHtml = "";
+  if(form.hasSketch && data.sketch){
+    sketchHtml = `<div style="margin-top:14px;font-weight:bold;">Isometric Sketch</div>
+      <img src="${data.sketch}" style="width:100%;border:1px solid #999;margin-top:4px;">`;
+  }
+
+  let metaHtml = "";
+  if(record.technicianUsername || record.geotag || (record.materialUsed && record.materialUsed.length)){
+    metaHtml += `<div style="margin-top:14px;font-weight:bold;">Job Metadata</div>
+      <table style="width:100%;border-collapse:collapse;margin-top:4px;font-size:11px;">
+        <tr><td style="border:1px solid #999;padding:4px;font-weight:bold;width:30%;">Filled By</td><td style="border:1px solid #999;padding:4px;">${techName(record.technicianUsername||"")}</td></tr>
+        <tr><td style="border:1px solid #999;padding:4px;font-weight:bold;">GPS Location</td><td style="border:1px solid #999;padding:4px;">${record.geotag ? `${record.geotag.lat.toFixed(6)}, ${record.geotag.lng.toFixed(6)} (±${Math.round(record.geotag.accuracy)}m)` : "Not captured"}</td></tr>
+      </table>`;
+    if(record.materialUsed && record.materialUsed.length){
+      metaHtml += `<div style="margin-top:8px;font-weight:bold;">Material Consumed</div>
+        <table style="width:100%;border-collapse:collapse;margin-top:4px;font-size:11px;">
+          <thead><tr><th style="border:1px solid #999;background:#e5f4ec;padding:4px;">Item</th><th style="border:1px solid #999;background:#e5f4ec;padding:4px;">Qty</th></tr></thead>
+          <tbody>${record.materialUsed.map(m=>`<tr><td style="border:1px solid #999;padding:4px;">${m.itemName}</td><td style="border:1px solid #999;padding:4px;text-align:center;">${m.qty} ${m.unit||""}</td></tr>`).join("")}</tbody>
+        </table>`;
+    }
+  }
+
+  return `<div style="width:754px;padding:20px;font-family:Arial,sans-serif;color:#111;">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      <tr>
+        <td style="width:22%;border:1px solid #999;text-align:center;padding:10px;font-weight:bold;color:#0D904F;">Resonance<br>Energy</td>
+        <td style="width:56%;border:1px solid #999;text-align:center;padding:10px;font-size:18px;font-weight:bold;">${form.title.toUpperCase()}</td>
+        <td style="width:22%;border:1px solid #999;text-align:center;padding:10px;font-weight:bold;color:#0D904F;">GAIL<br>gas</td>
+      </tr>
+    </table>
+    <table style="width:100%;border-collapse:collapse;">${rowsHtml}</table>
+    ${tablesHtml}
+    ${sketchHtml}
+    ${metaHtml}
+    <div style="margin-top:30px;display:flex;justify-content:space-between;font-size:12px;">
+      <div>Contractor</div><div>Consumer Sign.</div><div>REPL/GGL</div>
+    </div>
+  </div>`;
+}
+
+async function renderToPdf(formId, record, filename){
+  let loadingToast = showToast("Preparing PDF, please wait...");
+  try{ await ensurePdfLibs(); }
+  catch(e){ hideToast(loadingToast); alert("Could not load PDF engine. Check internet connection."); return; }
+  const host = document.getElementById("printHost");
+  host.innerHTML = buildPrintHTML(formId, record);
+  await new Promise(r=>setTimeout(r, 60));
+  const target = host.firstElementChild;
+  const canvas = await html2canvas(target, {scale:2, backgroundColor:"#ffffff"});
+  const imgData = canvas.toDataURL("image/png");
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF("p","mm","a4");
+  const pageWidth = 210, pageHeight = 297;
+  const imgW = pageWidth;
+  const imgH = (canvas.height * imgW) / canvas.width;
+  let heightLeft = imgH, position = 0;
+  pdf.addImage(imgData, "PNG", 0, position, imgW, imgH);
+  heightLeft -= pageHeight;
+  while(heightLeft > 0){
+    position = heightLeft - imgH;
+    pdf.addPage();
+    pdf.addImage(imgData, "PNG", 0, position, imgW, imgH);
+    heightLeft -= pageHeight;
+  }
+  pdf.save(filename);
+  host.innerHTML = "";
+  hideToast(loadingToast);
+}
+
+async function downloadCurrentFormPdf(){
+  const data = collectCurrentFormData();
+  const materialUsed = collectMaterialUsed();
+  const form = FORMS[currentFormId];
+  const record = {data, technicianUsername:currentUser.username, geotag:currentGeotag, materialUsed};
+  const nameKey = data.sections.consumer_name || data.sections.customer_name || "form";
+  await renderToPdf(currentFormId, record, `${form.title.replace(/\s+/g,"_")}_${nameKey.replace(/\s+/g,"_")||Date.now()}.pdf`);
+}
+
+async function downloadSubmissionPdf(id){
+  const sub = submissions.find(s=>s.id===id);
+  if(!sub) return;
+  const form = FORMS[sub.formType];
+  const nameKey = (sub.data.sections && (sub.data.sections.consumer_name || sub.data.sections.customer_name)) || "form";
+  await renderToPdf(sub.formType, sub, `${form.title.replace(/\s+/g,"_")}_${nameKey.replace(/\s+/g,"_")||Date.now()}.pdf`);
+}
+
+/* ============ LIGHTWEIGHT LAYOUT PREVIEW (no PDF library needed) ============ */
+function showPrintPreview(html, downloadFn){
+  const overlay = document.createElement("div");
+  overlay.id = "printPreviewOverlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;flex-direction:column;";
+  overlay.innerHTML = `
+    <div style="background:#0D904F;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span style="font-weight:bold;">📄 Form Layout Preview</span>
+      <div style="display:flex;gap:8px;">
+        ${downloadFn ? `<button id="previewDownloadBtn" style="background:#8430CE;border:none;color:#fff;padding:6px 12px;border-radius:6px;font-weight:bold;font-size:12px;">⬇ Download PDF</button>` : ""}
+        <button id="closePreviewBtn" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:6px 12px;border-radius:6px;font-weight:bold;font-size:12px;">✕ Close</button>
+      </div>
+    </div>
+    <div style="flex:1;overflow:auto;background:#d1d5db;padding:16px 0;">
+      <div id="previewScaleWrap" style="transform-origin:top center;margin:0 auto;">${html}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const wrap = overlay.querySelector("#previewScaleWrap");
+  const availWidth = Math.min(window.innerWidth - 24, 754);
+  const scale = availWidth / 754;
+  wrap.style.transform = `scale(${scale})`;
+  wrap.style.width = "754px";
+  wrap.parentElement.style.height = `${Math.ceil(wrap.scrollHeight * scale) + 20}px`;
+
+  overlay.querySelector("#closePreviewBtn").onclick = ()=> overlay.remove();
+  if(downloadFn){
+    overlay.querySelector("#previewDownloadBtn").onclick = async ()=>{ await downloadFn(); };
+  }
+}
+
+function previewCurrentFormPdf(){
+  const data = collectCurrentFormData();
+  const materialUsed = collectMaterialUsed();
+  const record = {data, technicianUsername:currentUser.username, geotag:currentGeotag, materialUsed};
+  showPrintPreview(buildPrintHTML(currentFormId, record), downloadCurrentFormPdf);
+}
+
+function previewSubmissionPdf(id){
+  const sub = submissions.find(s=>s.id===id);
+  if(!sub) return;
+  showPrintPreview(buildPrintHTML(sub.formType, sub), ()=>downloadSubmissionPdf(id));
+}
+
+/* ============ ADMIN MODULE ============ */
+/* ============ SURVEYOR MODULE ============ */
+const PENDING_WORK_OPTIONS = [
+  {key:"newConnection", label:"New Connection"},
+  {key:"giPending", label:"GI Pending"},
+  {key:"slPending", label:"SL Pending"},
+  {key:"ngPending", label:"NG Pending"},
+];
+const CONNECTION_TYPE_OPTIONS = [
+  {key:"old", label:"Old"},
+  {key:"new", label:"New"},
+  {key:"crm", label:"CRM"},
+  {key:"crmNew", label:"CRM New"},
+];
+function renderCheckboxGroup(groupPrefix, options){
+  return `<div class="grid grid-cols-2 gap-2 text-sm mb-1">
+    ${options.map(o=>`<label class="flex items-center gap-2 bg-gray-50 rounded px-2 py-2">
+      <input type="checkbox" id="${groupPrefix}_${o.key}" class="w-4 h-4 accent-[#0D904F]"> ${o.label}
+    </label>`).join("")}
+  </div>`;
+}
+function collectCheckboxGroup(groupPrefix, options){
+  return options.filter(o=>{
+    const el = document.getElementById(`${groupPrefix}_${o.key}`);
+    return el && el.checked;
+  }).map(o=>o.label);
+}
+
+function renderSurveyorAddCustomer(){
+  return `<h2 class="font-bold text-gray-800 mb-3">➕ Add New Customer (Field Survey)</h2>
+    <div class="bg-white rounded-lg shadow p-4">
+      <label class="ff-label">Pending Work</label>
+      ${renderCheckboxGroup("survPW", PENDING_WORK_OPTIONS)}
+      <label class="ff-label mt-2">Connection Type</label>
+      ${renderCheckboxGroup("survCT", CONNECTION_TYPE_OPTIONS)}
+
+      <p id="surveyGeoStatus" class="text-xs text-gray-500 mt-3 mb-3">📍 Capturing your current location...</p>
+      <label class="ff-label">Customer Name *</label>
+      <input id="survName" class="ff-input mb-3" placeholder="Full name">
+      <label class="ff-label">Father/Husband Name</label>
+      <input id="survFather" class="ff-input mb-3" placeholder="Father or Husband name">
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <div>
+          <label class="ff-label">Start At (Date)</label>
+          <input id="survStartAt" type="date" class="ff-input">
+        </div>
+        <div>
+          <label class="ff-label">Form No.</label>
+          <input id="survFormNo" class="ff-input" placeholder="e.g. F-1001">
+        </div>
+      </div>
+      <label class="ff-label">Phone Number</label>
+      <input id="survPhone" class="ff-input mb-3" placeholder="10-digit mobile">
+      <label class="ff-label">Email</label>
+      <input id="survEmail" class="ff-input mb-3" placeholder="email@example.com (optional)">
+      <label class="ff-label">Address (full, for display) *</label>
+      <textarea id="survAddress" class="ff-input mb-3" rows="2" placeholder="House no, street, area, city"></textarea>
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <input id="survHouseNo" class="ff-input" placeholder="House No">
+        <input id="survPinCode" class="ff-input" placeholder="Pin Code">
+        <input id="survSociety" class="ff-input" placeholder="Society/Colony">
+        <input id="survStreet" class="ff-input" placeholder="Street">
+        <input id="survArea" class="ff-input" placeholder="Area">
+        <input id="survLandmark" class="ff-input" placeholder="Landmark">
+      </div>
+      <label class="ff-label">B.P No (if known)</label>
+      <input id="survBpNo" class="ff-input mb-3" placeholder="Business Partner No (optional)">
+      <label class="ff-label">Notes</label>
+      <textarea id="survNotes" class="ff-input mb-4" rows="2" placeholder="Any additional notes for admin"></textarea>
+      <button onclick="submitSurveyCustomer()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Submit to Admin</button>
+    </div>`;
+}
+let surveyGeotag = null;
+
+async function submitSurveyCustomer(){
+  const name = document.getElementById("survName").value.trim();
+  const fatherHusbandName = document.getElementById("survFather").value.trim();
+  const startAt = document.getElementById("survStartAt").value;
+  const formNumber = document.getElementById("survFormNo").value.trim();
+  const phone = document.getElementById("survPhone").value.trim();
+  const email = document.getElementById("survEmail").value.trim();
+  const address = document.getElementById("survAddress").value.trim();
+  const houseNo = document.getElementById("survHouseNo").value.trim();
+  const pinCode = document.getElementById("survPinCode").value.trim();
+  const society = document.getElementById("survSociety").value.trim();
+  const street = document.getElementById("survStreet").value.trim();
+  const area = document.getElementById("survArea").value.trim();
+  const landmark = document.getElementById("survLandmark").value.trim();
+  const bpNo = document.getElementById("survBpNo").value.trim();
+  const notes = document.getElementById("survNotes").value.trim();
+  if(!name || !address){ alert("Naam aur address dena zaroori hai."); return; }
+
+  const pendingWork = collectCheckboxGroup("survPW", PENDING_WORK_OPTIONS);
+  const connectionType = collectCheckboxGroup("survCT", CONNECTION_TYPE_OPTIONS);
+
+  const geo = surveyGeotag || await getGeoTag();
+  const record = {
+    name, fatherHusbandName, startAt, formNumber, phone, email, address, houseNo, pinCode, society, street, area, landmark, bpNo, notes,
+    pendingWork, connectionType,
+    workStatus: "Pending", meterCompany:"", meterSerialNumber:"", switchOnDate:"",
+    paymentPlan:"", agencyName:"", sdAmount:"", registerBy: currentUser.username,
+    slWork:"Pending", slPaper:"Pending", giWork:"Pending", giPaper:"Pending",
+    ngWork:"Pending", ngPaper:"Pending", restoreWork:"Pending", restorePaper:"Pending",
+    jmrStatus:"Pending", remark:"",
+    status: "pending",
+    addedBy: currentUser.username,
+    addedByRole: "surveyor",
+    assignedTechnician: null,
+    geotag: geo,
+    createdAt: new Date().toISOString()
+  };
+  if(db){
+    try{ await db.collection("customers").add(record); showToast("Customer admin ko bhej diya gaya!"); }
+    catch(e){ console.error(e); alert("Save failed, try again."); return; }
+  } else {
+    customers.push({id:"local_"+Date.now(), ...record});
+  }
+  setView("mySurveys");
+}
+
+function renderSurveyorMySurveys(){
+  const mine = customers.filter(c=>c.addedBy===currentUser.username);
+  const sorted = [...mine].sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+  if(sorted.length===0) return `<p class="text-gray-400 text-center mt-10">Aapne abhi tak koi customer add nahi kiya.</p>`;
+  return `<h2 class="font-bold text-gray-800 mb-3">🧭 My Surveys</h2>
+    <div class="space-y-2">
+      ${sorted.map(c=>{
+        const badge = c.status==="pending" ? '<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded font-bold">Pending Assignment</span>'
+          : c.status==="assigned" ? `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold">Assigned to ${techName(c.assignedTechnician)}</span>`
+          : '<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-bold">Completed</span>';
+        return `<div class="bg-white rounded-lg shadow p-3">
+          <p class="font-bold text-sm">${c.name}</p>
+          <p class="text-xs text-gray-500">${c.address}</p>
+          <p class="text-xs text-gray-400">📞 ${c.phone||"—"} ${c.geotag ? `• 📍 ${c.geotag.lat.toFixed(5)}, ${c.geotag.lng.toFixed(5)}` : ""}</p>
+          ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-xs mt-1"><span class="font-bold">Pending:</span> ${c.pendingWork.join(", ")}</p>` : ""}
+          ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
+          <div class="flex items-center justify-between mt-2">
+            ${badge}
+            <button onclick="openCustomerDetail('${c.id}')" class="text-xs bg-[#0D904F] text-white px-3 py-1 rounded font-bold">Fill Forms</button>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>`;
+}
+
+/* ============ ADMIN: CUSTOMER MANAGEMENT ============ */
+function renderAdminCustomers(){
+  const pending = customers.filter(c=>c.status==="pending");
+  const others = customers.filter(c=>c.status!=="pending");
+  const sortedOthers = [...others].sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+  return `
+    <button onclick="exportCustomerMasterReport()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Export Customer Master Report (Excel)</button>
+    <button onclick="exportWorkTrackerReport()" class="w-full bg-[#8430CE] text-white font-bold py-2.5 rounded-lg mb-4">⬇ Export Work Tracker Report (SL/GI/NG/Restore)</button>
+
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <h2 class="font-bold text-gray-800 mb-3">➕ Add Customer (Admin)</h2>
+      <label class="ff-label">Pending Work</label>
+      ${renderCheckboxGroup("admPW", PENDING_WORK_OPTIONS)}
+      <label class="ff-label mt-2">Connection Type</label>
+      ${renderCheckboxGroup("admCT", CONNECTION_TYPE_OPTIONS)}
+      <div class="mt-3"></div>
+      <input id="admCustName" class="ff-input mb-2" placeholder="Customer Name">
+      <input id="admCustFather" class="ff-input mb-2" placeholder="Father/Husband Name">
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <input id="admCustStartAt" type="date" class="ff-input" placeholder="Start At">
+        <input id="admCustFormNo" class="ff-input" placeholder="Form No.">
+      </div>
+      <input id="admCustPhone" class="ff-input mb-2" placeholder="Phone">
+      <textarea id="admCustAddress" class="ff-input mb-2" rows="2" placeholder="Address"></textarea>
+      <input id="admCustBp" class="ff-input mb-2" placeholder="B.P No (optional)">
+      <label class="ff-label">Payment Plan</label>
+      <select id="admCustPlan" class="ff-input mb-2">
+        <option value="">-- Select --</option>
+        ${PAYMENT_PLAN_OPTIONS.map(p=>`<option value="${p}">${p}</option>`).join("")}
+      </select>
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <input id="admCustAgency" class="ff-input" placeholder="Agency Name">
+        <input id="admCustSd" type="number" class="ff-input" placeholder="SD Amount (Rs)">
+      </div>
+      <label class="ff-label">Assign to Technician (optional now)</label>
+      <select id="admCustAssign" class="ff-input mb-3">
+        <option value="">-- Leave unassigned --</option>
+        ${activeTechnicianList().map(t=>`<option value="${t.username}">${t.name}</option>`).join("")}
+      </select>
+      <button onclick="adminAddCustomer()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Add Customer</button>
+    </div>
+
+    <h2 class="font-bold text-gray-800 mb-2">🕓 Pending Assignment (${pending.length})</h2>
+    <div class="space-y-2 mb-5">
+      ${pending.length===0 ? '<p class="text-xs text-gray-400">Koi pending customer nahi hai.</p>' : pending.map(c=>`
+        <div class="bg-white rounded-lg shadow p-3">
+          <p class="font-bold text-sm">${c.name}</p>
+          <p class="text-xs text-gray-500">${c.address}</p>
+          <p class="text-xs text-gray-400">📞 ${c.phone||"—"} • Survey by: ${techName(c.addedBy)} ${c.geotag?`• 📍 ${c.geotag.lat.toFixed(5)}, ${c.geotag.lng.toFixed(5)}`:""}</p>
+          ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-xs mt-1"><span class="font-bold">Pending:</span> ${c.pendingWork.join(", ")}</p>` : ""}
+          ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
+          <div class="flex gap-2 mt-2">
+            <select id="assignSel_${c.id}" class="ff-input flex-1 text-xs">
+              ${activeTechnicianList().map(t=>`<option value="${t.username}">${t.name}</option>`).join("")}
+            </select>
+            <button onclick="assignCustomer('${c.id}')" class="bg-[#EA8600] text-white text-xs font-bold px-3 py-1.5 rounded">Assign</button>
+          </div>
+        </div>`).join("")}
+    </div>
+
+    <h2 class="font-bold text-gray-800 mb-2">📋 All Customers (${others.length})</h2>
+    <div class="space-y-2">
+      ${sortedOthers.map(c=>{
+        const filled = submissions.filter(s=>s.customerId===c.id).length;
+        return `<div class="bg-white rounded-lg shadow p-3">
+          <div class="flex justify-between items-center">
+            <p class="font-bold text-sm">${c.name}</p>
+            <span class="text-xs ${c.status==='completed'?'bg-green-100 text-green-700':'bg-blue-100 text-blue-700'} px-2 py-1 rounded font-bold">${c.status}</span>
+          </div>
+          <p class="text-xs text-gray-500">${c.address}</p>
+          <p class="text-xs text-gray-400">Technician: ${techName(c.assignedTechnician)} • Forms filled: ${filled}/6</p>
+          <p class="text-xs mt-1"><span class="font-bold">Work Status:</span> <span class="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">${c.workStatus||"Pending"}</span></p>
+          <p class="text-xs mt-1 flex flex-wrap gap-1">
+            <span class="bg-gray-100 px-1.5 py-0.5 rounded">SL: ${c.slWork||"-"}/${c.slPaper||"-"}</span>
+            <span class="bg-gray-100 px-1.5 py-0.5 rounded">GI: ${c.giWork||"-"}/${c.giPaper||"-"}</span>
+            <span class="bg-gray-100 px-1.5 py-0.5 rounded">NG: ${c.ngWork||"-"}/${c.ngPaper||"-"}</span>
+            <span class="bg-gray-100 px-1.5 py-0.5 rounded">Restore: ${c.restoreWork||"-"}/${c.restorePaper||"-"}</span>
+            <span class="bg-gray-100 px-1.5 py-0.5 rounded">JMR: ${c.jmrStatus||"-"}</span>
+          </p>
+          ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-xs mt-1"><span class="font-bold">Pending:</span> ${c.pendingWork.join(", ")}</p>` : ""}
+          ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
+          <div class="flex gap-2 mt-2">
+            <select id="reassignSel_${c.id}" class="ff-input flex-1 text-xs">
+              ${activeTechnicianList().map(t=>`<option value="${t.username}" ${c.assignedTechnician===t.username?"selected":""}>${t.name}</option>`).join("")}
+            </select>
+            <button onclick="reassignCustomer('${c.id}')" class="bg-[#8430CE] text-white text-xs font-bold px-3 py-1.5 rounded">🔁 Transfer</button>
+          </div>
+        </div>`;
+      }).join("") || '<p class="text-xs text-gray-400">Koi customer nahi.</p>'}
+    </div>`;
+}
+
+async function reassignCustomer(customerId){
+  const sel = document.getElementById("reassignSel_"+customerId);
+  const techUsername = sel.value;
+  if(!techUsername) return;
+  const c = customers.find(c=>c.id===customerId);
+  if(c && c.assignedTechnician===techUsername){ showToast("Ye customer pehle se isi technician ko assigned hai."); return; }
+  if(db){
+    try{ await db.doc("customers/"+customerId).update({assignedTechnician: techUsername, status:"assigned"}); }
+    catch(e){ console.error(e); alert("Transfer failed."); return; }
+  } else {
+    if(c){ c.assignedTechnician = techUsername; c.status = "assigned"; renderMain(); }
+  }
+  showToast(`Kaam transfer ho gaya: ${techName(techUsername)}`);
+}
+
+async function adminAddCustomer(){
+  const name = document.getElementById("admCustName").value.trim();
+  const fatherHusbandName = document.getElementById("admCustFather").value.trim();
+  const startAt = document.getElementById("admCustStartAt").value;
+  const formNumber = document.getElementById("admCustFormNo").value.trim();
+  const phone = document.getElementById("admCustPhone").value.trim();
+  const address = document.getElementById("admCustAddress").value.trim();
+  const bpNo = document.getElementById("admCustBp").value.trim();
+  const paymentPlan = document.getElementById("admCustPlan").value;
+  const agencyName = document.getElementById("admCustAgency").value.trim();
+  const sdAmount = document.getElementById("admCustSd").value.trim();
+  const assignTo = document.getElementById("admCustAssign").value;
+  if(!name || !address){ alert("Naam aur address dena zaroori hai."); return; }
+  const pendingWork = collectCheckboxGroup("admPW", PENDING_WORK_OPTIONS);
+  const connectionType = collectCheckboxGroup("admCT", CONNECTION_TYPE_OPTIONS);
+  const record = {
+    name, fatherHusbandName, startAt, formNumber, phone, address, bpNo,
+    pendingWork, connectionType,
+    workStatus: "Pending", meterCompany:"", meterSerialNumber:"", switchOnDate:"",
+    paymentPlan, agencyName, sdAmount, registerBy: currentUser.username,
+    slWork:"Pending", slPaper:"Pending", giWork:"Pending", giPaper:"Pending",
+    ngWork:"Pending", ngPaper:"Pending", restoreWork:"Pending", restorePaper:"Pending",
+    jmrStatus:"Pending", remark:"",
+    status: assignTo ? "assigned" : "pending",
+    addedBy: currentUser.username, addedByRole: "admin",
+    assignedTechnician: assignTo || null,
+    geotag: null,
+    createdAt: new Date().toISOString()
+  };
+  if(db){ await db.collection("customers").add(record); }
+  else { customers.push({id:"local_"+Date.now(), ...record}); renderMain(); }
+  showToast("Customer added!");
+}
+
+async function assignCustomer(customerId){
+  const sel = document.getElementById("assignSel_"+customerId);
+  const techUsername = sel.value;
+  if(!techUsername) return;
+  if(db){ await db.doc("customers/"+customerId).update({assignedTechnician: techUsername, status:"assigned"}); }
+  else {
+    const c = customers.find(c=>c.id===customerId);
+    if(c){ c.assignedTechnician = techUsername; c.status = "assigned"; renderMain(); }
+  }
+  showToast(`Assigned to ${techName(techUsername)}`);
+}
+
+function renderAdminOverview(){
+  const totalForms = submissions.length;
+  const totalTechs = technicianList().length;
+  const totalIssued = issues.reduce((s,i)=>s+(Number(i.qty)||0),0);
+  const totalConsumed = consumption.reduce((s,c)=>s+(Number(c.qty)||0),0);
+  const pendingCustomers = customers.filter(c=>c.status==="pending").length;
+  const assignedCustomers = customers.filter(c=>c.status==="assigned").length;
+  const byForm = {};
+  submissions.forEach(s=>{ byForm[s.formType] = (byForm[s.formType]||0)+1; });
+  return `
+    <h2 class="font-bold text-gray-800 mb-3">📊 Overall Progress (All Technicians Combined)</h2>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-white rounded-lg shadow p-3 text-center"><p class="text-2xl font-bold text-[#0D904F]">${totalForms}</p><p class="text-xs text-gray-500">Forms Filled</p></div>
+      <div class="bg-white rounded-lg shadow p-3 text-center"><p class="text-2xl font-bold text-[#0D904F]">${totalTechs}</p><p class="text-xs text-gray-500">Technicians</p></div>
+      <div class="bg-white rounded-lg shadow p-3 text-center"><p class="text-2xl font-bold text-[#8430CE]">${totalIssued}</p><p class="text-xs text-gray-500">Material Issued</p></div>
+      <div class="bg-white rounded-lg shadow p-3 text-center"><p class="text-2xl font-bold text-[#EA8600]">${totalConsumed}</p><p class="text-xs text-gray-500">Material Consumed</p></div>
+      <div class="bg-white rounded-lg shadow p-3 text-center"><p class="text-2xl font-bold text-yellow-600">${pendingCustomers}</p><p class="text-xs text-gray-500">Pending Customers</p></div>
+      <div class="bg-white rounded-lg shadow p-3 text-center"><p class="text-2xl font-bold text-blue-600">${assignedCustomers}</p><p class="text-xs text-gray-500">Assigned Customers</p></div>
+    </div>
+    <h3 class="font-bold text-gray-800 mb-2">Forms Breakdown</h3>
+    <div class="bg-white rounded-lg shadow p-3 mb-4 space-y-1">
+      ${Object.keys(FORMS).map(id=>`<div class="flex justify-between text-sm border-b last:border-0 py-1"><span>${FORMS[id].icon} ${FORMS[id].title}</span><span class="font-bold">${byForm[id]||0}</span></div>`).join("")}
+    </div>
+    <button onclick="exportAllToExcel()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg">⬇ Export All Data to Excel</button>
+  `;
+}
+
+/* ============ ADMIN: EMPLOYEE PANEL (attendance + add/remove login + role list) ============ */
+function renderAdminEmployees(){
+  const employees = employeeList();
+  const roleOrder = {technician:0, surveyor:1, store:2};
+  const sorted = [...employees].sort((a,b)=> (roleOrder[a.role]??9)-(roleOrder[b.role]??9) || a.name.localeCompare(b.name));
+  return `
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <h2 class="font-bold text-gray-800 mb-3">➕ Add New Employee</h2>
+      <label class="ff-label">Name</label>
+      <input id="empName" class="ff-input mb-2" placeholder="Employee Name">
+      <label class="ff-label">Role</label>
+      <select id="empRole" class="ff-input mb-3">
+        <option value="technician">Technician</option>
+        <option value="store">Store</option>
+        <option value="surveyor">Surveyor</option>
+      </select>
+      <button onclick="adminAddEmployee()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Add Employee</button>
+      <p class="text-xs text-gray-400 mt-2">Username/password auto-generate hoga aur add karne ke baad ek baar dikhaya jayega — note kar lena.</p>
+    </div>
+
+    <h2 class="font-bold text-gray-800 mb-2">👥 All Employees (${sorted.length})</h2>
+    <div class="space-y-2">
+      ${sorted.map(u=>{
+        const isActive = u.active !== false;
+        const myAtt = attendance.filter(a=>a.username===u.username).sort((a,b)=>(b.loginAt||"").localeCompare(a.loginAt||""));
+        const lastAtt = myAtt[0];
+        return `<div class="bg-white rounded-lg shadow p-3">
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="font-bold text-sm">${u.name} <span class="text-xs font-normal text-gray-400">(${u.username})</span></p>
+              <p class="text-xs text-gray-500 capitalize">${u.role}</p>
+            </div>
+            <span class="text-xs font-bold px-2 py-1 rounded ${isActive?'bg-green-100 text-green-700':'bg-red-100 text-red-600'}">${isActive?'Active':'Login Removed'}</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">📍 ${lastAtt ? `${lastAtt.address || (lastAtt.geotag?`${lastAtt.geotag.lat.toFixed(5)}, ${lastAtt.geotag.lng.toFixed(5)}`:'Location not captured')} • ${lastAtt.loginAt?new Date(lastAtt.loginAt).toLocaleString():""}` : 'Koi attendance record nahi.'}</p>
+          ${u.role==="technician" ? `<p class="text-xs mt-1">🦺 Aaj ka safety check: ${hasSafetyCheckToday(u.username) ? '<span class="text-green-600 font-bold">✅ Verified</span>' : '<span class="text-red-500 font-bold">❌ Pending</span>'}</p>` : ""}
+          <div class="flex gap-2 mt-2">
+            <button onclick="viewEmployeeDetail('${u.username}')" class="flex-1 text-xs bg-[#0D904F] text-white py-1.5 rounded font-bold">View Details</button>
+            <button onclick="toggleEmployeeActive('${u.username}')" class="flex-1 text-xs ${isActive?'bg-red-100 text-red-700':'bg-blue-100 text-blue-700'} py-1.5 rounded font-bold">${isActive?'Remove Login':'Restore Login'}</button>
+          </div>
+        </div>`;
+      }).join("") || '<p class="text-xs text-gray-400">Koi employee nahi.</p>'}
+    </div>
+    <div id="empDetailModal"></div>`;
+}
+
+async function adminAddEmployee(){
+  const name = document.getElementById("empName").value.trim();
+  const role = document.getElementById("empRole").value;
+  if(!name){ alert("Employee ka naam dalein."); return; }
+  const username = generateUsername(name);
+  const password = generatePassword(name);
+  const record = {username, password, role, name, active:true, createdAt:new Date().toISOString()};
+  if(db){
+    try{ await db.collection("users").doc(username).set(record); }
+    catch(e){ console.error(e); alert("Add karne mein error aaya, dobara try karein."); return; }
+  } else {
+    allUsers.push(record); renderMain();
+  }
+  document.getElementById("empName").value = "";
+  alert(`Employee add ho gaya!\n\nUsername: ${username}\nPassword: ${password}\n\nYe details employee ko de dein — dobara yahan nahi dikhengi, isliye abhi note kar lein.`);
+}
+
+async function toggleEmployeeActive(username){
+  const u = employeeList().find(u=>u.username===username);
+  if(!u) return;
+  const newActive = !(u.active !== false);
+  if(!newActive && !confirm(`${u.name} ka login access hata dein? Inka pura purana data (forms, customers, attendance) admin panel mein dikhta rahega.`)) return;
+  if(db){
+    try{ await db.doc("users/"+username).update({active:newActive}); }
+    catch(e){ console.error(e); alert("Update failed."); return; }
+  } else {
+    u.active = newActive; renderMain();
+  }
+  showToast(newActive ? "Login access restore ho gaya." : "Login access hata diya gaya (data safe hai).");
+}
+
+function viewEmployeeDetail(username){
+  const u = employeeList().find(u=>u.username===username);
+  if(!u) return;
+  const myAtt = attendance.filter(a=>a.username===username).sort((a,b)=>(b.loginAt||"").localeCompare(a.loginAt||""));
+  let extra = "";
+  if(u.role==="technician"){
+    const mySubs = submissions.filter(s=>s.technicianUsername===username).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+    const bal = getTechBalances(username);
+    const assigned = customers.filter(c=>c.assignedTechnician===username);
+    const mySafety = safetyChecks.filter(s=>s.username===username).sort((a,b)=>(b.submittedAt||"").localeCompare(a.submittedAt||""));
+    extra = `
+      <h4 class="font-bold text-sm text-gray-700 mb-1">🦺 Safety Kit Checks (${mySafety.length})</h4>
+      <div class="space-y-2 mb-3">
+        ${mySafety.slice(0,14).map(s=>`<div class="bg-gray-50 rounded p-2 text-xs">
+          <p class="font-bold mb-1">${s.date||""} ${s.submittedAt?"• "+new Date(s.submittedAt).toLocaleTimeString():""}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <img src="${s.selfiePhoto}" class="w-full rounded border" style="height:90px;object-fit:cover;">
+            <img src="${s.bodyPhoto}" class="w-full rounded border" style="height:90px;object-fit:cover;">
+          </div>
+        </div>`).join("") || '<p class="text-xs text-gray-400">Koi safety check record nahi.</p>'}
+      </div>
+      <h4 class="font-bold text-sm text-gray-700 mb-1">Material Balance</h4>
+      <div class="space-y-1 mb-3">${bal.map(b=>`<div class="flex justify-between text-xs bg-gray-50 rounded p-2"><span>${b.itemName}</span><span class="font-bold">${b.balance} ${b.unit} left (used ${b.consumed})</span></div>`).join("")||'<p class="text-xs text-gray-400">No material issued</p>'}</div>
+      <h4 class="font-bold text-sm text-gray-700 mb-1">Assigned Customers (${assigned.length})</h4>
+      <div class="space-y-1 mb-3">${assigned.map(c=>`<div class="text-xs bg-gray-50 rounded p-2">${c.name} — ${c.status}</div>`).join("")||'<p class="text-xs text-gray-400">None</p>'}</div>
+      <h4 class="font-bold text-sm text-gray-700 mb-1">Forms Submitted (${mySubs.length})</h4>
+      <div class="space-y-2 mb-3">
+        ${mySubs.map(s=>{
+          const f = FORMS[s.formType];
+          const custName = s.customerId ? customerName(s.customerId) : ((s.data.sections && (s.data.sections.consumer_name || s.data.sections.customer_name)) || "—");
+          return `<div class="border rounded p-2 text-xs">
+            <p class="font-bold">${f?f.title:s.formType} — ${custName}</p>
+            <p class="text-gray-400">${s.createdAt?new Date(s.createdAt).toLocaleString():""}</p>
+            <button onclick="previewSubmissionPdf('${s.id}')" class="mt-1 bg-gray-700 text-white px-2 py-1 rounded font-bold">View</button>
+            <button onclick="downloadSubmissionPdf('${s.id}')" class="mt-1 bg-[#8430CE] text-white px-2 py-1 rounded font-bold">PDF</button>
+          </div>`;
+        }).join("") || '<p class="text-xs text-gray-400">No forms yet</p>'}
+      </div>`;
+  } else if(u.role==="surveyor"){
+    const added = customers.filter(c=>c.addedBy===username).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+    extra = `<h4 class="font-bold text-sm text-gray-700 mb-1">Customers Surveyed (${added.length})</h4>
+      <div class="space-y-1 mb-3">${added.map(c=>`<div class="text-xs bg-gray-50 rounded p-2">${c.name} — ${c.address} — <span class="font-bold">${c.status}</span></div>`).join("")||'<p class="text-xs text-gray-400">None</p>'}</div>`;
+  } else if(u.role==="store"){
+    const myIssues = issues.filter(i=>i.issuedBy===username).sort((a,b)=>(b.issuedAt||"").localeCompare(a.issuedAt||""));
+    extra = `<h4 class="font-bold text-sm text-gray-700 mb-1">Material Issued by this Store User (${myIssues.length})</h4>
+      <div class="space-y-1 mb-3">${myIssues.map(i=>`<div class="text-xs bg-gray-50 rounded p-2">${i.itemName} — ${i.qty}${i.unit||""} → ${techName(i.technicianUsername)}</div>`).join("")||'<p class="text-xs text-gray-400">None</p>'}</div>`;
+  }
+  const html = `
+    <div class="fixed inset-0 bg-black/50 flex items-end z-50" onclick="if(event.target===this) document.getElementById('empDetailModal').innerHTML=''">
+      <div class="bg-white rounded-t-2xl w-full max-h-[85vh] overflow-y-auto p-4">
+        <div class="flex justify-between items-center mb-3">
+          <div>
+            <h3 class="font-bold text-lg">${u.name}</h3>
+            <p class="text-xs text-gray-400 capitalize">${u.role} • ${u.username} • ${u.active!==false?'Active':'Login Removed'}</p>
+          </div>
+          <button onclick="document.getElementById('empDetailModal').innerHTML=''" class="text-gray-400 text-2xl">✕</button>
+        </div>
+        ${extra}
+        <h4 class="font-bold text-sm text-gray-700 mb-1">📍 Attendance / Login Log (${myAtt.length})</h4>
+        <div class="space-y-1">
+          ${myAtt.slice(0,30).map(a=>`<div class="text-xs bg-gray-50 rounded p-2">
+            <p>${a.address || (a.geotag?`${a.geotag.lat.toFixed(5)}, ${a.geotag.lng.toFixed(5)}`:'Location not captured')}</p>
+            <p class="text-gray-400">${a.loginAt?new Date(a.loginAt).toLocaleString():""}</p>
+          </div>`).join("") || '<p class="text-xs text-gray-400">Koi login record nahi.</p>'}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById("empDetailModal").innerHTML = html;
+}
+
+function renderAdminStoreReport(){
+  const rows = inventory.length ? inventory : SEED_INVENTORY.map((it,i)=>({id:"seed"+i, ...it}));
+  const sortedIssues = [...issues].sort((a,b)=>(b.issuedAt||"").localeCompare(a.issuedAt||""));
+  return `<h2 class="font-bold text-gray-800 mb-3">📦 Store Inventory Report</h2>
+    <div class="space-y-2 mb-5">
+      ${rows.map(it=>`<div class="bg-white rounded-lg shadow p-3 flex justify-between"><span class="font-bold text-sm">${it.itemName}</span><span class="text-sm">${it.stockQty} ${it.unit} in stock</span></div>`).join("")}
+    </div>
+    <h2 class="font-bold text-gray-800 mb-3">🚚 Recent Issues</h2>
+    <div class="space-y-2">
+      ${sortedIssues.slice(0,15).map(i=>`<div class="bg-white rounded-lg shadow p-3">
+        <p class="font-bold text-sm">${i.itemName} — ${i.qty} ${i.unit||""}</p>
+        <p class="text-xs text-gray-500">To: ${techName(i.technicianUsername)} • ${i.issuedAt?new Date(i.issuedAt).toLocaleString():""}</p>
+      </div>`).join("") || '<p class="text-gray-400 text-sm">No issues yet.</p>'}
+    </div>`;
+}
+
+/* ============ EXCEL EXPORT (all data) ============ */
+/* ============ EXPORT: Customer Master Report (matches GAIL "work front" format) ============ */
+/* ============ EXPORT: Work Tracker Report (matches uploaded SL/GI/NG/Restore tracker sheet) ============ */
+async function exportWorkTrackerReport(){
+  if(customers.length===0){ alert("Koi customer nahi hai export karne ke liye."); return; }
+  let loadingToast = showToast("Preparing work tracker report...");
+  try{ await ensureXlsxLib(); }
+  catch(e){ hideToast(loadingToast); alert("Could not load Excel engine."); return; }
+
+  const rows = customers.map(c=>{
+    const workTypes = [];
+    if((c.pendingWork||[]).some(w=>w.includes("SL")) || c.slWork) workTypes.push("SL");
+    if((c.pendingWork||[]).some(w=>w.includes("GI")) || c.giWork) workTypes.push("GI");
+    if((c.pendingWork||[]).some(w=>w.includes("NG")) || c.ngWork) workTypes.push("NG");
+    return {
+      Timestamp: c.createdAt ? new Date(c.createdAt).toLocaleString() : "",
+      DATE: c.startAt || "",
+      "C TYPE": (c.connectionType||[]).join(", ") || "",
+      "CUSTMOR NAME": c.name || "",
+      "FATHER/HUSBAND": c.fatherHusbandName || "",
+      "PHONE NO": c.phone || "",
+      "BP NO": c.bpNo || "",
+      "AREA": c.area || "",
+      "ADDRESS": c.address || "",
+      "START AT": c.startAt || "",
+      "METER NO": c.meterSerialNumber || "",
+      "FORM": c.formNumber || "",
+      "SL WORK": c.slWork || "Pending",
+      "SL PAPER": c.slPaper || "Pending",
+      "GI WORK": c.giWork || "Pending",
+      "GI PAPER": c.giPaper || "Pending",
+      "NG WORK": c.ngWork || "Pending",
+      "NG PAPER": c.ngPaper || "Pending",
+      "RESTORE WORK": c.restoreWork || "Pending",
+      "RESTORE PAPER": c.restorePaper || "Pending",
+      "JMR": c.jmrStatus || "Pending",
+      "REMARK": c.remark || "",
+    };
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Work Tracker");
+  XLSX.writeFile(wb, `Work_Tracker_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+  hideToast(loadingToast);
+}
+
+async function exportCustomerMasterReport(){
+  if(customers.length===0){ alert("Koi customer nahi hai export karne ke liye."); return; }
+  let loadingToast = showToast("Preparing report...");
+  try{ await ensureXlsxLib(); }
+  catch(e){ hideToast(loadingToast); alert("Could not load Excel engine."); return; }
+
+  const rows = customers.map(c=>{
+    const nameParts = (c.name||"").trim().split(" ");
+    const firstName = c.name || "";
+    const middleName = ""; // not separately tracked
+    return {
+      BpNumber: c.bpNo || "",
+      FirstName: firstName,
+      MiddleName: middleName,
+      CreationDateTime: c.createdAt ? new Date(c.createdAt).toISOString() : "",
+      StatusChangeDate: c.switchOnDate || "",
+      PinCode: c.pinCode || "",
+      HouseNo: c.houseNo || "",
+      Society: c.society || "",
+      Street: c.street || "",
+      Area: c.area || "",
+      LandMark: c.landmark || "",
+      MobileNumber: c.phone || "",
+      Phone1: "",
+      EmailAddress: c.email || "",
+      SwitchOnDate: c.switchOnDate || "",
+      Status: c.workStatus || "Pending",
+      MeterCompanyName: c.meterCompany || "",
+      MeterSerialNumber: c.meterSerialNumber || "",
+      ConnectionStatus: (c.connectionType||[]).join(", "),
+      PaymentPlan: c.paymentPlan || "",
+      Latitude: c.geotag ? c.geotag.lat : "",
+      Longitude: c.geotag ? c.geotag.lng : "",
+      AgencyName: c.agencyName || "",
+      RegisterBy: techName(c.registerBy || c.addedBy || ""),
+      SDAvailable: c.sdAmount || "",
+    };
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Sheet1");
+  XLSX.writeFile(wb, `Customer_Master_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+  hideToast(loadingToast);
+}
+
+async function exportAllToExcel(){
+  let loadingToast = showToast("Preparing Excel file...");
+  try{ await ensureXlsxLib(); }
+  catch(e){ hideToast(loadingToast); alert("Could not load Excel engine."); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  // Forms sheets
+  Object.keys(FORMS).forEach(formId=>{
+    const form = FORMS[formId];
+    const subs = submissions.filter(s=>s.formType===formId);
+    if(subs.length===0) return;
+    const allRows = subs.map(s=>{
+      const row = {
+        "Technician": techName(s.technicianUsername||""),
+        "Saved At": s.createdAt ? new Date(s.createdAt).toLocaleString() : "",
+        "GPS Lat": s.geotag ? s.geotag.lat : "",
+        "GPS Lng": s.geotag ? s.geotag.lng : "",
+      };
+      form.sections.forEach(sec=>sec.fields.forEach(f=>{
+        const v = (s.data.sections && s.data.sections[f.key]) || "";
+        row[f.label] = f.type==="signature" ? (v?"✓ Signed":"") : v;
+      }));
+      (form.tables||[]).forEach(t=>{
+        const rows = (s.data.tables && s.data.tables[t.key]) || [];
+        rows.forEach((r,idx)=>{ t.columns.forEach(c=>{ row[`${t.heading} [Row ${idx+1}] ${c}`] = r[c] || ""; }); });
+      });
+      row["Material Used"] = (s.materialUsed||[]).map(m=>`${m.itemName}: ${m.qty}${m.unit||""}`).join(", ");
+      return row;
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(allRows), form.title.substring(0,31));
+  });
+
+  // Inventory sheet
+  const invRows = (inventory.length?inventory:SEED_INVENTORY).map(i=>({Item:i.itemName, Unit:i.unit, "Current Stock":i.stockQty}));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invRows), "Inventory");
+
+  // Issues sheet
+  const issueRows = issues.map(i=>({Technician:techName(i.technicianUsername), Item:i.itemName, Qty:i.qty, Unit:i.unit, "Issued At":i.issuedAt?new Date(i.issuedAt).toLocaleString():"", "Issued By":i.issuedBy}));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(issueRows), "Material Issues");
+
+  // Technician summary sheet
+  const techRows = technicianList().map(t=>{
+    const mySubs = submissions.filter(s=>s.technicianUsername===t.username);
+    const bal = getTechBalances(t.username);
+    return {
+      Technician: t.name, Username: t.username,
+      "Forms Filled": mySubs.length,
+      "Total Material Balance": bal.reduce((s,b)=>s+b.balance,0),
+      "Total Material Consumed": bal.reduce((s,b)=>s+b.consumed,0),
+    };
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(techRows), "Technician Summary");
+
+  // Customers sheet
+  const custRows = customers.map(c=>({
+    Name:c.name, Phone:c.phone, Address:c.address, "BP No":c.bpNo||"",
+    "Pending Work": (c.pendingWork||[]).join(", "), "Connection Type": (c.connectionType||[]).join(", "),
+    Status:c.status, "Assigned Technician": c.assignedTechnician?techName(c.assignedTechnician):"",
+    "Added By": techName(c.addedBy||""), "Survey Lat": c.geotag?c.geotag.lat:"", "Survey Lng": c.geotag?c.geotag.lng:"",
+    "Created At": c.createdAt?new Date(c.createdAt).toLocaleString():""
+  }));
+  if(custRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(custRows), "Customers");
+
+  XLSX.writeFile(wb, `PNG_Enterprise_Full_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+  hideToast(loadingToast);
+}
+
+/* ============ SESSION RESTORE (runs last) ============ */
+restoreSession();
+</script>
+</body>
+</html>
