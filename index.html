@@ -9,9 +9,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PNG Enterprise">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230D904F'/%3E%3Ctext x='50' y='65' font-size='55' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EP%3C/text%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230D904F'/%3E%3Ctext x='50' y='65' font-size='55' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EP%3C/text%3E%3C/svg%3E">
-<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22PNG%20Enterprise%22%2C%22short_name%22%3A%22PNG%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f3f4f6%22%2C%22theme_color%22%3A%22%230D904F%22%7D">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   :root{ --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); }
@@ -47,26 +47,32 @@
 <!-- ================= LOGIN SCREEN ================= -->
 <div id="loginScreen" class="h-full flex flex-col items-center justify-center bg-[#0D904F] p-6" style="padding-top: calc(1.5rem + var(--safe-top)); padding-bottom: calc(1.5rem + var(--safe-bottom));">
   <div class="w-full max-w-sm">
+    <div class="flex justify-end mb-2">
+      <div class="bg-white/15 rounded-full p-0.5 flex text-xs font-bold">
+        <button id="langBtnEn" onclick="setLang('en')" class="px-3 py-1 rounded-full">EN</button>
+        <button id="langBtnHi" onclick="setLang('hi')" class="px-3 py-1 rounded-full">हिं</button>
+      </div>
+    </div>
     <div class="text-center mb-6">
       <div class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl font-bold text-[#0D904F]">P</div>
       <h1 class="text-white text-2xl font-bold tracking-wide">PNG ENTERPRISE</h1>
-      <p class="text-green-100 text-sm">Universal Automation Engine</p>
+      <p id="loginSubtitle" class="text-green-100 text-sm">Universal Automation Engine</p>
     </div>
 
     <div class="grid grid-cols-4 gap-1 bg-white/15 rounded-xl p-1 mb-4">
-      <div class="role-tab active" data-role="technician" onclick="selectLoginRole('technician')">👷<br>Tech</div>
-      <div class="role-tab" data-role="surveyor" onclick="selectLoginRole('surveyor')">🧭<br>Survey</div>
-      <div class="role-tab" data-role="store" onclick="selectLoginRole('store')">📦<br>Store</div>
-      <div class="role-tab" data-role="admin" onclick="selectLoginRole('admin')">🛡️<br>Admin</div>
+      <div class="role-tab active" data-role="technician" onclick="selectLoginRole('technician')">👷<br><span id="roleTabLabel_technician">Tech</span></div>
+      <div class="role-tab" data-role="surveyor" onclick="selectLoginRole('surveyor')">🧭<br><span id="roleTabLabel_surveyor">Survey</span></div>
+      <div class="role-tab" data-role="store" onclick="selectLoginRole('store')">📦<br><span id="roleTabLabel_store">Store</span></div>
+      <div class="role-tab" data-role="admin" onclick="selectLoginRole('admin')">🛡️<br><span id="roleTabLabel_admin">Admin</span></div>
     </div>
 
     <div class="bg-white rounded-xl shadow-lg p-5">
-      <label class="block text-sm font-bold text-gray-700 mb-1">Username</label>
+      <label id="loginUserLabel" class="block text-sm font-bold text-gray-700 mb-1">Username</label>
       <input id="loginUser" type="text" placeholder="Enter username" class="w-full border rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-[#0D904F]">
-      <label class="block text-sm font-bold text-gray-700 mb-1">Password</label>
+      <label id="loginPassLabel" class="block text-sm font-bold text-gray-700 mb-1">Password</label>
       <input id="loginPass" type="password" placeholder="Enter password" class="w-full border rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-[#0D904F]">
       <p id="loginError" class="text-red-600 text-sm mb-2 hidden">Wrong username or password for this role.</p>
-      <button onclick="doLogin()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold active:scale-[0.98] transition">LOGIN</button>
+      <button id="loginBtn" onclick="doLogin()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold active:scale-[0.98] transition">LOGIN</button>
       <p id="loginDemoHint" class="text-xs text-gray-400 text-center mt-3">Apni Technician ID se login karein</p>
     </div>
   </div>
@@ -81,8 +87,9 @@
         <p id="dbStatus" class="text-xs text-green-100">⚪ Connecting...</p>
       </div>
       <div class="flex items-center gap-2">
+        <button id="headerLangBtn" onclick="toggleLang()" class="bg-white/15 rounded-full px-2 py-1 text-xs font-bold">EN/हिं</button>
         <span id="userBadge" class="text-xs bg-white/15 px-2 py-1 rounded-full"></span>
-        <button onclick="doLogout()" class="bg-white/15 rounded-full p-2 active:scale-95 transition text-sm px-3">Logout</button>
+        <button id="logoutBtn" onclick="doLogout()" class="bg-white/15 rounded-full p-2 active:scale-95 transition text-sm px-3">Logout</button>
       </div>
     </div>
   </header>
@@ -124,6 +131,183 @@ function showToast(msg){
 }
 function hideToast(el){ if(el && el.parentNode) el.parentNode.removeChild(el); }
 
+/* ============ LANGUAGE (EN / HI) ============
+   Infrastructure covers the whole app (any screen can call t()); dictionary is filled in for
+   Login, the app header/navigation, the Safety Kit gate, and the full Technician guided job
+   wizard. Admin/Surveyor/Store detail screens and the 6 official GAIL paper forms stay as-is
+   for now (forms especially are regulatory documents — keeping their field names in English
+   is intentional, not an oversight) and are a good candidate for a follow-up pass. */
+let LANG = "en";
+try{ LANG = localStorage.getItem("png_lang") || "en"; }catch(e){}
+const I18N = {
+  en: {
+    login_subtitle: "Universal Automation Engine",
+    role_technician: "Tech", role_surveyor: "Survey", role_store: "Store", role_admin: "Admin",
+    username_label: "Username", password_label: "Password", login_btn: "LOGIN",
+    login_error: "Wrong username or password for this role.",
+    hint_technician: "Login with your Technician ID", hint_surveyor: "Login with your Surveyor ID",
+    hint_store: "Login with your Store ID", hint_admin: "Login with your Admin ID",
+    header_technician: "PNG ENTERPRISE — TECHNICIAN", header_surveyor: "PNG ENTERPRISE — SURVEYOR",
+    header_store: "PNG ENTERPRISE — STORE", header_admin: "PNG ENTERPRISE — ADMIN",
+    logout_btn: "Logout",
+    nav_customers: "My Customers", nav_stock: "My Stock", nav_myjobs: "My Jobs",
+    nav_addcustomer: "Add Customer", nav_mysurveys: "My Surveys",
+    nav_inventory: "Inventory", nav_issue: "Issue Material", nav_history: "History",
+    nav_overview: "Overview", nav_employees: "Employees", nav_store: "Store", nav_customers_plain: "Customers",
+    safety_title: "Safety Kit Verification",
+    safety_desc: "Verify your safety kit before starting work — required once after every login.",
+    safety_ppe_heading: "Required PPE:",
+    safety_ppe1: "Safety Helmet worn", safety_ppe2: "Reflector / Hi-Vis Jacket (Yellow/Orange/Green/Blue) worn",
+    safety_selfie_label: "1. Selfie (face + helmet clearly visible)",
+    safety_body_label: "2. Full Body Photo (helmet + jacket both visible)",
+    safety_selfie_btn: "📷 Take Selfie (Camera)", safety_body_btn: "📷 Take Full Photo (Camera)",
+    safety_confirm_text: "I confirm that I am wearing my Safety Helmet and Reflector Jacket.",
+    safety_submit_btn: "✅ Verify & Start Work",
+    wiz_stepper_title: "🧭 Guided Job Steps",
+    stepper_contact: "Customer Contact", stepper_arrival: "Reach Location", stepper_verify: "Verify Details",
+    stepper_meterphoto: "Meter Photo", stepper_working: "Start Work", stepper_testing: "Testing",
+    stepper_material: "Material Used", stepper_forms: "Submit Forms", stepper_done: "Completed",
+    wiz_step1_title: "📞 STEP 1 — CUSTOMER CONTACT", wiz_step1_desc: "Call/message the customer before heading to the site.",
+    wiz_step1_no_phone: "No phone number on file — call/WhatsApp not available.",
+    wiz_remark_label: "Remark", wiz_image_label: "Image (optional)", wiz_image_btn: "📷 Add Image",
+    wiz_continue_btn: "Continue →",
+    wiz_step2_title: "📍 STEP 2 — REACH LOCATION",
+    wiz_step2_desc: "You must be within {r}m of the surveyor's recorded location to proceed.",
+    wiz_step2_no_ref: "⚠️ No survey location on file for this customer — location check will be skipped.",
+    wiz_check_location_btn: "📍 Check Location", wiz_not_checked_yet: "Location not checked yet.",
+    wiz_step3_title: "🔎 STEP 3 — VERIFY CUSTOMER & METER DETAILS",
+    wiz_meter_make: "Meter Make", wiz_meter_type: "Meter Type", wiz_meter_number: "Meter Number",
+    wiz_contact_number: "Contact Number", wiz_fitting_ok: "Is the fitting correct?",
+    wiz_fitting_details: "Details of what needs to be fitted",
+    wiz_call_confirm_q: "Is the detail the customer gave on the call correct?",
+    wiz_call_yes: "Yes, Correct (Verified)", wiz_call_no: "No, Mismatch",
+    wiz_mismatch_note: "Mismatch Note", wiz_mismatch_photo_btn: "📷 Take Mismatch Photo", wiz_verified_label: "✅ Verified",
+    wiz_missing_q: "Any item missing? (old connection / CRM case)",
+    wiz_missing_photo_hint: "Take photos of the missing items:", wiz_photo_btn: "📷 Take Photo",
+    wiz_missing_note_ph: "Note about missing items (old connection/CRM)...",
+    wiz_verify_complete_btn: "Verification Complete → Continue",
+    wiz_step4_title: "📷 STEP 4 — METER PHOTO", wiz_step4_desc: "Take a photo of the meter — location (lat/long) is captured automatically.",
+    wiz_meter_photo_btn: "📷 Take Meter Photo", wiz_confirm_continue_btn: "✅ Confirm & Continue",
+    wiz_step5_title: "🔧 STEP 5 — START WORK", wiz_step5_desc: "All details verified. Now start the work.",
+    wiz_start_work_btn: "🔧 Start Work",
+    wiz_step6_title: "🧪 STEP 6 — TESTING", wiz_test_start_label: "Testing Start Time",
+    wiz_test_start_btn: "Start Testing", wiz_test_reminder: "⏰ Don't forget a gauge photo every 1 hour (reminder fires while this customer's screen is open).",
+    wiz_started_label: "Started:", wiz_reading_label: "Reading",
+    wiz_no_readings: "No readings taken yet.", wiz_gauge_photo_btn: "📷 Take Gauge Photo",
+    wiz_add_reading_btn: "+ Add Reading", wiz_test_complete_btn: "✅ Testing Complete → Continue",
+    wiz_step7_title: "📦 STEP 7 — MATERIAL USED", wiz_step7_desc: "Standard list done. Add any extra/add-on material used here.",
+    wiz_no_material: "No material used.", wiz_addon_btn: "+ Add Add-on Material",
+    wiz_material_complete_btn: "✅ Material Entry Complete → Open NG Form",
+    wiz_qty_used_ph: "How much used? ({u})", wiz_skip_btn: "Skip (Not Used)", wiz_save_next_btn: "Save & Next",
+    wiz_available_label: "Available:", wiz_gauge_reminder_alert: "⏰ 1 hour is up — add a gauge photo and pressure reading.",
+    wiz_step8_title: "📝 STEP 8 — SUBMIT FORMS", wiz_step8_desc: "Common details (meter, contact, pressure readings) are auto-filled into the forms — check and Save.",
+    wiz_job_complete_btn: "✅ Mark Job Complete",
+    wiz_filled_label: "✓ Filled {n}x", wiz_pending_label: "Pending",
+    wiz_done_title: "Job Complete!", wiz_done_desc: "Work for {name} has been completed successfully.",
+  },
+  hi: {
+    login_subtitle: "यूनिवर्सल ऑटोमेशन इंजन",
+    role_technician: "टेक्नीशियन", role_surveyor: "सर्वेयर", role_store: "स्टोर", role_admin: "एडमिन",
+    username_label: "यूज़रनेम", password_label: "पासवर्ड", login_btn: "लॉगिन करें",
+    login_error: "इस भूमिका के लिए यूज़रनेम या पासवर्ड गलत है।",
+    hint_technician: "अपनी टेक्नीशियन आईडी से लॉगिन करें", hint_surveyor: "अपनी सर्वेयर आईडी से लॉगिन करें",
+    hint_store: "अपनी स्टोर आईडी से लॉगिन करें", hint_admin: "अपनी एडमिन आईडी से लॉगिन करें",
+    header_technician: "PNG एंटरप्राइज़ — टेक्नीशियन", header_surveyor: "PNG एंटरप्राइज़ — सर्वेयर",
+    header_store: "PNG एंटरप्राइज़ — स्टोर", header_admin: "PNG एंटरप्राइज़ — एडमिन",
+    logout_btn: "लॉगआउट",
+    nav_customers: "मेरे कस्टमर", nav_stock: "मेरा स्टॉक", nav_myjobs: "मेरे काम",
+    nav_addcustomer: "कस्टमर जोड़ें", nav_mysurveys: "मेरे सर्वे",
+    nav_inventory: "इन्वेंटरी", nav_issue: "मटेरियल जारी करें", nav_history: "हिस्ट्री",
+    nav_overview: "ओवरव्यू", nav_employees: "कर्मचारी", nav_store: "स्टोर", nav_customers_plain: "कस्टमर",
+    safety_title: "सेफ्टी किट वेरिफिकेशन",
+    safety_desc: "काम शुरू करने से पहले अपनी सेफ्टी किट वेरिफाई करें — हर लॉगिन के बाद एक बार ज़रूरी है।",
+    safety_ppe_heading: "आवश्यक PPE:",
+    safety_ppe1: "सेफ्टी हेलमेट पहना हुआ", safety_ppe2: "रिफ्लेक्टर / हाई-विज़ जैकेट (पीला/नारंगी/हरा/नीला) पहना हुआ",
+    safety_selfie_label: "1. सेल्फी (चेहरा + हेलमेट साफ़ दिखे)",
+    safety_body_label: "2. फुल बॉडी फोटो (हेलमेट + जैकेट दोनों दिखें)",
+    safety_selfie_btn: "📷 सेल्फी लें (कैमरा)", safety_body_btn: "📷 फुल फोटो लें (कैमरा)",
+    safety_confirm_text: "मैं पुष्टि करता/करती हूं कि मैंने अपना सेफ्टी हेलमेट और रिफ्लेक्टर जैकेट पहन लिया है।",
+    safety_submit_btn: "✅ वेरिफाई करें और काम शुरू करें",
+    wiz_stepper_title: "🧭 गाइडेड जॉब स्टेप्स",
+    stepper_contact: "कस्टमर से संपर्क", stepper_arrival: "लोकेशन पर पहुंचें", stepper_verify: "डिटेल्स वेरिफाई करें",
+    stepper_meterphoto: "मीटर फोटो", stepper_working: "काम शुरू करें", stepper_testing: "टेस्टिंग",
+    stepper_material: "इस्तेमाल किया गया मटेरियल", stepper_forms: "फॉर्म सबमिट करें", stepper_done: "पूरा हुआ",
+    wiz_step1_title: "📞 स्टेप 1 — कस्टमर से संपर्क", wiz_step1_desc: "साइट पर जाने से पहले कस्टमर को कॉल/मैसेज करके सूचित कर दें।",
+    wiz_step1_no_phone: "फ़ोन नंबर नहीं है — कॉल/व्हाट्सएप उपलब्ध नहीं है।",
+    wiz_remark_label: "रिमार्क", wiz_image_label: "इमेज (वैकल्पिक)", wiz_image_btn: "📷 इमेज जोड़ें",
+    wiz_continue_btn: "आगे बढ़ें →",
+    wiz_step2_title: "📍 स्टेप 2 — लोकेशन पर पहुंचें",
+    wiz_step2_desc: "आगे बढ़ने के लिए सर्वेयर की रिकॉर्ड की गई लोकेशन के {r} मीटर के अंदर होना ज़रूरी है।",
+    wiz_step2_no_ref: "⚠️ इस कस्टमर की सर्वे लोकेशन रिकॉर्ड नहीं है — लोकेशन चेक स्किप हो जाएगा।",
+    wiz_check_location_btn: "📍 लोकेशन चेक करें", wiz_not_checked_yet: "अभी तक लोकेशन चेक नहीं की गई।",
+    wiz_step3_title: "🔎 स्टेप 3 — कस्टमर और मीटर डिटेल्स वेरिफाई करें",
+    wiz_meter_make: "मीटर मेक", wiz_meter_type: "मीटर टाइप", wiz_meter_number: "मीटर नंबर",
+    wiz_contact_number: "कॉन्टैक्ट नंबर", wiz_fitting_ok: "फिटिंग सही है?",
+    wiz_fitting_details: "जो लगना है उसकी डिटेल्स",
+    wiz_call_confirm_q: "कॉल पर कस्टमर ने जो डिटेल बताई थी, क्या वह सही है?",
+    wiz_call_yes: "हां, सही है (वेरिफाइड)", wiz_call_no: "नहीं, मिसमैच है",
+    wiz_mismatch_note: "मिसमैच नोट", wiz_mismatch_photo_btn: "📷 मिसमैच का फोटो लें", wiz_verified_label: "✅ वेरिफाइड",
+    wiz_missing_q: "कोई आइटम मिसिंग है? (पुराना कनेक्शन / CRM केस)",
+    wiz_missing_photo_hint: "मिसिंग आइटम्स के फोटो लें:", wiz_photo_btn: "📷 फोटो लें",
+    wiz_missing_note_ph: "मिसिंग आइटम्स का नोट (पुराना कनेक्शन/CRM)...",
+    wiz_verify_complete_btn: "वेरिफिकेशन पूरा → आगे बढ़ें",
+    wiz_step4_title: "📷 स्टेप 4 — मीटर फोटो", wiz_step4_desc: "मीटर का फोटो लें — लोकेशन (lat/long) अपने आप सेव हो जाएगी।",
+    wiz_meter_photo_btn: "📷 मीटर फोटो लें", wiz_confirm_continue_btn: "✅ कन्फर्म करें और आगे बढ़ें",
+    wiz_step5_title: "🔧 स्टेप 5 — काम शुरू करें", wiz_step5_desc: "सारी डिटेल्स वेरिफाई हो गई हैं। अब काम शुरू करें।",
+    wiz_start_work_btn: "🔧 काम शुरू करें",
+    wiz_step6_title: "🧪 स्टेप 6 — टेस्टिंग", wiz_test_start_label: "टेस्टिंग शुरू होने का समय",
+    wiz_test_start_btn: "टेस्टिंग शुरू करें", wiz_test_reminder: "⏰ हर 1 घंटे में गेज फोटो लेना न भूलें (जब तक इस कस्टमर की स्क्रीन खुली है, रिमाइंडर आएगा)।",
+    wiz_started_label: "शुरू:", wiz_reading_label: "रीडिंग",
+    wiz_no_readings: "अभी तक कोई रीडिंग नहीं ली गई।", wiz_gauge_photo_btn: "📷 गेज फोटो लें",
+    wiz_add_reading_btn: "+ रीडिंग जोड़ें", wiz_test_complete_btn: "✅ टेस्टिंग पूरी → आगे बढ़ें",
+    wiz_step7_title: "📦 स्टेप 7 — इस्तेमाल किया गया मटेरियल", wiz_step7_desc: "स्टैंडर्ड लिस्ट पूरी हो गई। अगर कोई एक्स्ट्रा/ऐड-ऑन मटेरियल इस्तेमाल हुआ है तो यहां जोड़ें।",
+    wiz_no_material: "कोई मटेरियल इस्तेमाल नहीं किया गया।", wiz_addon_btn: "+ ऐड-ऑन मटेरियल जोड़ें",
+    wiz_material_complete_btn: "✅ मटेरियल एंट्री पूरी → NG फॉर्म खोलें",
+    wiz_qty_used_ph: "कितना इस्तेमाल हुआ? ({u})", wiz_skip_btn: "स्किप करें (इस्तेमाल नहीं हुआ)", wiz_save_next_btn: "सेव करें और आगे",
+    wiz_available_label: "उपलब्ध:", wiz_gauge_reminder_alert: "⏰ 1 घंटा हो गया — गेज फोटो और प्रेशर रीडिंग जोड़ें।",
+    wiz_step8_title: "📝 स्टेप 8 — फॉर्म सबमिट करें", wiz_step8_desc: "कॉमन डिटेल्स (मीटर, कॉन्टैक्ट, प्रेशर रीडिंग) फॉर्म्स में अपने आप भर दी गई हैं — चेक करके सेव करें।",
+    wiz_job_complete_btn: "✅ जॉब कम्प्लीट करें",
+    wiz_filled_label: "✓ {n} बार भरा गया", wiz_pending_label: "पेंडिंग",
+    wiz_done_title: "जॉब पूरा हुआ!", wiz_done_desc: "{name} का काम सफलतापूर्वक पूरा हो गया है।",
+  },
+};
+function t(key, vars){
+  let s = (I18N[LANG] && I18N[LANG][key]) || (I18N.en && I18N.en[key]) || key;
+  if(vars){ Object.keys(vars).forEach(k=>{ s = s.replace("{"+k+"}", vars[k]); }); }
+  return s;
+}
+const ROLE_HEADER_KEY = {technician:"header_technician", surveyor:"header_surveyor", store:"header_store", admin:"header_admin"};
+const ROLE_HINT_KEY = {technician:"hint_technician", surveyor:"hint_surveyor", store:"hint_store", admin:"hint_admin"};
+function applyLoginLang(){
+  const subEl = document.getElementById("loginSubtitle"); if(subEl) subEl.textContent = t("login_subtitle");
+  ["technician","surveyor","store","admin"].forEach(r=>{
+    const el = document.getElementById("roleTabLabel_"+r); if(el) el.textContent = t("role_"+r);
+  });
+  const uL = document.getElementById("loginUserLabel"); if(uL) uL.textContent = t("username_label");
+  const pL = document.getElementById("loginPassLabel"); if(pL) pL.textContent = t("password_label");
+  const btn = document.getElementById("loginBtn"); if(btn) btn.textContent = t("login_btn");
+  const err = document.getElementById("loginError"); if(err) err.textContent = t("login_error");
+  const hint = document.getElementById("loginDemoHint"); if(hint) hint.textContent = t(ROLE_HINT_KEY[loginRole] || "hint_technician");
+  const enBtn = document.getElementById("langBtnEn"), hiBtn = document.getElementById("langBtnHi");
+  if(enBtn) enBtn.className = "px-3 py-1 rounded-full" + (LANG==="en" ? " bg-white text-[#0D904F]" : " text-white");
+  if(hiBtn) hiBtn.className = "px-3 py-1 rounded-full" + (LANG==="hi" ? " bg-white text-[#0D904F]" : " text-white");
+}
+function applyHeaderLang(){
+  const logoutBtn = document.getElementById("logoutBtn"); if(logoutBtn) logoutBtn.textContent = t("logout_btn");
+  if(currentUser){
+    const titleEl = document.getElementById("headerTitle");
+    if(titleEl) titleEl.textContent = t(ROLE_HEADER_KEY[currentUser.role] || "header_technician");
+  }
+}
+function setLang(l){
+  LANG = l;
+  try{ localStorage.setItem("png_lang", l); }catch(e){}
+  applyLoginLang();
+  applyHeaderLang();
+  if(currentUser){ setupBottomNav(); renderMain(); }
+}
+function toggleLang(){ setLang(LANG==="en" ? "hi" : "en"); }
+
 /* ============ SEED DATA ============ */
 const SEED_USERS = [
   {username:"naveen", password:"Nave@7328", role:"admin", name:"Naveen", active:true},
@@ -154,6 +338,56 @@ const WORK_STATUS_OPTIONS = ["Pending", "GI Done", "RFC Done", "Meter Installed"
 const PAYMENT_PLAN_OPTIONS = ["Installment Scheme", "Upfront Payment", "NON FLEXI STANDARD SCHEME", "Flexi Payment Option"];
 const WORK_STAGE_STATUS_OPTIONS = ["Pending", "Done", "Tested"];
 const PAPER_STAGE_STATUS_OPTIONS = ["Pending", "Done"];
+
+/* ============ TECHNICIAN GUIDED JOB WIZARD (sequential, gated steps) ============ */
+const JOB_STAGE_ORDER = ["contact","arrival","verify","meterphoto","working","testing","material","forms","done"];
+const JOB_STAGE_META = {
+  contact:    {icon:"📞", key:"stepper_contact"},
+  arrival:    {icon:"📍", key:"stepper_arrival"},
+  verify:     {icon:"🔎", key:"stepper_verify"},
+  meterphoto: {icon:"📷", key:"stepper_meterphoto"},
+  working:    {icon:"🔧", key:"stepper_working"},
+  testing:    {icon:"🧪", key:"stepper_testing"},
+  material:   {icon:"📦", key:"stepper_material"},
+  forms:      {icon:"📝", key:"stepper_forms"},
+  done:       {icon:"✅", key:"stepper_done"},
+};
+const GEOFENCE_RADIUS_M = 50;
+const GAUGE_REMINDER_MS = 60*60*1000; // 1 hour
+const METER_TYPE_OPTIONS = ["LHS", "RHS"];
+const YES_NO_OPTIONS = ["Yes", "No"];
+
+function jobStageOf(c){ return (c && c.jobStage) || "contact"; }
+function jobStageIndex(stage){ const i = JOB_STAGE_ORDER.indexOf(stage); return i<0?0:i; }
+function isStageDone(c, stage){ return jobStageIndex(jobStageOf(c)) > jobStageIndex(stage); }
+function isStageActive(c, stage){ return jobStageOf(c) === stage; }
+function isStageLocked(c, stage){ return jobStageIndex(jobStageOf(c)) < jobStageIndex(stage); }
+
+// Haversine distance in meters between two lat/lng points
+function distanceMeters(lat1, lng1, lat2, lng2){
+  const R = 6371000;
+  const toRad = d => d * Math.PI/180;
+  const dLat = toRad(lat2-lat1), dLng = toRad(lng2-lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function saveJobField(customerId, patch){
+  if(db){
+    try{ await db.doc("customers/"+customerId).update(patch); }
+    catch(e){ console.error(e); alert("Save nahi ho paya, dobara try karein."); return false; }
+  } else {
+    const c = customers.find(c=>c.id===customerId);
+    if(c){ Object.assign(c, patch); }
+  }
+  return true;
+}
+async function advanceJobStage(customerId, fromStage){
+  const idx = jobStageIndex(fromStage);
+  const next = JOB_STAGE_ORDER[idx+1] || "done";
+  await saveJobField(customerId, {jobStage: next});
+  renderMain();
+}
 
 const SEED_CUSTOMERS = [
   {name:"Rahul Sharma", phone:"9876500001", address:"Sector 14, Main Market, Sonipat", bpNo:"5000090001",
@@ -187,16 +421,10 @@ const SEED_CUSTOMERS = [
 
 /* ============ LOGIN ============ */
 let loginRole = "technician";
-const ROLE_DEMO_HINT = {
-  technician: "Apni Technician ID se login karein",
-  surveyor: "Apni Surveyor ID se login karein",
-  store: "Apni Store ID se login karein",
-  admin: "Apni Admin ID se login karein",
-};
 function selectLoginRole(role){
   loginRole = role;
-  document.querySelectorAll(".role-tab").forEach(t=>t.classList.toggle("active", t.dataset.role===role));
-  document.getElementById("loginDemoHint").textContent = ROLE_DEMO_HINT[role];
+  document.querySelectorAll(".role-tab").forEach(el=>el.classList.toggle("active", el.dataset.role===role));
+  document.getElementById("loginDemoHint").textContent = t(ROLE_HINT_KEY[role] || "hint_technician");
   document.getElementById("loginError").classList.add("hidden");
 }
 
@@ -227,13 +455,12 @@ async function doLogin(){
       const snap = await db.collection("users").where("username","==",user).get();
       found = snap.docs.map(d=>({id:d.id, ...d.data()})).find(u=>u.password===pass && u.role===loginRole);
     }catch(e){ console.error(e); }
-  }
-  if(!found){
+  } else {
     found = SEED_USERS.find(u=>u.username===user && u.password===pass && u.role===loginRole);
   }
 
   if(!found){
-    errorEl.textContent = "Wrong username or password for this role.";
+    errorEl.textContent = t("login_error");
     errorEl.classList.remove("hidden");
     return;
   }
@@ -249,6 +476,7 @@ async function doLogin(){
 
 function doLogout(){
   try{ localStorage.removeItem("png_user"); }catch(e){}
+  if(typeof clearGaugeReminderTimer === "function") clearGaugeReminderTimer();
   currentUser = null;
   document.getElementById("appScreen").classList.add("hidden");
   document.getElementById("appScreen").classList.remove("flex");
@@ -342,6 +570,7 @@ async function showApp(){
       }
     }catch(e){ console.error(e); }
   }
+  applyHeaderLang();
   setupBottomNav();
   renderMain();
   markAttendanceIfNeeded();
@@ -361,33 +590,33 @@ function setupBottomNav(){
   const nav = document.getElementById("bottomNav");
   const title = document.getElementById("headerTitle");
   if(currentUser.role === "store"){
-    title.textContent = "PNG ENTERPRISE — STORE";
+    title.textContent = t("header_store");
     nav.innerHTML = `
-      <button onclick="setView('inventory')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>Inventory</button>
-      <button onclick="setView('issue')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🚚</span>Issue Material</button>
-      <button onclick="setView('history')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📜</span>History</button>`;
+      <button onclick="setView('inventory')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>${t("nav_inventory")}</button>
+      <button onclick="setView('issue')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🚚</span>${t("nav_issue")}</button>
+      <button onclick="setView('history')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📜</span>${t("nav_history")}</button>`;
     currentView = "inventory";
   } else if(currentUser.role === "technician"){
-    title.textContent = "PNG ENTERPRISE — TECHNICIAN";
+    title.textContent = t("header_technician");
     nav.innerHTML = `
-      <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>My Customers</button>
-      <button onclick="setView('stock')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🎒</span>My Stock</button>
-      <button onclick="setView('myjobs')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📋</span>My Jobs</button>`;
+      <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_customers")}</button>
+      <button onclick="setView('stock')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🎒</span>${t("nav_stock")}</button>
+      <button onclick="setView('myjobs')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📋</span>${t("nav_myjobs")}</button>`;
     currentView = "customers";
   } else if(currentUser.role === "surveyor"){
-    title.textContent = "PNG ENTERPRISE — SURVEYOR";
+    title.textContent = t("header_surveyor");
     nav.innerHTML = `
-      <button onclick="setView('addCustomer')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">➕</span>Add Customer</button>
-      <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>My Customers</button>
-      <button onclick="setView('mySurveys')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧭</span>My Surveys</button>`;
+      <button onclick="setView('addCustomer')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">➕</span>${t("nav_addcustomer")}</button>
+      <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_customers")}</button>
+      <button onclick="setView('mySurveys')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧭</span>${t("nav_mysurveys")}</button>`;
     currentView = "addCustomer";
   } else if(currentUser.role === "admin"){
-    title.textContent = "PNG ENTERPRISE — ADMIN";
+    title.textContent = t("header_admin");
     nav.innerHTML = `
-      <button onclick="setView('overview')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📊</span>Overview</button>
-      <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>Customers</button>
-      <button onclick="setView('employees')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">👥</span>Employees</button>
-      <button onclick="setView('storereport')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>Store</button>`;
+      <button onclick="setView('overview')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📊</span>${t("nav_overview")}</button>
+      <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_customers_plain")}</button>
+      <button onclick="setView('employees')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">👥</span>${t("nav_employees")}</button>
+      <button onclick="setView('storereport')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>${t("nav_store")}</button>`;
     currentView = "overview";
   }
   const defaultView = currentView;
@@ -442,6 +671,7 @@ function renderMain(){
     else if(currentView==="employees") el.innerHTML = renderAdminEmployees();
     else if(currentView==="storereport") el.innerHTML = renderAdminStoreReport();
     else if(currentView==="customers") el.innerHTML = renderAdminCustomers();
+    else if(currentView==="bulkWhatsapp") el.innerHTML = renderBulkWhatsApp();
   }
 }
 
@@ -468,6 +698,202 @@ function employeeList(){
   const fromDb = allUsers.filter(u=>u.role!=="admin");
   if(fromDb.length) return fromDb;
   return SEED_USERS.filter(u=>u.role!=="admin");
+}
+
+/* ============ CALL / WHATSAPP HELPERS ============ */
+function waDigits(phone){
+  let d = (phone||"").replace(/\D/g,"");
+  if(d.length === 10) d = "91"+d;
+  else if(d.length === 11 && d.startsWith("0")) d = "91"+d.slice(1);
+  return d;
+}
+function waLink(phone, message){
+  const d = waDigits(phone);
+  if(!d) return "";
+  return `https://wa.me/${d}?text=${encodeURIComponent(message||"")}`;
+}
+function callLink(phone){
+  const d = waDigits(phone);
+  if(!d) return "";
+  return `tel:+${d}`;
+}
+function openWaFromBox(phone, boxId){
+  const box = document.getElementById(boxId);
+  const msg = box ? box.value : "";
+  const link = waLink(phone, msg);
+  if(!link){ alert("Phone number sahi nahi hai."); return; }
+  window.open(link, "_blank");
+}
+const DEFAULT_WA_TEMPLATE = "Namaste {name} ji,\n\nPNG Enterprise (Authorised GAIL Gas Contractor) ki taraf se suchit kar rahe hain ki aapka PNG gas connection register ho chuka hai. Kisi bhi jaankari ya sahayata ke liye is number par sampark karein.\n\nDhanyavaad.";
+const DEFAULT_SCHEDULE_TEMPLATE = "Namaste {name} ji,\n\nAapka PNG gas connection ka kaam {date} hone wala hai. Hamare technician {tech} aapke ghar aayenge, kripya us samay ghar par upasthit rahein.\n\nKisi bhi sawal ke liye sampark karein.\nDhanyavaad,\nPNG Enterprise";
+function getWaTemplate(){
+  try{ return localStorage.getItem("png_wa_template") || DEFAULT_WA_TEMPLATE; }catch(e){ return DEFAULT_WA_TEMPLATE; }
+}
+function fillWaTemplate(tpl, cust){
+  return (tpl||"").replace(/\{name\}/gi, cust.name||"").replace(/\{address\}/gi, cust.address||"").replace(/\{bp\}/gi, cust.bpNo||"");
+}
+function formatWorkDateForMessage(dateStr, plain){
+  if(!dateStr) return "";
+  const d = new Date(dateStr+"T00:00:00");
+  if(isNaN(d)) return dateStr;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
+  const dOnly = new Date(d); dOnly.setHours(0,0,0,0);
+  const formatted = d.toLocaleDateString("en-IN", {day:"numeric", month:"long", year:"numeric"});
+  if(plain) return formatted;
+  if(dOnly.getTime() === tomorrow.getTime()) return `Kal (${formatted})`;
+  if(dOnly.getTime() === today.getTime()) return `Aaj (${formatted})`;
+  return formatted;
+}
+
+/* Quick contact modal — shown right after a new customer is added */
+function showQuickContactModal(cust){
+  const msg = fillWaTemplate(getWaTemplate(), cust);
+  const call = callLink(cust.phone);
+  const html = `
+    <div class="fixed inset-0 bg-black/50 flex items-end z-50" onclick="if(event.target===this) document.getElementById('quickContactModal').innerHTML=''">
+      <div class="bg-white rounded-t-2xl w-full max-h-[85vh] overflow-y-auto p-5">
+        <div class="text-center mb-3">
+          <div class="w-14 h-14 bg-green-100 text-[#0D904F] rounded-full flex items-center justify-center mx-auto mb-2 text-2xl">✅</div>
+          <h3 class="font-bold text-lg">${cust.name} add ho gaya!</h3>
+          <p class="text-xs text-gray-400">Ab inhe welcome call ya WhatsApp message bhej sakte hain.</p>
+        </div>
+        ${cust.phone ? `
+          <textarea id="quickMsgBox" class="ff-input mb-3" rows="5">${msg}</textarea>
+          <div class="flex gap-2">
+            <a href="${call}" class="flex-1 text-center bg-blue-600 text-white py-3 rounded-lg font-bold">📞 Call</a>
+            <button onclick="openWaFromBox('${cust.phone}','quickMsgBox')" class="flex-1 bg-green-600 text-white py-3 rounded-lg font-bold">💬 WhatsApp</button>
+          </div>` : `<p class="text-xs text-red-500 mb-2">Phone number nahi diya gaya — call/WhatsApp available nahi hai.</p>`}
+        <button onclick="document.getElementById('quickContactModal').innerHTML=''" class="w-full mt-3 text-xs text-gray-400 py-2">Band Karein</button>
+      </div>
+    </div>`;
+  const host = document.getElementById("quickContactModal");
+  if(host) host.innerHTML = html;
+}
+
+/* Schedule contact modal — shown right after a technician is assigned to a customer */
+function showScheduleContactModal(cust, techUsername, workDate){
+  const tpl = (function(){ try{ return localStorage.getItem("png_wa_schedule_template")||DEFAULT_SCHEDULE_TEMPLATE; }catch(e){ return DEFAULT_SCHEDULE_TEMPLATE; } })();
+  const dateText = workDate ? formatWorkDateForMessage(workDate) : "jald hi";
+  const msg = tpl.replace(/\{name\}/gi, cust.name||"")
+                 .replace(/\{date\}/gi, dateText)
+                 .replace(/\{tech\}/gi, techName(techUsername))
+                 .replace(/\{address\}/gi, cust.address||"");
+  const call = callLink(cust.phone);
+  const html = `
+    <div class="fixed inset-0 bg-black/50 flex items-end z-50" onclick="if(event.target===this) document.getElementById('quickContactModal').innerHTML=''">
+      <div class="bg-white rounded-t-2xl w-full max-h-[85vh] overflow-y-auto p-5">
+        <div class="text-center mb-3">
+          <div class="w-14 h-14 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-2 text-2xl">🗓️</div>
+          <h3 class="font-bold text-lg">${cust.name} ko suchit karein</h3>
+          <p class="text-xs text-gray-400">Technician: ${techName(techUsername)}${workDate?` • Kaam ki tareekh: ${formatWorkDateForMessage(workDate,true)}`:""}</p>
+        </div>
+        ${cust.phone ? `
+          <textarea id="scheduleMsgBox" class="ff-input mb-3" rows="6">${msg}</textarea>
+          <div class="flex gap-2">
+            <a href="${call}" class="flex-1 text-center bg-blue-600 text-white py-3 rounded-lg font-bold">📞 Call</a>
+            <button onclick="openWaFromBox('${cust.phone}','scheduleMsgBox')" class="flex-1 bg-green-600 text-white py-3 rounded-lg font-bold">💬 WhatsApp Bhejein</button>
+          </div>` : `<p class="text-xs text-red-500 mb-2">Phone number nahi hai — call/WhatsApp available nahi hai.</p>`}
+        <button onclick="document.getElementById('quickContactModal').innerHTML=''" class="w-full mt-3 text-xs text-gray-400 py-2">Band Karein</button>
+      </div>
+    </div>`;
+  const host = document.getElementById("quickContactModal");
+  if(host) host.innerHTML = html;
+}
+
+/* ============ BULK WHATSAPP ============ */
+let bulkSelected = new Set();
+let bulkQueue = [];
+let bulkQueueIndex = 0;
+
+function renderBulkWhatsApp(){
+  if(bulkQueue.length > 0 && bulkQueueIndex < bulkQueue.length){
+    const cust = bulkQueue[bulkQueueIndex];
+    const msg = fillWaTemplate(getWaTemplate(), cust);
+    const call = callLink(cust.phone);
+    return `
+      <div class="bg-white rounded-lg shadow p-4 mb-4">
+        <p class="text-xs font-bold text-gray-400 mb-2">Bhej rahe hain: ${bulkQueueIndex+1} / ${bulkQueue.length}</p>
+        <div class="w-full bg-gray-100 rounded-full h-2 mb-4"><div class="bg-[#0D904F] h-2 rounded-full" style="width:${Math.round((bulkQueueIndex/bulkQueue.length)*100)}%"></div></div>
+        <h3 class="font-bold text-lg">${cust.name}</h3>
+        <p class="text-xs text-gray-500 mb-3">📞 ${cust.phone} • ${cust.address||""}</p>
+        <textarea id="bulkMsgBox" class="ff-input mb-4" rows="6">${msg}</textarea>
+        <div class="flex gap-2 mb-2">
+          <a href="${call}" class="flex-1 text-center bg-blue-600 text-white py-3 rounded-lg font-bold">📞 Call</a>
+          <button onclick="openWaFromBox('${cust.phone}','bulkMsgBox')" class="flex-1 bg-green-600 text-white py-3 rounded-lg font-bold">💬 WhatsApp Kholein</button>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="bulkNext()" class="flex-1 bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">✅ Bhej diya, Next →</button>
+          <button onclick="bulkSkip()" class="px-4 bg-gray-100 text-gray-600 py-2.5 rounded-lg font-bold">⏭ Skip</button>
+        </div>
+        <button onclick="exitBulkWhatsApp()" class="w-full mt-3 text-xs text-gray-400 py-1">✕ Band Karein</button>
+      </div>`;
+  }
+  if(bulkQueue.length > 0 && bulkQueueIndex >= bulkQueue.length){
+    return `
+      <div class="bg-white rounded-lg shadow p-6 text-center">
+        <div class="text-4xl mb-2">🎉</div>
+        <h3 class="font-bold text-lg mb-1">Sab ko bhej diya!</h3>
+        <p class="text-xs text-gray-400 mb-4">${bulkQueue.length} customers ko message/call ho gaya.</p>
+        <button onclick="exitBulkWhatsApp()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">🔙 Wapas Customer List</button>
+      </div>`;
+  }
+  const withPhone = customers.filter(c=>c.phone);
+  const allSelected = withPhone.length>0 && withPhone.every(c=>bulkSelected.has(c.id));
+  return `
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <h2 class="font-bold text-gray-800 mb-2">📢 Bulk Call / WhatsApp</h2>
+      <label class="ff-label">Message Template</label>
+      <textarea id="bulkWaTemplate" class="ff-input mb-1" rows="5">${getWaTemplate()}</textarea>
+      <p class="text-xs text-gray-400 mb-3">{name}, {address}, {bp} apne aap customer ki detail se bhar jayenge.</p>
+      <button onclick="exitBulkWhatsApp()" class="text-xs text-gray-400">✕ Cancel</button>
+    </div>
+    <div class="flex justify-between items-center mb-2">
+      <h2 class="font-bold text-gray-800" id="bulkSelCount">👥 Customers Select Karein (${bulkSelected.size} selected)</h2>
+      <label class="text-xs font-bold flex items-center gap-1"><input type="checkbox" ${allSelected?"checked":""} onchange="toggleBulkAll(this.checked)"> Sab</label>
+    </div>
+    <div class="space-y-2 mb-4">
+      ${withPhone.length===0 ? '<p class="text-xs text-gray-400">Kisi bhi customer ka phone number nahi hai.</p>' : withPhone.map(c=>`
+        <label class="bg-white rounded-lg shadow p-3 flex items-center gap-3">
+          <input type="checkbox" ${bulkSelected.has(c.id)?"checked":""} onchange="toggleBulkOne('${c.id}')">
+          <div class="flex-1">
+            <p class="font-bold text-sm">${c.name}</p>
+            <p class="text-xs text-gray-400">📞 ${c.phone} • ${c.address||""}</p>
+          </div>
+        </label>`).join("")}
+    </div>
+    <button id="bulkStartBtn" onclick="startBulkWhatsApp()" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold">🚀 Bhejna Shuru Karein (${bulkSelected.size})</button>`;
+}
+function updateBulkCountUI(){
+  const h = document.getElementById("bulkSelCount");
+  if(h) h.textContent = `👥 Customers Select Karein (${bulkSelected.size} selected)`;
+  const b = document.getElementById("bulkStartBtn");
+  if(b) b.textContent = `🚀 Bhejna Shuru Karein (${bulkSelected.size})`;
+}
+function toggleBulkAll(checked){
+  const withPhone = customers.filter(c=>c.phone);
+  if(checked){ withPhone.forEach(c=>bulkSelected.add(c.id)); }
+  else { bulkSelected.clear(); }
+  renderMain();
+}
+function toggleBulkOne(id){
+  if(bulkSelected.has(id)) bulkSelected.delete(id); else bulkSelected.add(id);
+  updateBulkCountUI();
+}
+function startBulkWhatsApp(){
+  const tplEl = document.getElementById("bulkWaTemplate");
+  const tpl = tplEl ? tplEl.value : getWaTemplate();
+  try{ localStorage.setItem("png_wa_template", tpl); }catch(e){}
+  bulkQueue = customers.filter(c=>bulkSelected.has(c.id) && c.phone);
+  bulkQueueIndex = 0;
+  if(bulkQueue.length===0){ alert("Koi customer select nahi kiya, ya unke paas phone number nahi hai."); return; }
+  renderMain();
+}
+function bulkNext(){ bulkQueueIndex++; renderMain(); }
+function bulkSkip(){ bulkNext(); }
+function exitBulkWhatsApp(){
+  bulkQueue = []; bulkQueueIndex = 0; bulkSelected = new Set();
+  setView("customers");
 }
 
 /* ============ ATTENDANCE (geotagged login) ============ */
@@ -550,35 +976,35 @@ function renderSafetyCheckScreen(){
   return `
     <div class="bg-white rounded-lg shadow p-4 mb-4 text-center">
       <div class="text-4xl mb-2">🦺</div>
-      <h2 class="font-bold text-gray-800 text-lg mb-1">Safety Kit Verification</h2>
-      <p class="text-sm text-gray-500">Kaam shuru karne se pehle apni safety kit verify karein — ye roz login ke baad ek baar zaroori hai.</p>
+      <h2 class="font-bold text-gray-800 text-lg mb-1">${t("safety_title")}</h2>
+      <p class="text-sm text-gray-500">${t("safety_desc")}</p>
     </div>
     <div class="bg-white rounded-lg shadow p-4 mb-4">
-      <p class="text-sm font-bold text-gray-700 mb-2">Required PPE:</p>
+      <p class="text-sm font-bold text-gray-700 mb-2">${t("safety_ppe_heading")}</p>
       <ul class="text-sm text-gray-600 list-disc pl-5 space-y-1">
-        <li>Safety Helmet pehna hua</li>
-        <li>Reflector / Hi-Vis Jacket (Yellow / Orange / Green / Blue) pehna hua</li>
+        <li>${t("safety_ppe1")}</li>
+        <li>${t("safety_ppe2")}</li>
       </ul>
     </div>
     <div class="bg-white rounded-lg shadow p-4 mb-3">
-      <label class="ff-label">1. Selfie (chehra + helmet saaf dikhe)</label>
+      <label class="ff-label">${t("safety_selfie_label")}</label>
       <div id="selfiePreviewWrap" class="mb-2"></div>
       <input type="file" id="safetySelfieInput" accept="image/*" capture="user" class="hidden" onchange="onSafetyPhotoSelected('selfie', this)">
-      <button type="button" onclick="document.getElementById('safetySelfieInput').click()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">📷 Selfie Lein (Camera)</button>
+      <button type="button" onclick="document.getElementById('safetySelfieInput').click()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("safety_selfie_btn")}</button>
     </div>
     <div class="bg-white rounded-lg shadow p-4 mb-3">
-      <label class="ff-label">2. Full Body Photo (helmet + jacket dono dikhein)</label>
+      <label class="ff-label">${t("safety_body_label")}</label>
       <div id="bodyPreviewWrap" class="mb-2"></div>
       <input type="file" id="safetyBodyInput" accept="image/*" capture="environment" class="hidden" onchange="onSafetyPhotoSelected('body', this)">
-      <button type="button" onclick="document.getElementById('safetyBodyInput').click()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">📷 Full Photo Lein (Camera)</button>
+      <button type="button" onclick="document.getElementById('safetyBodyInput').click()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("safety_body_btn")}</button>
     </div>
     <div class="bg-white rounded-lg shadow p-4 mb-6">
       <label class="flex items-start gap-2 text-sm">
         <input type="checkbox" id="safetyConfirmCheck" class="w-4 h-4 mt-0.5 accent-[#0D904F]">
-        <span>Main confirm karta/karti hoon ki maine apna Safety Helmet aur Reflector Jacket pehan liya hai.</span>
+        <span>${t("safety_confirm_text")}</span>
       </label>
       <p id="safetySubmitError" class="text-red-600 text-xs mt-2 hidden"></p>
-      <button onclick="submitSafetyCheck()" class="w-full bg-[#8430CE] text-white py-2.5 rounded-lg font-bold mt-3">✅ Verify & Start Work</button>
+      <button onclick="submitSafetyCheck()" class="w-full bg-[#8430CE] text-white py-2.5 rounded-lg font-bold mt-3">${t("safety_submit_btn")}</button>
     </div>`;
 }
 
@@ -842,6 +1268,527 @@ async function updateWorkProgress(customerId){
   }
 }
 
+/* ============ JOB WIZARD: STEPPER + STAGE RENDER/HANDLERS ============ */
+function renderJobWizardStepper(c){
+  const stage = jobStageOf(c);
+  return `<div class="bg-white rounded-lg shadow p-3 mb-3">
+    <h3 class="text-sm font-bold text-gray-700 mb-2">${t("wiz_stepper_title")}</h3>
+    <div class="space-y-1">
+      ${JOB_STAGE_ORDER.map(s=>{
+        const meta = JOB_STAGE_META[s];
+        const done = isStageDone(c,s);
+        const active = isStageActive(c,s);
+        const cls = done ? "text-green-600" : active ? "text-[#0D904F] font-bold" : "text-gray-300";
+        const badge = done ? "✅" : active ? meta.icon : "🔒";
+        return `<div class="flex items-center gap-2 text-sm ${cls}"><span class="w-5 text-center">${badge}</span><span>${t(meta.key)}</span></div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+
+function renderJobWizardStage(c){
+  const stage = jobStageOf(c);
+  if(stage==="done") return renderWizDone(c);
+  if(stage==="forms") return renderWizForms(c);
+  if(stage==="material") return renderWizMaterial(c);
+  if(stage==="testing") return renderWizTesting(c);
+  if(stage==="working") return renderWizWorking(c);
+  if(stage==="meterphoto") return renderWizMeterPhoto(c);
+  if(stage==="verify") return renderWizVerify(c);
+  if(stage==="arrival") return renderWizArrival(c);
+  return renderWizContact(c);
+}
+
+/* Shared photo-capture helper for wizard steps (reuses compression logic already built for safety-kit photos) */
+async function onWizPhotoSelected(inputEl, wrapId){
+  const file = inputEl.files && inputEl.files[0];
+  if(!file) return;
+  const wrap = document.getElementById(wrapId);
+  if(wrap) wrap.innerHTML = `<p class="text-xs text-gray-400">Photo process ho rahi hai...</p>`;
+  try{
+    const dataUrl = await captureCompressedPhoto(file);
+    inputEl.dataset.captured = dataUrl;
+    if(wrap) wrap.innerHTML = `<img src="${dataUrl}" class="w-full rounded-lg border" style="max-height:180px;object-fit:cover;">`;
+  }catch(e){
+    console.error(e);
+    if(wrap) wrap.innerHTML = `<p class="text-xs text-red-500">Photo process nahi ho payi, dobara try karein.</p>`;
+  }
+  inputEl.value = "";
+}
+
+/* ---- Stage 1: Contact ---- */
+function renderWizContact(c){
+  const msg = fillWaTemplate(getWaTemplate(), c);
+  const call = callLink(c.phone);
+  const wc = c.wizContact || {};
+  return `<div class="bg-white rounded-lg shadow p-4">
+    <h3 class="ff-section-heading">${t("wiz_step1_title")}</h3>
+    <p class="text-xs text-gray-500 mb-3">${t("wiz_step1_desc")}</p>
+    ${c.phone ? `
+      <textarea id="wizContactMsg" class="ff-input mb-2" rows="4">${msg}</textarea>
+      <div class="flex gap-2 mb-3">
+        <a href="${call}" class="flex-1 text-center bg-blue-600 text-white py-2.5 rounded-lg font-bold">📞 Call</a>
+        <button onclick="openWaFromBox('${c.phone}','wizContactMsg')" class="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-bold">💬 WhatsApp</button>
+      </div>` : `<p class="text-xs text-red-500 mb-3">${t("wiz_step1_no_phone")}</p>`}
+    <label class="ff-label">${t("wiz_remark_label")}</label>
+    <textarea id="wizContactRemark" class="ff-input mb-2" rows="2">${wc.remark||""}</textarea>
+    <label class="ff-label">${t("wiz_image_label")}</label>
+    <div id="wizContactImgWrap" class="mb-2">${wc.imageDataUrl?`<img src="${wc.imageDataUrl}" class="w-full rounded-lg border" style="max-height:180px;object-fit:cover;">`:""}</div>
+    <input type="file" id="wizContactImgInput" accept="image/*" capture="environment" class="hidden" onchange="onWizPhotoSelected(this,'wizContactImgWrap')">
+    <button type="button" onclick="document.getElementById('wizContactImgInput').click()" class="w-full bg-gray-100 text-gray-700 py-2 rounded-lg font-bold text-sm mb-3">${t("wiz_image_btn")}</button>
+    <button onclick="completeWizContact('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_continue_btn")}</button>
+  </div>`;
+}
+async function completeWizContact(customerId){
+  const remark = document.getElementById("wizContactRemark").value.trim();
+  const imgInput = document.getElementById("wizContactImgInput");
+  const existing = customers.find(c=>c.id===customerId);
+  const imageDataUrl = (imgInput && imgInput.dataset.captured) || (existing && existing.wizContact && existing.wizContact.imageDataUrl) || null;
+  await saveJobField(customerId, {wizContact: {remark, imageDataUrl, contactedAt: new Date().toISOString()}});
+  await advanceJobStage(customerId, "contact");
+}
+
+/* ---- Stage 2: Arrival (50m geofence, strict) ---- */
+function renderWizArrival(c){
+  const hasRef = !!c.geotag;
+  return `<div class="bg-white rounded-lg shadow p-4">
+    <h3 class="ff-section-heading">${t("wiz_step2_title")}</h3>
+    ${hasRef ? `<p class="text-xs text-gray-500 mb-3">${t("wiz_step2_desc",{r:GEOFENCE_RADIUS_M})}</p>`
+             : `<p class="text-xs text-orange-500 mb-3">${t("wiz_step2_no_ref")}</p>`}
+    <div id="wizArrivalStatus" class="text-sm mb-3 text-gray-500">${t("wiz_not_checked_yet")}</div>
+    <button onclick="checkWizArrival('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_check_location_btn")}</button>
+  </div>`;
+}
+async function checkWizArrival(customerId){
+  const statusEl = document.getElementById("wizArrivalStatus");
+  if(statusEl) statusEl.textContent = "📍 Location capture ho rahi hai...";
+  const geo = await getGeoTag();
+  const c = customers.find(c=>c.id===customerId);
+  if(!geo){
+    if(statusEl) statusEl.innerHTML = `<span class="text-red-600">⚠️ Location nahi mil payi. GPS/permission check karein aur dobara try karein.</span>`;
+    return;
+  }
+  if(c && c.geotag){
+    const dist = distanceMeters(geo.lat, geo.lng, c.geotag.lat, c.geotag.lng);
+    geo.distanceM = Math.round(dist);
+    if(dist > GEOFENCE_RADIUS_M){
+      if(statusEl) statusEl.innerHTML = `<span class="text-red-600 font-bold">❌ Aap survey location se ${Math.round(dist)}m dur hain. ${GEOFENCE_RADIUS_M}m ke andar aakar dobara check karein.</span>`;
+      return;
+    }
+    if(statusEl) statusEl.innerHTML = `<span class="text-green-600 font-bold">✅ Location match ho gayi (${Math.round(dist)}m). Aage badh rahe hain...</span>`;
+  } else if(statusEl){
+    statusEl.innerHTML = `<span class="text-green-600 font-bold">✅ Location capture ho gayi.</span>`;
+  }
+  await saveJobField(customerId, {wizArrivalGeo: geo});
+  await advanceJobStage(customerId, "arrival");
+}
+
+/* ---- Stage 3: Verify customer/meter details ---- */
+function renderWizVerify(c){
+  const meter = c.wizMeter || {};
+  const itemsList = (inventory.length?inventory:SEED_INVENTORY).map(it=>it.itemName);
+  const missingSelected = (meter.missingItems||[]).map(m=>m.itemName);
+  return `<div class="bg-white rounded-lg shadow p-4">
+    <h3 class="ff-section-heading">${t("wiz_step3_title")}</h3>
+    <label class="ff-label">${t("wiz_meter_make")}</label>
+    <input id="wizMeterMake" class="ff-input-line mb-2" value="${meter.make||""}">
+    <label class="ff-label">${t("wiz_meter_type")}</label>
+    <select id="wizMeterType" class="ff-input-line mb-2">
+      <option value="">-- Select --</option>
+      ${METER_TYPE_OPTIONS.map(o=>`<option value="${o}" ${meter.type===o?"selected":""}>${o}</option>`).join("")}
+    </select>
+    <label class="ff-label">${t("wiz_meter_number")}</label>
+    <input id="wizMeterNumber" class="ff-input-line mb-2" value="${meter.number||""}">
+    <label class="ff-label">${t("wiz_contact_number")}</label>
+    <input id="wizContactNumber" class="ff-input-line mb-2" value="${meter.contactNumber||c.phone||""}">
+
+    <label class="ff-label">${t("wiz_fitting_ok")}</label>
+    <select id="wizFittingOk" class="ff-input-line mb-2" onchange="toggleWizFittingDetails(this.value)">
+      <option value="">-- Select --</option>
+      ${YES_NO_OPTIONS.map(o=>`<option value="${o}" ${meter.fittingOk===o?"selected":""}>${o}</option>`).join("")}
+    </select>
+    <div id="wizFittingDetailsWrap" class="mb-2 ${meter.fittingOk==='No'?'':'hidden'}">
+      <label class="ff-label">${t("wiz_fitting_details")}</label>
+      <textarea id="wizFittingDetails" class="ff-input-line" rows="2">${meter.fittingDetails||""}</textarea>
+    </div>
+
+    <div class="border-t pt-3 mt-2">
+      <label class="ff-label">${t("wiz_call_confirm_q")}</label>
+      <select id="wizCallVerified" class="ff-input-line mb-2" onchange="toggleWizCallVerify(this.value)">
+        <option value="">-- Select --</option>
+        <option value="Yes" ${meter.callVerified==='Yes'?"selected":""}>${t("wiz_call_yes")}</option>
+        <option value="No" ${meter.callVerified==='No'?"selected":""}>${t("wiz_call_no")}</option>
+      </select>
+      <div id="wizCallVerifyExtra">${renderWizCallVerifyExtra(meter.callVerified, meter)}</div>
+    </div>
+
+    <div class="border-t pt-3 mt-2">
+      <label class="ff-label">${t("wiz_missing_q")}</label>
+      <div class="grid grid-cols-2 gap-2 text-sm mb-2">
+        ${itemsList.map(name=>`<label class="flex items-center gap-2 bg-gray-50 rounded px-2 py-2">
+          <input type="checkbox" class="wizMissingChk w-4 h-4 accent-[#0D904F]" value="${name}" ${missingSelected.includes(name)?"checked":""} onchange="toggleWizMissingExtra()"> ${name}
+        </label>`).join("")}
+      </div>
+      <div id="wizMissingExtra">${renderWizMissingExtra(meter.missingItems||[])}</div>
+    </div>
+
+    <button onclick="completeWizVerify('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold mt-3">${t("wiz_verify_complete_btn")}</button>
+  </div>`;
+}
+function toggleWizFittingDetails(val){
+  const wrap = document.getElementById("wizFittingDetailsWrap");
+  if(wrap) wrap.classList.toggle("hidden", val!=="No");
+}
+function renderWizCallVerifyExtra(val, meter){
+  if(val==="No"){
+    return `<div class="mb-2">
+      <label class="ff-label">${t("wiz_mismatch_note")}</label>
+      <textarea id="wizMismatchNote" class="ff-input-line mb-2" rows="2">${(meter&&meter.mismatchNote)||""}</textarea>
+      <div id="wizMismatchPhotoWrap" class="mb-2">${(meter&&meter.mismatchPhoto)?`<img src="${meter.mismatchPhoto}" class="w-full rounded-lg border" style="max-height:160px;object-fit:cover;">`:""}</div>
+      <input type="file" id="wizMismatchPhotoInput" accept="image/*" capture="environment" class="hidden" onchange="onWizPhotoSelected(this,'wizMismatchPhotoWrap')">
+      <button type="button" onclick="document.getElementById('wizMismatchPhotoInput').click()" class="w-full bg-gray-100 text-gray-700 py-2 rounded-lg font-bold text-sm">${t("wiz_mismatch_photo_btn")}</button>
+    </div>`;
+  }
+  if(val==="Yes") return `<p class="text-xs text-green-600 font-bold">${t("wiz_verified_label")}</p>`;
+  return "";
+}
+function toggleWizCallVerify(val){
+  const wrap = document.getElementById("wizCallVerifyExtra");
+  const c = customers.find(c=>c.id===activeCustomerId) || {};
+  if(wrap) wrap.innerHTML = renderWizCallVerifyExtra(val, (c.wizMeter||{}));
+}
+function renderWizMissingExtra(existing){
+  const checkboxes = document.querySelectorAll(".wizMissingChk");
+  const checked = Array.prototype.filter.call(checkboxes, x=>x.checked).map(x=>x.value);
+  if(checked.length===0) return "";
+  const photos = {}; (existing||[]).forEach(m=>{ photos[m.itemName]=m.photo; });
+  const existingNote = (existing||[]).length ? (existing.find(m=>m.note)||{}).note||"" : "";
+  return `<div class="mt-2 space-y-2">
+    <p class="text-xs text-orange-500 font-bold">${t("wiz_missing_photo_hint")}</p>
+    ${checked.map((name,i)=>`<div class="border rounded-lg p-2">
+      <p class="text-xs font-bold mb-1">${name}</p>
+      <div id="wizMissingPhotoWrap_${i}" class="mb-1">${photos[name]?`<img src="${photos[name]}" class="w-full rounded border" style="max-height:120px;object-fit:cover;">`:""}</div>
+      <input type="file" id="wizMissingPhotoInput_${i}" accept="image/*" capture="environment" class="hidden" onchange="onWizPhotoSelected(this,'wizMissingPhotoWrap_${i}')">
+      <button type="button" onclick="document.getElementById('wizMissingPhotoInput_${i}').click()" class="w-full bg-gray-100 text-gray-700 py-1.5 rounded font-bold text-xs">${t("wiz_photo_btn")}</button>
+    </div>`).join("")}
+    <textarea id="wizMissingNote" class="ff-input-line" rows="2" placeholder="${t("wiz_missing_note_ph")}">${existingNote}</textarea>
+  </div>`;
+}
+function toggleWizMissingExtra(){
+  const wrap = document.getElementById("wizMissingExtra");
+  const c = customers.find(c=>c.id===activeCustomerId) || {};
+  if(wrap) wrap.innerHTML = renderWizMissingExtra((c.wizMeter&&c.wizMeter.missingItems)||[]);
+}
+async function completeWizVerify(customerId){
+  const make = document.getElementById("wizMeterMake").value.trim();
+  const type = document.getElementById("wizMeterType").value;
+  const number = document.getElementById("wizMeterNumber").value.trim();
+  const contactNumber = document.getElementById("wizContactNumber").value.trim();
+  const fittingOk = document.getElementById("wizFittingOk").value;
+  const fittingDetailsEl = document.getElementById("wizFittingDetails");
+  const fittingDetails = fittingDetailsEl ? fittingDetailsEl.value.trim() : "";
+  const callVerified = document.getElementById("wizCallVerified").value;
+  if(!callVerified){ alert("Kripya batayein ki call par batayi gayi detail sahi hai ya nahi."); return; }
+
+  let mismatchNote = "", mismatchPhoto = null;
+  const existing = customers.find(c=>c.id===customerId);
+  if(callVerified === "No"){
+    const noteEl = document.getElementById("wizMismatchNote");
+    mismatchNote = noteEl ? noteEl.value.trim() : "";
+    const photoInput = document.getElementById("wizMismatchPhotoInput");
+    mismatchPhoto = (photoInput && photoInput.dataset.captured) || (existing && existing.wizMeter && existing.wizMeter.mismatchPhoto) || null;
+    if(!mismatchPhoto){ alert("Mismatch ka photo lena zaroori hai."); return; }
+  }
+
+  const checkboxes = document.querySelectorAll(".wizMissingChk");
+  const missingItems = [];
+  let missingIdx = 0;
+  for(let i=0;i<checkboxes.length;i++){
+    const chk = checkboxes[i];
+    if(!chk.checked) continue;
+    const photoInput = document.getElementById("wizMissingPhotoInput_"+missingIdx);
+    let photo = (photoInput && photoInput.dataset.captured) || null;
+    if(!photo && existing && existing.wizMeter && existing.wizMeter.missingItems){
+      const prev = existing.wizMeter.missingItems.find(m=>m.itemName===chk.value);
+      if(prev) photo = prev.photo;
+    }
+    if(!photo){ alert(`"${chk.value}" ka photo lena zaroori hai.`); return; }
+    missingItems.push({itemName: chk.value, photo});
+    missingIdx++;
+  }
+  const missingNoteEl = document.getElementById("wizMissingNote");
+  const missingNote = missingNoteEl ? missingNoteEl.value.trim() : "";
+  if(missingItems.length && missingNote){ missingItems.forEach(m=>m.note = missingNote); }
+
+  const wizMeter = {make, type, number, contactNumber, fittingOk, fittingDetails, callVerified, mismatchNote, mismatchPhoto, missingItems, isOldConnectionCase: missingItems.length>0};
+  await saveJobField(customerId, {wizMeter});
+  await advanceJobStage(customerId, "verify");
+}
+
+/* ---- Stage 4: Meter photo (with geotag) ---- */
+function renderWizMeterPhoto(c){
+  const mp = c.wizMeterPhoto;
+  return `<div class="bg-white rounded-lg shadow p-4">
+    <h3 class="ff-section-heading">${t("wiz_step4_title")}</h3>
+    <p class="text-xs text-gray-500 mb-3">${t("wiz_step4_desc")}</p>
+    <div id="wizMeterPhotoWrap" class="mb-2">${mp?`<img src="${mp.dataUrl}" class="w-full rounded-lg border" style="max-height:220px;object-fit:cover;">`:""}</div>
+    <input type="file" id="wizMeterPhotoInput" accept="image/*" capture="environment" class="hidden" onchange="onWizMeterPhotoSelected(this)">
+    <button type="button" onclick="document.getElementById('wizMeterPhotoInput').click()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold mb-2">${t("wiz_meter_photo_btn")}</button>
+    <p id="wizMeterPhotoGeoStatus" class="text-xs text-gray-400 mb-2">${mp&&mp.geotag?`📍 ${mp.geotag.lat.toFixed(5)}, ${mp.geotag.lng.toFixed(5)}`:""}</p>
+    <button onclick="completeWizMeterPhoto('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_confirm_continue_btn")}</button>
+  </div>`;
+}
+async function onWizMeterPhotoSelected(inputEl){
+  const file = inputEl.files && inputEl.files[0];
+  if(!file) return;
+  const wrap = document.getElementById("wizMeterPhotoWrap");
+  if(wrap) wrap.innerHTML = `<p class="text-xs text-gray-400">Processing...</p>`;
+  try{
+    const dataUrl = await captureCompressedPhoto(file);
+    const geo = await getGeoTag();
+    inputEl.dataset.captured = dataUrl;
+    if(geo) inputEl.dataset.geo = JSON.stringify(geo);
+    if(wrap) wrap.innerHTML = `<img src="${dataUrl}" class="w-full rounded-lg border" style="max-height:220px;object-fit:cover;">`;
+    const gs = document.getElementById("wizMeterPhotoGeoStatus");
+    if(gs) gs.textContent = geo ? `📍 ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}` : "⚠️ Location capture nahi ho payi";
+  }catch(e){
+    console.error(e);
+    if(wrap) wrap.innerHTML = `<p class="text-xs text-red-500">Photo process nahi ho payi.</p>`;
+  }
+  inputEl.value = "";
+}
+async function completeWizMeterPhoto(customerId){
+  const input = document.getElementById("wizMeterPhotoInput");
+  const existing = customers.find(c=>c.id===customerId);
+  const dataUrl = (input && input.dataset.captured) || (existing && existing.wizMeterPhoto && existing.wizMeterPhoto.dataUrl);
+  if(!dataUrl){ alert("Meter ka photo lena zaroori hai."); return; }
+  const geo = (input && input.dataset.geo) ? JSON.parse(input.dataset.geo) : ((existing && existing.wizMeterPhoto && existing.wizMeterPhoto.geotag) || null);
+  await saveJobField(customerId, {wizMeterPhoto: {dataUrl, geotag: geo, capturedAt: new Date().toISOString()}});
+  await advanceJobStage(customerId, "meterphoto");
+}
+
+/* ---- Stage 5: Start work ---- */
+function renderWizWorking(c){
+  return `<div class="bg-white rounded-lg shadow p-4 text-center">
+    <h3 class="ff-section-heading">${t("wiz_step5_title")}</h3>
+    <p class="text-sm text-gray-500 mb-3">${t("wiz_step5_desc")}</p>
+    <button onclick="completeWizWorking('${c.id}')" class="w-full bg-[#0D904F] text-white py-3 rounded-lg font-bold">${t("wiz_start_work_btn")}</button>
+  </div>`;
+}
+async function completeWizWorking(customerId){
+  await saveJobField(customerId, {wizWorkStartedAt: new Date().toISOString()});
+  await advanceJobStage(customerId, "working");
+}
+
+/* ---- Stage 6: Testing (hourly gauge reminder while app is open) ---- */
+let gaugeReminderTimer = null;
+function clearGaugeReminderTimer(){ if(gaugeReminderTimer){ clearInterval(gaugeReminderTimer); gaugeReminderTimer = null; } }
+function startGaugeReminderTimer(customerId){
+  clearGaugeReminderTimer();
+  gaugeReminderTimer = setInterval(function(){
+    if(!(currentUser && currentView==="customerDetail" && activeCustomerId===customerId)) return;
+    alert(t("wiz_gauge_reminder_alert"));
+  }, GAUGE_REMINDER_MS);
+}
+function renderWizTesting(c){
+  const testing = c.wizTesting;
+  if(!testing || !testing.startedAt){
+    const nowLocal = new Date().toISOString().slice(0,16);
+    return `<div class="bg-white rounded-lg shadow p-4">
+      <h3 class="ff-section-heading">${t("wiz_step6_title")}</h3>
+      <label class="ff-label">${t("wiz_test_start_label")}</label>
+      <input id="wizTestStart" type="datetime-local" class="ff-input-line mb-3" value="${nowLocal}">
+      <button onclick="startWizTesting('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_test_start_btn")}</button>
+    </div>`;
+  }
+  const readings = testing.readings || [];
+  return `<div class="bg-white rounded-lg shadow p-4">
+    <h3 class="ff-section-heading">${t("wiz_step6_title")}</h3>
+    <p class="text-xs text-gray-500 mb-2">${t("wiz_started_label")} ${new Date(testing.startedAt).toLocaleString()}</p>
+    <p class="text-xs text-orange-500 mb-3">${t("wiz_test_reminder")}</p>
+    <div class="space-y-2 mb-3">
+      ${readings.map((r,i)=>`<div class="border rounded-lg p-2 flex items-center gap-2">
+        ${r.photo?`<img src="${r.photo}" class="w-12 h-12 rounded object-cover border">`:""}
+        <div class="flex-1 text-xs">
+          <p class="font-bold">${t("wiz_reading_label")} ${i+1} — ${new Date(r.time).toLocaleTimeString()}</p>
+          <p class="text-gray-500">PG-1: ${r.pg1||"—"} • PG-2: ${r.pg2||"—"}</p>
+        </div>
+      </div>`).join("") || `<p class="text-xs text-gray-400">${t("wiz_no_readings")}</p>`}
+    </div>
+    <div id="wizGaugePhotoWrap" class="mb-2"></div>
+    <input type="file" id="wizGaugePhotoInput" accept="image/*" capture="environment" class="hidden" onchange="onWizPhotoSelected(this,'wizGaugePhotoWrap')">
+    <div class="grid grid-cols-2 gap-2 mb-2">
+      <input id="wizPg1" type="text" class="ff-input" placeholder="PG-1 Reading">
+      <input id="wizPg2" type="text" class="ff-input" placeholder="PG-2 Reading">
+    </div>
+    <button type="button" onclick="document.getElementById('wizGaugePhotoInput').click()" class="w-full bg-gray-100 text-gray-700 py-2 rounded-lg font-bold text-sm mb-2">${t("wiz_gauge_photo_btn")}</button>
+    <button onclick="addWizGaugeReading('${c.id}')" class="w-full bg-[#EA8600] text-white py-2 rounded-lg font-bold text-sm mb-3">${t("wiz_add_reading_btn")}</button>
+    <button onclick="completeWizTesting('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_test_complete_btn")}</button>
+  </div>`;
+}
+async function startWizTesting(customerId){
+  const startEl = document.getElementById("wizTestStart");
+  const startedAt = (startEl && startEl.value) ? new Date(startEl.value).toISOString() : new Date().toISOString();
+  await saveJobField(customerId, {wizTesting: {startedAt, readings: []}});
+  startGaugeReminderTimer(customerId);
+  renderMain();
+}
+async function addWizGaugeReading(customerId){
+  const photoInput = document.getElementById("wizGaugePhotoInput");
+  const photo = (photoInput && photoInput.dataset.captured) || null;
+  const pg1El = document.getElementById("wizPg1");
+  const pg2El = document.getElementById("wizPg2");
+  const pg1 = pg1El ? pg1El.value.trim() : "";
+  const pg2 = pg2El ? pg2El.value.trim() : "";
+  const c = customers.find(c=>c.id===customerId);
+  const testing = (c && c.wizTesting) || {startedAt: new Date().toISOString(), readings:[]};
+  const readings = (testing.readings||[]).concat([{time: new Date().toISOString(), pg1: pg1, pg2: pg2, photo: photo}]);
+  await saveJobField(customerId, {wizTesting: {startedAt: testing.startedAt, readings: readings}});
+  renderMain();
+}
+async function completeWizTesting(customerId){
+  const c = customers.find(c=>c.id===customerId);
+  if(!c || !c.wizTesting || !(c.wizTesting.readings||[]).length){
+    if(!confirm("Abhi tak koi pressure reading nahi li gayi. Phir bhi aage badhein?")) return;
+  }
+  clearGaugeReminderTimer();
+  await advanceJobStage(customerId, "testing");
+}
+
+/* ---- Stage 7: Material consumption (one-by-one) + add-on ---- */
+let materialStepIndex = 0;
+let addonRowCount = 0;
+function renderWizMaterial(c){
+  const bal = getTechBalances(currentUser.username).filter(b=>b.balance>0);
+  const used = (c.wizMaterialUsed || []);
+  if(materialStepIndex >= bal.length){
+    return `<div class="bg-white rounded-lg shadow p-4">
+      <h3 class="ff-section-heading">${t("wiz_step7_title")}</h3>
+      <p class="text-xs text-gray-500 mb-2">${t("wiz_step7_desc")}</p>
+      <div class="space-y-1 mb-3 text-sm">
+        ${used.length ? used.map(m=>`<div class="flex justify-between border-b py-1"><span>${m.itemName}</span><span class="font-bold">${m.qty} ${m.unit}</span></div>`).join("") : `<p class="text-xs text-gray-400">${t("wiz_no_material")}</p>`}
+      </div>
+      <div id="wizAddonRows" class="space-y-2 mb-2"></div>
+      <button type="button" onclick="addWizAddonRow()" class="text-xs bg-gray-100 px-3 py-1.5 rounded font-bold mb-3">${t("wiz_addon_btn")}</button>
+      <button onclick="completeWizMaterial('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_material_complete_btn")}</button>
+    </div>`;
+  }
+  const item = bal[materialStepIndex];
+  return `<div class="bg-white rounded-lg shadow p-4">
+    <h3 class="ff-section-heading">${t("wiz_step7_title")} (${materialStepIndex+1}/${bal.length})</h3>
+    <p class="text-sm font-bold mb-1">${item.itemName}</p>
+    <p class="text-xs text-gray-400 mb-3">${t("wiz_available_label")} ${item.balance} ${item.unit}</p>
+    <input id="wizMatQty" type="number" class="ff-input mb-3" placeholder="${t("wiz_qty_used_ph",{u:item.unit})}">
+    <div class="flex gap-2">
+      <button onclick="skipWizMaterial('${c.id}')" class="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-lg font-bold">${t("wiz_skip_btn")}</button>
+      <button onclick="saveWizMaterial('${c.id}')" class="flex-1 bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_save_next_btn")}</button>
+    </div>
+  </div>`;
+}
+async function saveWizMaterial(customerId){
+  const bal = getTechBalances(currentUser.username).filter(b=>b.balance>0);
+  const item = bal[materialStepIndex];
+  const qtyEl = document.getElementById("wizMatQty");
+  const qty = parseFloat(qtyEl.value);
+  if(item && qty > 0){
+    const c = customers.find(c=>c.id===customerId);
+    const used = ((c && c.wizMaterialUsed) || []).concat([{itemName:item.itemName, qty:qty, unit:item.unit}]);
+    await saveJobField(customerId, {wizMaterialUsed: used});
+  }
+  materialStepIndex++;
+  renderMain();
+}
+function skipWizMaterial(customerId){ materialStepIndex++; renderMain(); }
+function addWizAddonRow(){
+  const bal = getTechBalances(currentUser.username).filter(b=>b.balance>0);
+  const container = document.getElementById("wizAddonRows");
+  if(!container) return;
+  const rid = "wao_"+(addonRowCount++);
+  const opts = bal.map(b=>`<option value="${b.itemName}" data-unit="${b.unit}">${b.itemName} (${b.balance} ${b.unit} left)</option>`).join("");
+  const row = document.createElement("div");
+  row.id = rid;
+  row.className = "flex gap-2 items-center";
+  row.innerHTML = `<select class="ff-input flex-1 wao-item">${opts}</select>
+    <input type="number" class="ff-input w-24 wao-qty" placeholder="Qty">
+    <button type="button" onclick="document.getElementById('${rid}').remove()" class="text-red-500 font-bold px-2">✕</button>`;
+  container.appendChild(row);
+}
+async function completeWizMaterial(customerId){
+  const rows = document.querySelectorAll("#wizAddonRows > div");
+  const c = customers.find(c=>c.id===customerId);
+  let used = (c && c.wizMaterialUsed) || [];
+  for(let i=0;i<rows.length;i++){
+    const r = rows[i];
+    const sel = r.querySelector(".wao-item");
+    const qtyEl = r.querySelector(".wao-qty");
+    if(!sel || !qtyEl) continue;
+    const qty = parseFloat(qtyEl.value);
+    if(sel.value && qty>0){
+      const opt = sel.selectedOptions && sel.selectedOptions[0];
+      used = used.concat([{itemName: sel.value, qty:qty, unit: (opt && opt.dataset.unit) || "Nos"}]);
+    }
+  }
+  await saveJobField(customerId, {wizMaterialUsed: used});
+  materialStepIndex = 0;
+  await saveJobField(customerId, {jobStage: "forms"});
+  autoOpenNgFormFromWizard(customerId);
+}
+function autoOpenNgFormFromWizard(customerId){
+  openFormEntry("conversion_report", customerId).then(function(){
+    setTimeout(function(){
+      const c = customers.find(c=>c.id===customerId);
+      const used = (c && c.wizMaterialUsed) || [];
+      used.forEach(function(m){
+        addMaterialUsedRow();
+        const rows = document.querySelectorAll("#materialUsedRows > div");
+        const last = rows[rows.length-1];
+        if(last){
+          const sel = last.querySelector(".mu-item");
+          const qtyEl = last.querySelector(".mu-qty");
+          if(sel) sel.value = m.itemName;
+          if(qtyEl) qtyEl.value = m.qty;
+        }
+      });
+      showToast("Material entries NG form me bhar di gayi hain — check karke Save karein.");
+    }, 80);
+  });
+}
+
+/* ---- Stage 8: Forms checklist (NG/Conversion auto-opened already; others stay accessible) ---- */
+function renderWizForms(c){
+  const mySubs = submissions.filter(s=>s.customerId===c.id);
+  return `<div class="bg-white rounded-lg shadow p-4">
+    <h3 class="ff-section-heading">${t("wiz_step8_title")}</h3>
+    <p class="text-xs text-gray-500 mb-3">${t("wiz_step8_desc")}</p>
+    <div class="space-y-2 mb-3">
+      ${Object.keys(FORMS).map(id=>{
+        const f = FORMS[id];
+        const done = mySubs.filter(s=>s.formType===id).length;
+        return `<button onclick="openFormEntry('${id}','${c.id}')" class="w-full text-left bg-gray-50 rounded-lg p-3 border-l-4 ${done?'border-green-500':'border-[#0D904F]'} flex items-center gap-3">
+          <span class="text-xl">${f.icon}</span>
+          <div class="flex-1">
+            <p class="font-bold text-sm">${f.title}</p>
+            <p class="text-xs text-gray-500">${done>0?t("wiz_filled_label",{n:done}):t("wiz_pending_label")}</p>
+          </div>
+        </button>`;
+      }).join("")}
+    </div>
+    <button onclick="completeWizForms('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_job_complete_btn")}</button>
+  </div>`;
+}
+async function completeWizForms(customerId){
+  await advanceJobStage(customerId, "forms");
+}
+
+/* ---- Stage 9: Done ---- */
+function renderWizDone(c){
+  return `<div class="bg-white rounded-lg shadow p-4 text-center">
+    <div class="text-4xl mb-2">🎉</div>
+    <h3 class="font-bold text-lg mb-1">${t("wiz_done_title")}</h3>
+    <p class="text-xs text-gray-500">${t("wiz_done_desc",{name:c.name})}</p>
+  </div>`;
+}
+
 function renderTechCustomerDetail(customerId){
   const c = customers.find(c=>c.id===customerId);
   if(!c) return `<p class="text-gray-400 text-center mt-10">Customer not found.</p>`;
@@ -861,7 +1808,13 @@ function renderTechCustomerDetail(customerId){
       <p class="text-xs text-gray-400 mt-1">${c.geotag ? `📍 Survey location: ${c.geotag.lat.toFixed(5)}, ${c.geotag.lng.toFixed(5)}` : "📍 No geotag on file"}</p>
     </div>
 
-    <div class="bg-white rounded-lg shadow p-4 mb-3">
+    ${renderJobWizardStepper(c)}
+    <div id="jobWizardStage" class="mb-4">${renderJobWizardStage(c)}</div>
+
+    <details class="mb-4">
+      <summary class="text-sm font-bold text-gray-500 py-2 cursor-pointer">⚙️ Advance / Manual Tools (WORK PROGRESS + Purane Forms)</summary>
+
+    <div class="bg-white rounded-lg shadow p-4 mb-3 mt-2">
       <h3 class="ff-section-heading">WORK PROGRESS UPDATE</h3>
       <label class="ff-label">Work Status (overall)</label>
       <select id="wp_status_${c.id}" class="ff-input-line mb-2">
@@ -953,6 +1906,7 @@ function renderTechCustomerDetail(customerId){
           </div>`;
         }).join("")}
       </div>` : ""}
+    </details>
   `;
 }
 
@@ -1261,14 +2215,47 @@ async function openFormEntry(formId, customerId){
   const el = document.getElementById("mainContent");
   const cust = currentCustomerId ? customers.find(c=>c.id===currentCustomerId) : null;
 
-  // Prefill defaults from customer record (only if not already set)
+  // Prefill defaults from customer record + wizard-collected common data.
+  // Always refreshed (not just "if not already set") so switching between customers never
+  // leaks a previous customer's stale prefill into this one.
+  (form.tables||[]).forEach(t=>{
+    if(t.key==="pressure_readings" || t.key==="pressure_observation") t.prefill = {};
+  });
   if(cust){
+    const wm = cust.wizMeter || {};
+    const arrivalGeo = cust.wizArrivalGeo || cust.geotag || null;
     form.sections.forEach(sec=>sec.fields.forEach(f=>{
-      if(["consumer_name","customer_name"].includes(f.key) && !f.def) f.def = cust.name;
-      if(["address"].includes(f.key) && !f.def) f.def = cust.address;
-      if(["contact_no","phone_no","telephone_no","mobile","mobile_no"].includes(f.key) && !f.def) f.def = cust.phone;
-      if(["bp_no"].includes(f.key) && cust.bpNo && !f.def) f.def = cust.bpNo;
+      if(["consumer_name","customer_name"].includes(f.key)) f.def = cust.name || "";
+      if(["address"].includes(f.key)) f.def = cust.address || "";
+      if(["contact_no","phone_no","telephone_no","mobile","mobile_no"].includes(f.key)) f.def = wm.contactNumber || cust.phone || "";
+      if(["bp_no"].includes(f.key)) f.def = cust.bpNo || "";
+      if(f.key==="meter_make") f.def = wm.make || "";
+      if(f.key==="meter_type") f.def = wm.type || "";
+      if(f.key==="meter_number" || f.key==="meter_no") f.def = wm.number || "";
+      if(f.key==="latitude" && arrivalGeo) f.def = arrivalGeo.lat.toFixed(6);
+      if(f.key==="longitude" && arrivalGeo) f.def = arrivalGeo.lng.toFixed(6);
     }));
+    // Pressure-gauge readings captured during the Testing wizard step, auto-filled into
+    // Isometric Graph / Service Line Job Card pressure tables.
+    const testingReadings = (cust.wizTesting && cust.wizTesting.readings) || [];
+    if(testingReadings.length){
+      (form.tables||[]).forEach(t=>{
+        if(t.key==="pressure_readings"){
+          const prefill = {};
+          testingReadings.slice(0, t.rows).forEach((r,i)=>{
+            prefill[i] = {"Time": new Date(r.time).toLocaleTimeString(), "PG-1": r.pg1||"", "PG-2": r.pg2||"", "Date": new Date(r.time).toLocaleDateString(), "Remarks": ""};
+          });
+          t.prefill = prefill;
+        }
+        if(t.key==="pressure_observation"){
+          const prefill = {};
+          testingReadings.slice(0, t.rows).forEach((r,i)=>{
+            prefill[i] = {"Time": new Date(r.time).toLocaleTimeString(), "Reading (kg/cm2)": r.pg1||""};
+          });
+          t.prefill = prefill;
+        }
+      });
+    }
   }
 
   let html = `<div class="bg-white rounded-lg shadow p-3 mb-3 flex items-center gap-3">
@@ -1960,6 +2947,7 @@ function renderAdminCustomers(){
   const others = customers.filter(c=>c.status!=="pending");
   const sortedOthers = [...others].sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
   return `
+    <button onclick="setView('bulkWhatsapp')" class="w-full bg-green-600 text-white font-bold py-2.5 rounded-lg mb-2">📢 Bulk Call / WhatsApp Bhejein</button>
     <button onclick="exportCustomerMasterReport()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Export Customer Master Report (Excel)</button>
     <button onclick="exportWorkTrackerReport()" class="w-full bg-[#8430CE] text-white font-bold py-2.5 rounded-lg mb-4">⬇ Export Work Tracker Report (SL/GI/NG/Restore)</button>
 
@@ -2005,11 +2993,15 @@ function renderAdminCustomers(){
           <p class="text-xs text-gray-400">📞 ${c.phone||"—"} • Survey by: ${techName(c.addedBy)} ${c.geotag?`• 📍 ${c.geotag.lat.toFixed(5)}, ${c.geotag.lng.toFixed(5)}`:""}</p>
           ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-xs mt-1"><span class="font-bold">Pending:</span> ${c.pendingWork.join(", ")}</p>` : ""}
           ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
-          <div class="flex gap-2 mt-2">
-            <select id="assignSel_${c.id}" class="ff-input flex-1 text-xs">
+          <div class="mt-2 space-y-2">
+            <select id="assignSel_${c.id}" class="ff-input w-full text-xs">
               ${activeTechnicianList().map(t=>`<option value="${t.username}">${t.name}</option>`).join("")}
             </select>
-            <button onclick="assignCustomer('${c.id}')" class="bg-[#EA8600] text-white text-xs font-bold px-3 py-1.5 rounded">Assign</button>
+            <p class="text-xs text-gray-400">🗓️ Kaam ki tareekh (optional — WhatsApp message isi tareekh ke sath jayega):</p>
+            <div class="flex gap-2">
+              <input type="date" id="assignDate_${c.id}" class="ff-input flex-1 text-xs">
+              <button onclick="assignCustomer('${c.id}')" class="bg-[#EA8600] text-white text-xs font-bold px-4 py-1.5 rounded">Assign</button>
+            </div>
           </div>
         </div>`).join("")}
     </div>
@@ -2025,6 +3017,7 @@ function renderAdminCustomers(){
           </div>
           <p class="text-xs text-gray-500">${c.address}</p>
           <p class="text-xs text-gray-400">Technician: ${techName(c.assignedTechnician)} • Forms filled: ${filled}/6</p>
+          ${c.scheduledWorkDate ? `<p class="text-xs mt-1">🗓️ Kaam ki tareekh: <b>${formatWorkDateForMessage(c.scheduledWorkDate,true)}</b></p>` : ""}
           <p class="text-xs mt-1"><span class="font-bold">Work Status:</span> <span class="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">${c.workStatus||"Pending"}</span></p>
           <p class="text-xs mt-1 flex flex-wrap gap-1">
             <span class="bg-gray-100 px-1.5 py-0.5 rounded">SL: ${c.slWork||"-"}/${c.slPaper||"-"}</span>
@@ -2035,30 +3028,40 @@ function renderAdminCustomers(){
           </p>
           ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-xs mt-1"><span class="font-bold">Pending:</span> ${c.pendingWork.join(", ")}</p>` : ""}
           ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
-          <div class="flex gap-2 mt-2">
-            <select id="reassignSel_${c.id}" class="ff-input flex-1 text-xs">
+          <div class="mt-2 space-y-2">
+            <select id="reassignSel_${c.id}" class="ff-input w-full text-xs">
               ${activeTechnicianList().map(t=>`<option value="${t.username}" ${c.assignedTechnician===t.username?"selected":""}>${t.name}</option>`).join("")}
             </select>
-            <button onclick="reassignCustomer('${c.id}')" class="bg-[#8430CE] text-white text-xs font-bold px-3 py-1.5 rounded">🔁 Transfer</button>
+            <div class="flex gap-2">
+              <input type="date" id="reassignDate_${c.id}" class="ff-input flex-1 text-xs" value="${c.scheduledWorkDate||''}">
+              <button onclick="reassignCustomer('${c.id}')" class="bg-[#8430CE] text-white text-xs font-bold px-4 py-1.5 rounded">🔁 Transfer</button>
+            </div>
+            ${c.phone ? `<button onclick='showScheduleContactModal(${JSON.stringify({id:c.id,name:c.name,phone:c.phone,address:c.address||""}).replace(/'/g,"&#39;")}, "${c.assignedTechnician||''}", "${c.scheduledWorkDate||''}")' class="w-full text-xs bg-green-50 text-green-700 font-bold py-1.5 rounded">💬 Is customer ko WhatsApp bhejein</button>` : ""}
           </div>
         </div>`;
       }).join("") || '<p class="text-xs text-gray-400">Koi customer nahi.</p>'}
-    </div>`;
+    </div>
+    <div id="quickContactModal"></div>`;
 }
 
 async function reassignCustomer(customerId){
   const sel = document.getElementById("reassignSel_"+customerId);
+  const dateEl = document.getElementById("reassignDate_"+customerId);
   const techUsername = sel.value;
   if(!techUsername) return;
+  const workDate = dateEl ? dateEl.value : "";
   const c = customers.find(c=>c.id===customerId);
-  if(c && c.assignedTechnician===techUsername){ showToast("Ye customer pehle se isi technician ko assigned hai."); return; }
+  if(c && c.assignedTechnician===techUsername && !workDate){ showToast("Ye customer pehle se isi technician ko assigned hai."); return; }
+  const updates = {assignedTechnician: techUsername, status:"assigned"};
+  if(workDate) updates.scheduledWorkDate = workDate;
   if(db){
-    try{ await db.doc("customers/"+customerId).update({assignedTechnician: techUsername, status:"assigned"}); }
+    try{ await db.doc("customers/"+customerId).update(updates); }
     catch(e){ console.error(e); alert("Transfer failed."); return; }
   } else {
-    if(c){ c.assignedTechnician = techUsername; c.status = "assigned"; renderMain(); }
+    if(c){ Object.assign(c, updates); renderMain(); }
   }
   showToast(`Kaam transfer ho gaya: ${techName(techUsername)}`);
+  showScheduleContactModal({...(c||{id:customerId}), ...updates}, techUsername, workDate);
 }
 
 async function adminAddCustomer(){
@@ -2090,21 +3093,26 @@ async function adminAddCustomer(){
     geotag: null,
     createdAt: new Date().toISOString()
   };
-  if(db){ await db.collection("customers").add(record); }
-  else { customers.push({id:"local_"+Date.now(), ...record}); renderMain(); }
+  let newId = "local_"+Date.now();
+  if(db){ const ref = await db.collection("customers").add(record); newId = ref.id; }
+  else { customers.push({id:newId, ...record}); renderMain(); }
   showToast("Customer added!");
+  showQuickContactModal({id:newId, ...record});
 }
 
 async function assignCustomer(customerId){
   const sel = document.getElementById("assignSel_"+customerId);
+  const dateEl = document.getElementById("assignDate_"+customerId);
   const techUsername = sel.value;
   if(!techUsername) return;
-  if(db){ await db.doc("customers/"+customerId).update({assignedTechnician: techUsername, status:"assigned"}); }
-  else {
-    const c = customers.find(c=>c.id===customerId);
-    if(c){ c.assignedTechnician = techUsername; c.status = "assigned"; renderMain(); }
-  }
+  const workDate = dateEl ? dateEl.value : "";
+  const updates = {assignedTechnician: techUsername, status:"assigned"};
+  if(workDate) updates.scheduledWorkDate = workDate;
+  const c = customers.find(c=>c.id===customerId) || {id:customerId, name:"", phone:""};
+  if(db){ await db.doc("customers/"+customerId).update(updates); }
+  else { Object.assign(c, updates); renderMain(); }
   showToast(`Assigned to ${techName(techUsername)}`);
+  showScheduleContactModal({...c, ...updates}, techUsername, workDate);
 }
 
 function renderAdminOverview(){
@@ -2211,6 +3219,26 @@ async function toggleEmployeeActive(username){
   showToast(newActive ? "Login access restore ho gaya." : "Login access hata diya gaya (data safe hai).");
 }
 
+function regenerateEmpPassword(username){
+  const u = employeeList().find(u=>u.username===username);
+  const input = document.getElementById("pwUpdateInput_"+username);
+  if(input) input.value = generatePassword(u ? u.name : username);
+}
+
+async function saveEmpPassword(username){
+  const input = document.getElementById("pwUpdateInput_"+username);
+  const newPass = input ? input.value.trim() : "";
+  if(!newPass || newPass.length < 4){ alert("Kam se kam 4 character ka password dein."); return; }
+  if(db){
+    try{ await db.doc("users/"+username).update({password: newPass}); }
+    catch(e){ console.error(e); alert("Password update nahi ho paya, dobara try karein."); return; }
+  } else {
+    const u = allUsers.find(u=>u.username===username);
+    if(u) u.password = newPass;
+  }
+  alert(`Password update ho gaya!\n\nUsername: ${username}\nNaya Password: ${newPass}\n\nYe employee ko bata dein — purana password ab kaam nahi karega.`);
+}
+
 function viewEmployeeDetail(username){
   const u = employeeList().find(u=>u.username===username);
   if(!u) return;
@@ -2267,6 +3295,15 @@ function viewEmployeeDetail(username){
             <p class="text-xs text-gray-400 capitalize">${u.role} • ${u.username} • ${u.active!==false?'Active':'Login Removed'}</p>
           </div>
           <button onclick="document.getElementById('empDetailModal').innerHTML=''" class="text-gray-400 text-2xl">✕</button>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3 mb-3">
+          <p class="text-xs font-bold text-gray-500 mb-2">🔑 Password Update</p>
+          <div class="flex gap-2 mb-2">
+            <input id="pwUpdateInput_${u.username}" class="ff-input flex-1 text-sm" value="${generatePassword(u.name)}">
+            <button onclick="regenerateEmpPassword('${u.username}')" class="text-xs bg-gray-200 text-gray-700 font-bold px-3 rounded">🔄</button>
+          </div>
+          <button onclick="saveEmpPassword('${u.username}')" class="w-full bg-[#0D904F] text-white text-xs font-bold py-2 rounded">💾 Save New Password</button>
+          <p class="text-xs text-gray-400 mt-1">Chahen toh box mein apna pasand ka password bhi type kar sakte hain, ya 🔄 se naya auto-generate karein.</p>
         </div>
         ${extra}
         <h4 class="font-bold text-sm text-gray-700 mb-1">📍 Attendance / Login Log (${myAtt.length})</h4>
@@ -2457,7 +3494,14 @@ async function exportAllToExcel(){
 }
 
 /* ============ SESSION RESTORE (runs last) ============ */
+applyLoginLang();
 restoreSession();
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(e){ console.error("SW register failed", e); });
+  });
+}
 </script>
 </body>
 </html>
