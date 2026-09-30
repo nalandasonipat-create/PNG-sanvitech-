@@ -59,9 +59,10 @@
       <p id="loginSubtitle" class="text-green-100 text-sm">Universal Automation Engine</p>
     </div>
 
-    <div class="grid grid-cols-4 gap-1 bg-white/15 rounded-xl p-1 mb-4">
+    <div class="grid grid-cols-5 gap-1 bg-white/15 rounded-xl p-1 mb-4">
       <div class="role-tab active" data-role="technician" onclick="selectLoginRole('technician')">👷<br><span id="roleTabLabel_technician">Tech</span></div>
       <div class="role-tab" data-role="surveyor" onclick="selectLoginRole('surveyor')">🧭<br><span id="roleTabLabel_surveyor">Survey</span></div>
+      <div class="role-tab" data-role="telecaller" onclick="selectLoginRole('telecaller')">📞<br><span id="roleTabLabel_telecaller">Call</span></div>
       <div class="role-tab" data-role="store" onclick="selectLoginRole('store')">📦<br><span id="roleTabLabel_store">Store</span></div>
       <div class="role-tab" data-role="admin" onclick="selectLoginRole('admin')">🛡️<br><span id="roleTabLabel_admin">Admin</span></div>
     </div>
@@ -142,18 +143,21 @@ try{ LANG = localStorage.getItem("png_lang") || "en"; }catch(e){}
 const I18N = {
   en: {
     login_subtitle: "Universal Automation Engine",
-    role_technician: "Tech", role_surveyor: "Survey", role_store: "Store", role_admin: "Admin",
+    role_technician: "Tech", role_surveyor: "Survey", role_store: "Store", role_admin: "Admin", role_telecaller: "Call",
     username_label: "Username", password_label: "Password", login_btn: "LOGIN",
     login_error: "Wrong username or password for this role.",
     hint_technician: "Login with your Technician ID", hint_surveyor: "Login with your Surveyor ID",
     hint_store: "Login with your Store ID", hint_admin: "Login with your Admin ID",
+    hint_telecaller: "Login with your Telecaller ID",
     header_technician: "PNG ENTERPRISE — TECHNICIAN", header_surveyor: "PNG ENTERPRISE — SURVEYOR",
     header_store: "PNG ENTERPRISE — STORE", header_admin: "PNG ENTERPRISE — ADMIN",
+    header_telecaller: "PNG ENTERPRISE — TELECALLER",
     logout_btn: "Logout",
     nav_customers: "My Customers", nav_stock: "My Stock", nav_myjobs: "My Jobs",
     nav_addcustomer: "Add Customer", nav_mysurveys: "My Surveys",
     nav_inventory: "Inventory", nav_issue: "Issue Material", nav_history: "History",
     nav_overview: "Overview", nav_employees: "Employees", nav_store: "Store", nav_customers_plain: "Customers",
+    nav_newcall: "New Call", nav_mycalls: "My Calls", nav_payout: "Payout",
     safety_title: "Safety Kit Verification",
     safety_desc: "Verify your safety kit before starting work — required once after every login.",
     safety_ppe_heading: "Required PPE:",
@@ -204,21 +208,48 @@ const I18N = {
     wiz_job_complete_btn: "✅ Mark Job Complete",
     wiz_filled_label: "✓ Filled {n}x", wiz_pending_label: "Pending",
     wiz_done_title: "Job Complete!", wiz_done_desc: "Work for {name} has been completed successfully.",
+    tc_hub_title: "📞 Telecaller Calls Lead", tc_hub_desc: "Pick a track based on this call:",
+    tc_trackA_title: "🆕 New Connection", tc_trackA_desc: "Fresh lead — confirm details & address, mark as Fresh Lead.",
+    tc_trackB_title: "📂 CRM / Old Record", tc_trackB_desc: "Existing customer — verify BP No./Mobile, categorize the issue.",
+    tc_a_title: "🆕 New Connection — Fresh Lead", tc_a_name: "Customer Name *", tc_a_phone: "Phone Number *",
+    tc_a_address: "Address *", tc_a_notes: "Notes (optional)", tc_a_issue_type_label: "Issue Type",
+    tc_a_issue_type_value: "Fresh Lead", tc_a_move_running: "Move to Running", tc_a_submit_btn: "Submit → Move to Running",
+    tc_a_validation: "Naam, phone aur address dena zaroori hai.", tc_a_check_validation: "'Move to Running' par tick karein.",
+    tc_a_success: "Fresh lead Running me chala gaya!",
+    tc_b_title: "📂 CRM / Old Record", tc_b_search_label: "Search by B.P No. or Mobile Number",
+    tc_b_search_ph: "Enter B.P No. or 10-digit mobile", tc_b_search_btn: "🔍 Search",
+    tc_b_not_found: "Koi customer nahi mila is B.P No./Mobile se.", tc_b_select_btn: "Select",
+    tc_b_selected_label: "Selected Customer", tc_b_category_label: "Categorize Issue",
+    tc_b_workpending: "1. Work Pending (Survey/Plumbing/Meter/Gas-In)", tc_b_servicecomplaint: "2. Service Complaint (Leakage/Pressure/Billing)",
+    tc_b_remarks_label: "Remarks", tc_b_move_running: "Move to Running", tc_b_submit_btn: "Update & Move to Running",
+    tc_b_validation: "Pehle category chunein.", tc_b_check_validation: "'Move to Running' par tick karein.",
+    tc_b_success: "Update ho gaya, Running me chala gaya!", tc_b_new_search: "🔄 New Search",
+    mc_title: "🧾 My Calls", mc_empty: "Aapne abhi tak koi call log nahi kiya.",
+    mc_track_new: "New Connection", mc_track_crm: "CRM", mc_resolved_label: "✅ Task Resolved",
+    mc_pickup_label: "✅ Form Picked Up", mc_running_label: "🟡 Running",
+    payout_title: "💰 My Payout", payout_start_date: "Start Date", payout_end_date: "End Date",
+    payout_filter_btn: "Apply Filter", payout_crm_closures: "CRM Closures (Task Resolved)",
+    payout_form_pickups: "Form Pickups (Conversion)", payout_total_label: "Total Net Filtered Payout",
+    payout_rate_title: "⚙️ Payout Rates (Admin)", payout_rate_crm: "Rate ₹X — CRM Closure (Fixed Service Pay)",
+    payout_rate_form: "Rate ₹Y — Form Pickup (Conversion Incentive)", payout_rate_save_btn: "Save Rates",
   },
   hi: {
     login_subtitle: "यूनिवर्सल ऑटोमेशन इंजन",
-    role_technician: "टेक्नीशियन", role_surveyor: "सर्वेयर", role_store: "स्टोर", role_admin: "एडमिन",
+    role_technician: "टेक्नीशियन", role_surveyor: "सर्वेयर", role_store: "स्टोर", role_admin: "एडमिन", role_telecaller: "कॉल",
     username_label: "यूज़रनेम", password_label: "पासवर्ड", login_btn: "लॉगिन करें",
     login_error: "इस भूमिका के लिए यूज़रनेम या पासवर्ड गलत है।",
     hint_technician: "अपनी टेक्नीशियन आईडी से लॉगिन करें", hint_surveyor: "अपनी सर्वेयर आईडी से लॉगिन करें",
     hint_store: "अपनी स्टोर आईडी से लॉगिन करें", hint_admin: "अपनी एडमिन आईडी से लॉगिन करें",
+    hint_telecaller: "अपनी टेलीकॉलर आईडी से लॉगिन करें",
     header_technician: "PNG एंटरप्राइज़ — टेक्नीशियन", header_surveyor: "PNG एंटरप्राइज़ — सर्वेयर",
     header_store: "PNG एंटरप्राइज़ — स्टोर", header_admin: "PNG एंटरप्राइज़ — एडमिन",
+    header_telecaller: "PNG एंटरप्राइज़ — टेलीकॉलर",
     logout_btn: "लॉगआउट",
     nav_customers: "मेरे कस्टमर", nav_stock: "मेरा स्टॉक", nav_myjobs: "मेरे काम",
     nav_addcustomer: "कस्टमर जोड़ें", nav_mysurveys: "मेरे सर्वे",
     nav_inventory: "इन्वेंटरी", nav_issue: "मटेरियल जारी करें", nav_history: "हिस्ट्री",
     nav_overview: "ओवरव्यू", nav_employees: "कर्मचारी", nav_store: "स्टोर", nav_customers_plain: "कस्टमर",
+    nav_newcall: "नई कॉल", nav_mycalls: "मेरी कॉल्स", nav_payout: "पेआउट",
     safety_title: "सेफ्टी किट वेरिफिकेशन",
     safety_desc: "काम शुरू करने से पहले अपनी सेफ्टी किट वेरिफाई करें — हर लॉगिन के बाद एक बार ज़रूरी है।",
     safety_ppe_heading: "आवश्यक PPE:",
@@ -269,6 +300,30 @@ const I18N = {
     wiz_job_complete_btn: "✅ जॉब कम्प्लीट करें",
     wiz_filled_label: "✓ {n} बार भरा गया", wiz_pending_label: "पेंडिंग",
     wiz_done_title: "जॉब पूरा हुआ!", wiz_done_desc: "{name} का काम सफलतापूर्वक पूरा हो गया है।",
+    tc_hub_title: "📞 टेलीकॉलर लीड को कॉल करता है", tc_hub_desc: "इस कॉल के आधार पर एक ट्रैक चुनें:",
+    tc_trackA_title: "🆕 नया कनेक्शन", tc_trackA_desc: "फ्रेश लीड — डिटेल्स और एड्रेस कन्फर्म करें, Fresh Lead मार्क करें।",
+    tc_trackB_title: "📂 CRM / पुराना रिकॉर्ड", tc_trackB_desc: "पुराना कस्टमर — B.P No./मोबाइल वेरिफाई करें, इशू कैटेगराइज़ करें।",
+    tc_a_title: "🆕 नया कनेक्शन — Fresh Lead", tc_a_name: "कस्टमर का नाम *", tc_a_phone: "फ़ोन नंबर *",
+    tc_a_address: "पता *", tc_a_notes: "नोट्स (वैकल्पिक)", tc_a_issue_type_label: "इशू टाइप",
+    tc_a_issue_type_value: "Fresh Lead", tc_a_move_running: "Running में भेजें", tc_a_submit_btn: "सबमिट करें → Running में भेजें",
+    tc_a_validation: "नाम, फ़ोन और पता देना ज़रूरी है।", tc_a_check_validation: "'Running में भेजें' पर टिक करें।",
+    tc_a_success: "Fresh lead Running में चला गया!",
+    tc_b_title: "📂 CRM / पुराना रिकॉर्ड", tc_b_search_label: "B.P No. या मोबाइल नंबर से खोजें",
+    tc_b_search_ph: "B.P No. या 10-अंकों का मोबाइल डालें", tc_b_search_btn: "🔍 खोजें",
+    tc_b_not_found: "इस B.P No./मोबाइल से कोई कस्टमर नहीं मिला।", tc_b_select_btn: "चुनें",
+    tc_b_selected_label: "चुना गया कस्टमर", tc_b_category_label: "इशू कैटेगराइज़ करें",
+    tc_b_workpending: "1. Work Pending (Survey/Plumbing/Meter/Gas-In)", tc_b_servicecomplaint: "2. Service Complaint (Leakage/Pressure/Billing)",
+    tc_b_remarks_label: "रिमार्क्स", tc_b_move_running: "Running में भेजें", tc_b_submit_btn: "अपडेट करें और Running में भेजें",
+    tc_b_validation: "पहले कैटेगरी चुनें।", tc_b_check_validation: "'Running में भेजें' पर टिक करें।",
+    tc_b_success: "अपडेट हो गया, Running में चला गया!", tc_b_new_search: "🔄 नई खोज",
+    mc_title: "🧾 मेरी कॉल्स", mc_empty: "आपने अभी तक कोई कॉल लॉग नहीं किया।",
+    mc_track_new: "नया कनेक्शन", mc_track_crm: "CRM", mc_resolved_label: "✅ काम पूरा हुआ",
+    mc_pickup_label: "✅ फॉर्म पिकअप हुआ", mc_running_label: "🟡 Running",
+    payout_title: "💰 मेरा पेआउट", payout_start_date: "शुरुआत तारीख", payout_end_date: "आखिरी तारीख",
+    payout_filter_btn: "फ़िल्टर लगाएं", payout_crm_closures: "CRM Closures (काम पूरा हुआ)",
+    payout_form_pickups: "Form Pickups (कन्वर्शन)", payout_total_label: "टोटल नेट फ़िल्टर्ड पेआउट",
+    payout_rate_title: "⚙️ पेआउट रेट्स (एडमिन)", payout_rate_crm: "रेट ₹X — CRM Closure (फिक्स्ड सर्विस पे)",
+    payout_rate_form: "रेट ₹Y — Form Pickup (कन्वर्शन इंसेंटिव)", payout_rate_save_btn: "रेट्स सेव करें",
   },
 };
 function t(key, vars){
@@ -276,11 +331,11 @@ function t(key, vars){
   if(vars){ Object.keys(vars).forEach(k=>{ s = s.replace("{"+k+"}", vars[k]); }); }
   return s;
 }
-const ROLE_HEADER_KEY = {technician:"header_technician", surveyor:"header_surveyor", store:"header_store", admin:"header_admin"};
-const ROLE_HINT_KEY = {technician:"hint_technician", surveyor:"hint_surveyor", store:"hint_store", admin:"hint_admin"};
+const ROLE_HEADER_KEY = {technician:"header_technician", surveyor:"header_surveyor", store:"header_store", admin:"header_admin", telecaller:"header_telecaller"};
+const ROLE_HINT_KEY = {technician:"hint_technician", surveyor:"hint_surveyor", store:"hint_store", admin:"hint_admin", telecaller:"hint_telecaller"};
 function applyLoginLang(){
   const subEl = document.getElementById("loginSubtitle"); if(subEl) subEl.textContent = t("login_subtitle");
-  ["technician","surveyor","store","admin"].forEach(r=>{
+  ["technician","surveyor","store","admin","telecaller"].forEach(r=>{
     const el = document.getElementById("roleTabLabel_"+r); if(el) el.textContent = t("role_"+r);
   });
   const uL = document.getElementById("loginUserLabel"); if(uL) uL.textContent = t("username_label");
@@ -315,6 +370,7 @@ const SEED_USERS = [
   {username:"ronak", password:"Rona!6580", role:"technician", name:"Ronak", active:true},
   {username:"akash", password:"Akas#1858", role:"technician", name:"Akash", active:true},
   {username:"ajay", password:"Ajay!3152", role:"surveyor", name:"Ajay", active:true},
+  {username:"sanya", password:"Sany@4410", role:"telecaller", name:"Sanya", active:true},
 ];
 const SEED_INVENTORY = [
   {itemName:"GI Pipe 1/2\"", unit:"Mtrs", stockQty:800},
@@ -385,7 +441,17 @@ async function saveJobField(customerId, patch){
 async function advanceJobStage(customerId, fromStage){
   const idx = jobStageIndex(fromStage);
   const next = JOB_STAGE_ORDER[idx+1] || "done";
-  await saveJobField(customerId, {jobStage: next});
+  const patch = {jobStage: next};
+  // Telecaller payout attribution: stamp the completion event once, the first time this job reaches "done"
+  if(next === "done"){
+    const c = customers.find(c=>c.id===customerId);
+    if(c && c.telecallerId){
+      const now = new Date().toISOString();
+      if(c.track === "crm_maintenance" && !c.taskResolvedAt){ patch.taskResolvedAt = now; patch.taskResolvedBy = c.telecallerId; }
+      else if(c.track === "new_connection" && !c.formPickedUpAt){ patch.formPickedUpAt = now; patch.formPickedUpBy = c.telecallerId; }
+    }
+  }
+  await saveJobField(customerId, patch);
   renderMain();
 }
 
@@ -440,6 +506,11 @@ let customers = [];
 let tasks = [];
 let attendance = [];
 let safetyChecks = [];
+let payoutRates = {crmRate: 50, formRate: 100};
+let telecallerPayoutFilter = {start:"", end:""};
+let telecallerSearchResults = [];
+let telecallerHasSearched = false;
+let telecallerSelectedCustomerId = null;
 
 async function doLogin(){
   const user = document.getElementById("loginUser").value.trim();
@@ -534,6 +605,10 @@ async function initDb(){
     const snap = await db.collection("customers").get();
     if(snap.empty){ for(const c of SEED_CUSTOMERS){ await db.collection("customers").add(c); } }
   }catch(e){ console.error("seed customers error", e); }
+  try{
+    const snap = await db.doc("settings/payoutRates").get();
+    if(!snap.exists){ await db.doc("settings/payoutRates").set(payoutRates); }
+  }catch(e){ console.error("seed payout rates error", e); }
 
   db.collection("users").onSnapshot(snap=>{ allUsers = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
   db.collection("inventory").onSnapshot(snap=>{ inventory = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
@@ -543,6 +618,7 @@ async function initDb(){
   db.collection("customers").onSnapshot(snap=>{ customers = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
   db.collection("attendance").onSnapshot(snap=>{ attendance = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
   db.collection("safety_checks").onSnapshot(snap=>{ safetyChecks = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.doc("settings/payoutRates").onSnapshot(snap=>{ if(snap && snap.exists) payoutRates = {crmRate:50, formRate:100, ...snap.data()}; renderMain(); }, e=>console.error(e));
   dbReady = true;
 }
 function updateDbBadge(connected, errored){
@@ -618,12 +694,26 @@ function setupBottomNav(){
       <button onclick="setView('employees')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">👥</span>${t("nav_employees")}</button>
       <button onclick="setView('storereport')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>${t("nav_store")}</button>`;
     currentView = "overview";
+  } else if(currentUser.role === "telecaller"){
+    title.textContent = t("header_telecaller");
+    nav.innerHTML = `
+      <button onclick="setView('newCall')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📞</span>${t("nav_newcall")}</button>
+      <button onclick="setView('myCalls')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_mycalls")}</button>
+      <button onclick="setView('payout')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">💰</span>${t("nav_payout")}</button>`;
+    currentView = "newCall";
   }
   const defaultView = currentView;
   highlightNav();
   setView(defaultView);
 }
 function setView(view){
+  if(view==="newCall" || view==="trackB"){ telecallerSearchResults = []; telecallerHasSearched = false; telecallerSelectedCustomerId = null; }
+  if(view==="payout" && !telecallerPayoutFilter.start){
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    telecallerPayoutFilter.start = first.toISOString().slice(0,10);
+    telecallerPayoutFilter.end = now.toISOString().slice(0,10);
+  }
   currentView = view; highlightNav(); renderMain();
   if(view==="addCustomer" && currentUser && currentUser.role==="surveyor"){
     surveyGeotag = null;
@@ -672,6 +762,12 @@ function renderMain(){
     else if(currentView==="storereport") el.innerHTML = renderAdminStoreReport();
     else if(currentView==="customers") el.innerHTML = renderAdminCustomers();
     else if(currentView==="bulkWhatsapp") el.innerHTML = renderBulkWhatsApp();
+  } else if(currentUser.role === "telecaller"){
+    if(currentView==="newCall") el.innerHTML = renderTelecallerNewCall();
+    else if(currentView==="trackA") el.innerHTML = renderTelecallerTrackA();
+    else if(currentView==="trackB") el.innerHTML = renderTelecallerTrackB();
+    else if(currentView==="myCalls") el.innerHTML = renderTelecallerMyCalls();
+    else if(currentView==="payout") el.innerHTML = renderTelecallerPayout();
   }
 }
 
@@ -2941,6 +3037,276 @@ function renderSurveyorMySurveys(){
     </div>`;
 }
 
+/* ============ TELECALLER MODULE ============ */
+const CRM_WORK_PENDING_OPTIONS = [
+  {key:"survey", label:"Survey"},
+  {key:"plumbing", label:"Plumbing"},
+  {key:"meter", label:"Meter"},
+  {key:"gasin", label:"Gas-In"},
+];
+const CRM_SERVICE_COMPLAINT_OPTIONS = [
+  {key:"leakage", label:"Leakage"},
+  {key:"pressure", label:"Pressure"},
+  {key:"billing", label:"Billing"},
+];
+
+function renderTelecallerNewCall(){
+  return `<h2 class="font-bold text-gray-800 mb-3">${t("tc_hub_title")}</h2>
+    <p class="text-xs text-gray-500 mb-4">${t("tc_hub_desc")}</p>
+    <div class="space-y-3">
+      <button onclick="setView('trackA')" class="w-full text-left bg-white rounded-lg shadow p-4 border-l-4 border-[#0D904F]">
+        <p class="font-bold text-sm">${t("tc_trackA_title")}</p>
+        <p class="text-xs text-gray-500 mt-1">${t("tc_trackA_desc")}</p>
+      </button>
+      <button onclick="setView('trackB')" class="w-full text-left bg-white rounded-lg shadow p-4 border-l-4 border-[#EA8600]">
+        <p class="font-bold text-sm">${t("tc_trackB_title")}</p>
+        <p class="text-xs text-gray-500 mt-1">${t("tc_trackB_desc")}</p>
+      </button>
+    </div>`;
+}
+
+/* ---- Track A: New Connection / Fresh Lead ---- */
+function renderTelecallerTrackA(){
+  return `<h2 class="font-bold text-gray-800 mb-3">${t("tc_a_title")}</h2>
+    <div class="bg-white rounded-lg shadow p-4">
+      <label class="ff-label">${t("tc_a_name")}</label>
+      <input id="tcaName" class="ff-input mb-3" placeholder="${t("tc_a_name")}">
+      <label class="ff-label">${t("tc_a_phone")}</label>
+      <input id="tcaPhone" class="ff-input mb-3" placeholder="10-digit mobile">
+      <label class="ff-label">${t("tc_a_address")}</label>
+      <textarea id="tcaAddress" class="ff-input mb-3" rows="2"></textarea>
+      <label class="ff-label">${t("tc_a_notes")}</label>
+      <textarea id="tcaNotes" class="ff-input mb-3" rows="2"></textarea>
+      <div class="bg-gray-50 rounded p-2 mb-3 flex justify-between items-center text-sm">
+        <span class="text-gray-500">${t("tc_a_issue_type_label")}</span>
+        <span class="font-bold text-[#0D904F]">${t("tc_a_issue_type_value")}</span>
+      </div>
+      <label class="flex items-center gap-2 bg-gray-50 rounded px-2 py-2 mb-3 text-sm font-bold">
+        <input type="checkbox" id="tcaMoveRunning" class="w-4 h-4 accent-[#0D904F]"> ${t("tc_a_move_running")}
+      </label>
+      <button onclick="submitTelecallerTrackA()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("tc_a_submit_btn")}</button>
+    </div>`;
+}
+async function submitTelecallerTrackA(){
+  const name = document.getElementById("tcaName").value.trim();
+  const phone = document.getElementById("tcaPhone").value.trim();
+  const address = document.getElementById("tcaAddress").value.trim();
+  const notes = document.getElementById("tcaNotes").value.trim();
+  const moveChecked = document.getElementById("tcaMoveRunning").checked;
+  if(!name || !phone || !address){ alert(t("tc_a_validation")); return; }
+  if(!moveChecked){ alert(t("tc_a_check_validation")); return; }
+  const record = {
+    name, phone, address, fatherHusbandName:"", startAt:"", formNumber:"", email:"",
+    houseNo:"", pinCode:"", society:"", street:"", area:"", landmark:"", bpNo:"", notes,
+    pendingWork: [], connectionType: ["New"],
+    workStatus: "Pending", meterCompany:"", meterSerialNumber:"", switchOnDate:"",
+    paymentPlan:"", agencyName:"", sdAmount:"", registerBy: currentUser.username,
+    slWork:"Pending", slPaper:"Pending", giWork:"Pending", giPaper:"Pending",
+    ngWork:"Pending", ngPaper:"Pending", restoreWork:"Pending", restorePaper:"Pending",
+    jmrStatus:"Pending", remark:"",
+    status: "pending", addedBy: currentUser.username, addedByRole: "telecaller",
+    assignedTechnician: null, geotag: null,
+    track: "new_connection", issueType: "Fresh Lead", telecallerId: currentUser.username,
+    movedToRunningAt: new Date().toISOString(), createdAt: new Date().toISOString(),
+  };
+  if(db){
+    try{ await db.collection("customers").add(record); }
+    catch(e){ console.error(e); alert("Save failed, try again."); return; }
+  } else {
+    customers.push({id:"local_"+Date.now(), ...record});
+  }
+  showToast(t("tc_a_success"));
+  setView("myCalls");
+}
+
+/* ---- Track B: CRM / Old Record ---- */
+function renderTelecallerTrackB(){
+  const selected = telecallerSelectedCustomerId ? customers.find(c=>c.id===telecallerSelectedCustomerId) : null;
+  return `<h2 class="font-bold text-gray-800 mb-3">${t("tc_b_title")}</h2>
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <label class="ff-label">${t("tc_b_search_label")}</label>
+      <div class="flex gap-2">
+        <input id="tcbSearchInput" class="ff-input flex-1" placeholder="${t("tc_b_search_ph")}">
+        <button onclick="searchTelecallerCRM()" class="bg-[#0D904F] text-white px-4 rounded-lg font-bold text-sm">${t("tc_b_search_btn")}</button>
+      </div>
+      ${telecallerSearchResults.length ? `<div class="space-y-2 mt-3">
+        ${telecallerSearchResults.map(c=>`<div class="bg-gray-50 rounded p-2 flex justify-between items-center">
+          <div>
+            <p class="font-bold text-sm">${c.name}</p>
+            <p class="text-xs text-gray-500">${c.address||""}</p>
+            <p class="text-xs text-gray-400">📞 ${c.phone||"—"} • BP: ${c.bpNo||"—"}</p>
+          </div>
+          <button onclick="selectTelecallerCRMCustomer('${c.id}')" class="text-xs bg-[#0D904F] text-white px-3 py-1.5 rounded font-bold">${t("tc_b_select_btn")}</button>
+        </div>`).join("")}
+      </div>` : (telecallerHasSearched ? `<p class="text-xs text-red-500 mt-3">${t("tc_b_not_found")}</p>` : "")}
+    </div>
+    ${selected ? renderTelecallerTrackBForm(selected) : ""}`;
+}
+function searchTelecallerCRM(){
+  const q = (document.getElementById("tcbSearchInput").value||"").trim();
+  if(!q){ telecallerSearchResults = []; telecallerHasSearched = false; renderMain(); return; }
+  const qDigits = q.replace(/\D/g,"");
+  telecallerSearchResults = customers.filter(c=>{
+    if(c.bpNo && c.bpNo.trim() === q) return true;
+    if(qDigits.length>=6 && (c.phone||"").replace(/\D/g,"").includes(qDigits)) return true;
+    return false;
+  });
+  telecallerHasSearched = true;
+  telecallerSelectedCustomerId = null;
+  renderMain();
+}
+function selectTelecallerCRMCustomer(id){
+  telecallerSelectedCustomerId = id;
+  renderMain();
+}
+function renderTelecallerTrackBForm(c){
+  const call = callLink(c.phone);
+  return `<div class="bg-white rounded-lg shadow p-4">
+    <div class="flex justify-between items-start mb-3">
+      <div>
+        <p class="text-xs text-gray-400">${t("tc_b_selected_label")}</p>
+        <p class="font-bold text-sm">${c.name}</p>
+        <p class="text-xs text-gray-500">${c.address||""}</p>
+      </div>
+      ${c.phone ? `<a href="${call}" class="bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded">📞 Call</a>` : ""}
+    </div>
+    <label class="ff-label">${t("tc_b_category_label")}</label>
+    <select id="tcbCategory" class="ff-input mb-2" onchange="toggleTcbCategory(this.value)">
+      <option value="">-- Select --</option>
+      <option value="workPending">${t("tc_b_workpending")}</option>
+      <option value="serviceComplaint">${t("tc_b_servicecomplaint")}</option>
+    </select>
+    <div id="tcbCategoryExtra" class="mb-3"></div>
+    <label class="ff-label">${t("tc_b_remarks_label")}</label>
+    <textarea id="tcbRemarks" class="ff-input mb-3" rows="2"></textarea>
+    <label class="flex items-center gap-2 bg-gray-50 rounded px-2 py-2 mb-3 text-sm font-bold">
+      <input type="checkbox" id="tcbMoveRunning" class="w-4 h-4 accent-[#0D904F]"> ${t("tc_b_move_running")}
+    </label>
+    <button onclick="submitTelecallerTrackB('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold mb-2">${t("tc_b_submit_btn")}</button>
+    <button onclick="telecallerSelectedCustomerId=null; renderMain();" class="w-full text-xs text-gray-400 py-1">${t("tc_b_new_search")}</button>
+  </div>`;
+}
+function toggleTcbCategory(val){
+  const wrap = document.getElementById("tcbCategoryExtra");
+  if(!wrap) return;
+  if(val==="workPending") wrap.innerHTML = renderCheckboxGroup("tcbWP", CRM_WORK_PENDING_OPTIONS);
+  else if(val==="serviceComplaint") wrap.innerHTML = renderCheckboxGroup("tcbSC", CRM_SERVICE_COMPLAINT_OPTIONS);
+  else wrap.innerHTML = "";
+}
+function telecallerTrackBCategory(){
+  const sel = document.getElementById("tcbCategory");
+  return sel ? sel.value : "";
+}
+async function submitTelecallerTrackB(customerId){
+  const category = telecallerTrackBCategory();
+  if(!category){ alert(t("tc_b_validation")); return; }
+  const moveChecked = document.getElementById("tcbMoveRunning").checked;
+  if(!moveChecked){ alert(t("tc_b_check_validation")); return; }
+  const remarks = (document.getElementById("tcbRemarks").value||"").trim();
+  const subItems = category==="workPending" ? collectCheckboxGroup("tcbWP", CRM_WORK_PENDING_OPTIONS) : collectCheckboxGroup("tcbSC", CRM_SERVICE_COMPLAINT_OPTIONS);
+  const c = customers.find(c=>c.id===customerId);
+  const connectionType = Array.from(new Set([...(c&&c.connectionType||[]), "CRM"]));
+  const patch = {
+    track: "crm_maintenance",
+    issueCategory: category==="workPending" ? "Work Pending" : "Service Complaint",
+    issueType: subItems.join(", ") || (category==="workPending"?"Work Pending":"Service Complaint"),
+    telecallerNote: remarks, telecallerId: currentUser.username,
+    status: "pending", assignedTechnician: null, jobStage: "contact",
+    connectionType, movedToRunningAt: new Date().toISOString(),
+  };
+  if(db){
+    try{ await db.doc("customers/"+customerId).update(patch); }
+    catch(e){ console.error(e); alert("Update failed, try again."); return; }
+  } else {
+    if(c){ Object.assign(c, patch); }
+  }
+  showToast(t("tc_b_success"));
+  telecallerSelectedCustomerId = null;
+  telecallerSearchResults = [];
+  setView("myCalls");
+}
+
+/* ---- My Calls (call log) ---- */
+function renderTelecallerMyCalls(){
+  const mine = customers.filter(c=>c.telecallerId===currentUser.username);
+  const sorted = [...mine].sort((a,b)=>(b.movedToRunningAt||b.createdAt||"").localeCompare(a.movedToRunningAt||a.createdAt||""));
+  if(sorted.length===0) return `<h2 class="font-bold text-gray-800 mb-3">${t("mc_title")}</h2><p class="text-gray-400 text-center mt-10">${t("mc_empty")}</p>`;
+  return `<h2 class="font-bold text-gray-800 mb-3">${t("mc_title")}</h2>
+    <div class="space-y-2">
+      ${sorted.map(c=>{
+        const isNew = c.track==="new_connection";
+        const trackBadge = isNew ? `<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-bold">${t("mc_track_new")}</span>` : `<span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded font-bold">${t("mc_track_crm")}</span>`;
+        const statusBadge = isNew
+          ? (c.formPickedUpAt ? `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold">${t("mc_pickup_label")}</span>` : `<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded font-bold">${t("mc_running_label")}</span>`)
+          : (c.taskResolvedAt ? `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold">${t("mc_resolved_label")}</span>` : `<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded font-bold">${t("mc_running_label")}</span>`);
+        return `<div class="bg-white rounded-lg shadow p-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="font-bold text-sm">${c.name}</p>
+              <p class="text-xs text-gray-500">${c.address||""}</p>
+            </div>
+            ${trackBadge}
+          </div>
+          <p class="text-xs text-gray-400 mt-1">${c.issueType||""}</p>
+          <div class="flex items-center justify-between mt-2">
+            ${statusBadge}
+            <span class="text-xs text-gray-400">${c.movedToRunningAt ? new Date(c.movedToRunningAt).toLocaleString() : ""}</span>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>`;
+}
+
+/* ---- Payout calculator ---- */
+function computeTelecallerPayout(username, startDate, endDate){
+  const inRange = (iso) => {
+    if(!iso) return false;
+    const d = iso.slice(0,10);
+    if(startDate && d < startDate) return false;
+    if(endDate && d > endDate) return false;
+    return true;
+  };
+  const mine = customers.filter(c=>c.telecallerId===username);
+  const crmClosures = mine.filter(c=>c.track==="crm_maintenance" && inRange(c.taskResolvedAt));
+  const formPickups = mine.filter(c=>c.track==="new_connection" && inRange(c.formPickedUpAt));
+  const crmAmount = crmClosures.length * (payoutRates.crmRate||0);
+  const formAmount = formPickups.length * (payoutRates.formRate||0);
+  return {crmCount: crmClosures.length, formCount: formPickups.length, crmAmount, formAmount, total: crmAmount+formAmount};
+}
+function renderTelecallerPayout(){
+  const {start, end} = telecallerPayoutFilter;
+  const result = computeTelecallerPayout(currentUser.username, start, end);
+  return `<h2 class="font-bold text-gray-800 mb-3">${t("payout_title")}</h2>
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <div><label class="ff-label">${t("payout_start_date")}</label><input type="date" id="payoutStart" class="ff-input" value="${start||""}"></div>
+        <div><label class="ff-label">${t("payout_end_date")}</label><input type="date" id="payoutEnd" class="ff-input" value="${end||""}"></div>
+      </div>
+      <button onclick="applyTelecallerPayoutFilter()" class="w-full bg-[#0D904F] text-white py-2 rounded-lg font-bold text-sm">${t("payout_filter_btn")}</button>
+    </div>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-white rounded-lg shadow p-3 text-center">
+        <p class="text-xs text-gray-400">${t("payout_crm_closures")}</p>
+        <p class="text-2xl font-bold text-[#0D904F]">${result.crmCount}</p>
+        <p class="text-xs text-gray-500">× ₹${payoutRates.crmRate} = ₹${result.crmAmount}</p>
+      </div>
+      <div class="bg-white rounded-lg shadow p-3 text-center">
+        <p class="text-xs text-gray-400">${t("payout_form_pickups")}</p>
+        <p class="text-2xl font-bold text-[#0D904F]">${result.formCount}</p>
+        <p class="text-xs text-gray-500">× ₹${payoutRates.formRate} = ₹${result.formAmount}</p>
+      </div>
+    </div>
+    <div class="bg-[#0D904F] text-white rounded-lg shadow p-4 text-center">
+      <p class="text-xs opacity-80">${t("payout_total_label")}</p>
+      <p class="text-3xl font-bold">₹${result.total}</p>
+    </div>`;
+}
+function applyTelecallerPayoutFilter(){
+  telecallerPayoutFilter.start = document.getElementById("payoutStart").value;
+  telecallerPayoutFilter.end = document.getElementById("payoutEnd").value;
+  renderMain();
+}
+
 /* ============ ADMIN: CUSTOMER MANAGEMENT ============ */
 function renderAdminCustomers(){
   const pending = customers.filter(c=>c.status==="pending");
@@ -3145,7 +3511,7 @@ function renderAdminOverview(){
 /* ============ ADMIN: EMPLOYEE PANEL (attendance + add/remove login + role list) ============ */
 function renderAdminEmployees(){
   const employees = employeeList();
-  const roleOrder = {technician:0, surveyor:1, store:2};
+  const roleOrder = {technician:0, surveyor:1, telecaller:2, store:3};
   const sorted = [...employees].sort((a,b)=> (roleOrder[a.role]??9)-(roleOrder[b.role]??9) || a.name.localeCompare(b.name));
   return `
     <div class="bg-white rounded-lg shadow p-4 mb-4">
@@ -3157,9 +3523,19 @@ function renderAdminEmployees(){
         <option value="technician">Technician</option>
         <option value="store">Store</option>
         <option value="surveyor">Surveyor</option>
+        <option value="telecaller">Telecaller</option>
       </select>
       <button onclick="adminAddEmployee()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Add Employee</button>
       <p class="text-xs text-gray-400 mt-2">Username/password auto-generate hoga aur add karne ke baad ek baar dikhaya jayega — note kar lena.</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <h2 class="font-bold text-gray-800 mb-3">${t("payout_rate_title")}</h2>
+      <label class="ff-label">${t("payout_rate_crm")}</label>
+      <input id="payRateCrm" type="number" class="ff-input mb-2" value="${payoutRates.crmRate}">
+      <label class="ff-label">${t("payout_rate_form")}</label>
+      <input id="payRateForm" type="number" class="ff-input mb-3" value="${payoutRates.formRate}">
+      <button onclick="saveTelecallerPayoutRates()" class="w-full bg-[#8430CE] text-white py-2 rounded-lg font-bold text-sm">${t("payout_rate_save_btn")}</button>
     </div>
 
     <h2 class="font-bold text-gray-800 mb-2">👥 All Employees (${sorted.length})</h2>
@@ -3203,6 +3579,19 @@ async function adminAddEmployee(){
   }
   document.getElementById("empName").value = "";
   alert(`Employee add ho gaya!\n\nUsername: ${username}\nPassword: ${password}\n\nYe details employee ko de dein — dobara yahan nahi dikhengi, isliye abhi note kar lein.`);
+}
+
+async function saveTelecallerPayoutRates(){
+  const crmRate = Number(document.getElementById("payRateCrm").value) || 0;
+  const formRate = Number(document.getElementById("payRateForm").value) || 0;
+  const rates = {crmRate, formRate};
+  if(db){
+    try{ await db.doc("settings/payoutRates").set(rates); }
+    catch(e){ console.error(e); alert("Rates save nahi ho paye, dobara try karein."); return; }
+  } else {
+    payoutRates = rates; renderMain();
+  }
+  showToast("Payout rates update ho gaye.");
 }
 
 async function toggleEmployeeActive(username){
@@ -3285,6 +3674,24 @@ function viewEmployeeDetail(username){
     const myIssues = issues.filter(i=>i.issuedBy===username).sort((a,b)=>(b.issuedAt||"").localeCompare(a.issuedAt||""));
     extra = `<h4 class="font-bold text-sm text-gray-700 mb-1">Material Issued by this Store User (${myIssues.length})</h4>
       <div class="space-y-1 mb-3">${myIssues.map(i=>`<div class="text-xs bg-gray-50 rounded p-2">${i.itemName} — ${i.qty}${i.unit||""} → ${techName(i.technicianUsername)}</div>`).join("")||'<p class="text-xs text-gray-400">None</p>'}</div>`;
+  } else if(u.role==="telecaller"){
+    const mine = customers.filter(c=>c.telecallerId===username);
+    const newLeads = mine.filter(c=>c.track==="new_connection");
+    const crmCases = mine.filter(c=>c.track==="crm_maintenance");
+    const payout = computeTelecallerPayout(username, "", "");
+    extra = `<h4 class="font-bold text-sm text-gray-700 mb-1">Calls Logged (${mine.length})</h4>
+      <div class="flex gap-2 mb-3">
+        <div class="flex-1 bg-gray-50 rounded p-2 text-xs text-center"><p class="font-bold text-lg">${newLeads.length}</p><p>New Connection</p></div>
+        <div class="flex-1 bg-gray-50 rounded p-2 text-xs text-center"><p class="font-bold text-lg">${crmCases.length}</p><p>CRM / Old Record</p></div>
+      </div>
+      <h4 class="font-bold text-sm text-gray-700 mb-1">All-time Payout</h4>
+      <div class="bg-gray-50 rounded p-2 text-xs mb-3">
+        <p>${payout.crmCount} CRM Closures × ₹${payoutRates.crmRate} = ₹${payout.crmAmount}</p>
+        <p>${payout.formCount} Form Pickups × ₹${payoutRates.formRate} = ₹${payout.formAmount}</p>
+        <p class="font-bold mt-1">Total: ₹${payout.total}</p>
+      </div>
+      <h4 class="font-bold text-sm text-gray-700 mb-1">Recent Calls</h4>
+      <div class="space-y-1 mb-3">${mine.slice(0,15).map(c=>`<div class="text-xs bg-gray-50 rounded p-2">${c.name} — ${c.track==='new_connection'?'New Connection':'CRM'} — <span class="font-bold">${c.status}</span></div>`).join("")||'<p class="text-xs text-gray-400">None</p>'}</div>`;
   }
   const html = `
     <div class="fixed inset-0 bg-black/50 flex items-end z-50" onclick="if(event.target===this) document.getElementById('empDetailModal').innerHTML=''">
