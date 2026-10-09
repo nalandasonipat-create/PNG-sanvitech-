@@ -2465,6 +2465,7 @@ function fpData(formId, cust){
     });
     if(dt.sketch && !d.sketch) d.sketch = dt.sketch;
   });
+  if(formId==='isometric_graph') d.iso = isoPlan(cust);
   return d;
 }
 function fpLoadImg(url){ return new Promise(res=>{ const im = new Image(); im.onload = ()=>res(im); im.onerror = ()=>res(null); im.src = url; }); }
@@ -2476,7 +2477,8 @@ async function fpClean(url){
   let ink = 0;
   try{
     const id = cx.getImageData(0,0,cv.width,cv.height), px = id.data;
-    for(let i=0;i<px.length;i+=4){ if(px[i+3]>20 && px[i]+px[i+1]+px[i+2] < 640){ ink++; } else { px[i+3] = 0; } }
+    for(let i=0;i<px.length;i+=4){ const mx = Math.max(px[i],px[i+1],px[i+2]), mn = Math.min(px[i],px[i+1],px[i+2]);
+      if(px[i+3]>20 && (px[i]+px[i+1]+px[i+2] < 360 || mx-mn > 60)){ ink++; } else { px[i+3] = 0; } }
     cx.putImageData(id,0,0);
   }catch(e){ ink = 100; }
   return {url:cv.toDataURL("image/png"), ink, w:im.width, h:im.height};
@@ -2544,6 +2546,7 @@ const FP_SPECS = {
     [437,458,479,500,524].forEach((y,i)=>{ const r = pr[i]; if(!r) return;
       o.push(FP_T(40,y,r["Time"],200,8), FP_T(270,y,r["PG-1"],120,8), FP_T(405,y,r["PG-2"],130,8), FP_T(553,y,r["Date"],95,8), FP_T(660,y,r["Remarks"],130,8)); });
     o.push({k:"img",c:d.sketch,x:34,y:557,w:770,h:532});
+    o.push({k:"iso",plan:(d.sketch ? null : d.iso),box:{x:34,y:557,w:770,h:532}});
     return o;
   },
   service_line_card(d){
@@ -2575,6 +2578,7 @@ function fpDraw(pdf, ops){
       pdf.addImage(o.c.url, "PNG", o.x*FP_MM + (bw-w)/2, o.y*FP_MM + (bh-h)/2, w, h);
       return;
     }
+    if(o.k==="iso"){ if(o.plan){ isoRender(isoPdfApi(pdf), o.box, o.plan); pdf.setTextColor(10,25,120); } return; }
     if(o.k==="bp"){
       const s = String(o.s||"").replace(/\D/g,"").slice(0,10);
       pdf.setFontSize(10);
@@ -2623,7 +2627,7 @@ const FP_REQ = {
     ["PVC sleeve",fpHas(k["PVC Sleeve"])],["Meter clamp",fpHas(k["Meter Clamp"])],["GI painting",fpHas(k["GI Painting"])]]; },
   isometric_graph: d=>{ const f=d.f, p=(d.t.pipe_lengths||{})[0]||{}; return [
     ["Customer name",fpHas(f.customer_name)],["BP no.",fpHas(f.bp_no)],["Address",fpHas(f.address)],["Pipe total",fpHas(p["Total(Mtrs)"])],
-    ["Pressure reading",!!(d.t.pressure_readings && d.t.pressure_readings[0])]]; },
+    ["Pressure reading",!!(d.t.pressure_readings && d.t.pressure_readings[0])],["Isometric drawing",!!(d.sketch || d.iso)]]; },
   service_line_card: d=>{ const f=d.f, ft=(d.t.fittings||{})[0]||{}, pd=d.t.pipe_details||{}; return [
     ["Consumer name",fpHas(f.consumer_name)],["BP no.",fpHas(f.bp_no)],["Contact",fpHas(f.contact_no||f.mobile_no)],["Address",fpHas(f.address)],["Serial no.",fpHas(f.serial_no)],["Date",fpHas(f.date)],
     ["Latitude",fpHas(f.latitude)],["Longitude",fpHas(f.longitude)],["20 MM pipe",fpHas(ft["MDPE Pipe(20MM)"])],["Total pipe length",fpHas((pd[2]||{})["Value"])],
@@ -2837,7 +2841,8 @@ async function openFormEntry(formId, customerId){
         <button onclick="setSketchColor('#111111')" class="w-6 h-6 rounded-full border-2 border-gray-300" style="background:#111111"></button>
         <button onclick="setSketchColor('#0D904F')" class="w-6 h-6 rounded-full border-2 border-gray-300" style="background:#0D904F"></button>
         <button onclick="setSketchColor('#dc2626')" class="w-6 h-6 rounded-full border-2 border-gray-300" style="background:#dc2626"></button>
-        <button onclick="clearSketch()" class="ml-auto text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-bold">🗑 Clear</button>
+        <button onclick="autoSketch()" class="ml-auto text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded font-bold">⚙ Auto</button>
+        <button onclick="clearSketch()" class="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded font-bold">🗑 Clear</button>
       </div>
       <canvas id="sketchCanvas" width="700" height="450" class="border rounded w-full touch-none" style="background:#fff;"></canvas>
     </div>`;
@@ -2869,6 +2874,7 @@ async function openFormEntry(formId, customerId){
     });
   });
   if(form.hasSketch){ setTimeout(initSketchCanvas, 50); }
+  if(formId==="isometric_graph" && cust){ setTimeout(()=>autoSketch(true), 150); }
 
   // Capture geotag
   getGeoTag().then(geo=>{
@@ -2998,6 +3004,98 @@ function setSketchTool(tool){
   });
 }
 function setSketchColor(color){ sketchColor = color; }
+
+/* ============ AUTO ISOMETRIC DRAWING (built from the customer's GI data) ============ */
+function isoPlan(c){
+  const gi = giRowFor(c) || [];
+  const n = k=>ffNum(gi[k]);
+  const p12 = n(5)+n(7), p34 = n(6)+n(8);
+  const el = n(9)+n(10)+n(11)+n(12)+n(13), tee = n(23)+n(24), av = n(25)+n(26), iv = n(27)+n(28);
+  const reg = /INSTAL|REPLAC/i.test(ffStr(gi[38]));
+  const total = p12 + p34;
+  if(!total && !el && !tee && !av && !iv) return null;
+  const segN = Math.max(1, Math.min(10, Math.round(el)+1));
+  const dirs = [[1,0,0],[0,0,0.8],[0,-1,0],[0,0,-0.8]];   // right-down, up, right-up, down: the run keeps moving to the right, so it never overlaps itself
+  let q = [0,0,0]; const pts = [q.slice()], segs = [];
+  for(let i=0;i<segN;i++){
+    const d = dirs[i%4], b = [q[0]+d[0], q[1]+d[1], q[2]+d[2]];
+    segs.push({a:q.slice(), b, size: total && ((i+0.5)/segN*total < p34) ? "3/4" : "1/2"});
+    q = b; pts.push(b.slice());
+  }
+  const lg = [];
+  if(p12) lg.push(`GI 1/2": ${Math.round(p12*100)/100} m`);
+  if(p34) lg.push(`GI 3/4": ${Math.round(p34*100)/100} m`);
+  lg.push(`Elbow: ${el}   Tee: ${tee}   AV: ${av}   IV: ${iv}`);
+  if(reg) lg.push("Regulator: installed");
+  if(gi[2] || gi[3]) lg.push(`Meter: ${ffStr(gi[2])} ${ffStr(gi[3])}`.trim());
+  lg.push("Schematic isometric - not to scale");
+  return {pts, segs, el: Math.round(el), tee: Math.round(tee), av: Math.round(av), iv: Math.round(iv), reg, legend: lg};
+}
+function isoRender(api, box, plan){
+  if(!plan) return;
+  const pr = p=>[(p[0]-p[1])*0.866, (p[0]+p[1])*0.5 - p[2]];
+  const P = plan.pts.map(pr);
+  const xs = P.map(a=>a[0]), ys = P.map(a=>a[1]);
+  const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
+  const bw = Math.max(maxx-minx, 1), bh = Math.max(maxy-miny, 1);
+  const availW = box.w - 150, availH = box.h*0.55;
+  const sc = Math.min(availW/bw, availH/bh, 110);
+  const ox = box.x + 110 + (availW - bw*sc)/2 - minx*sc, oy = box.y + box.h*0.1 + (availH - bh*sc)/2 - miny*sc;
+  const T = a=>[ox + a[0]*sc, oy + a[1]*sc];
+  const col = "#1d3a8a", red = "#b91c1c", grn = "#0D904F";
+  plan.segs.forEach((sg,i)=>{
+    const a = T(P[i]), b = T(P[i+1]);
+    api.line(a[0],a[1],b[0],b[1], sg.size==="3/4" ? 3.4 : 2.2, col);
+    api.text(sg.size+'"', (a[0]+b[0])/2 + 6, (a[1]+b[1])/2 - 6, 11, col);
+  });
+  // start: wall hole + regulator + meter
+  const s0 = T(P[0]);
+  api.rect(s0[0]-46, s0[1]-12, 30, 22, 1.8, red); api.text("M", s0[0]-35, s0[1]+4, 12, red);
+  api.line(s0[0]-16, s0[1], s0[0], s0[1], 1.8, red);
+  if(plan.reg){ api.circle(s0[0]-62, s0[1], 7, 1.8, red); api.text("REG", s0[0]-74, s0[1]-12, 10, red); }
+  api.text("Wall hole / TF", s0[0]-30, s0[1]+26, 10, red);
+  // elbows
+  for(let i=1;i<plan.pts.length-1;i++){ const e = T(P[i]); api.circle(e[0],e[1],5,1.6,red); }
+  if(plan.el) { const e1 = T(P[Math.min(1,P.length-1)]); api.text("E x"+plan.el, e1[0]+8, e1[1]+16, 10, red); }
+  // tees on segment middles
+  for(let t=0;t<Math.min(plan.tee, plan.segs.length);t++){
+    const i = (t*2+1) % plan.segs.length, a = T(P[i]), b = T(P[i+1]), m = [(a[0]+b[0])/2,(a[1]+b[1])/2];
+    api.line(m[0],m[1],m[0]-14,m[1]-18,1.8,col); api.text("T", m[0]-26, m[1]-20, 11, red);
+  }
+  // valves: IV near start, AV at the end
+  if(plan.iv){ const a = T(P[0]), b = T(P[1]); const m = [a[0]+(b[0]-a[0])*0.3, a[1]+(b[1]-a[1])*0.3]; api.rect(m[0]-6,m[1]-6,12,12,1.8,grn); api.text("IV x"+plan.iv, m[0]-8, m[1]+22, 10, grn); }
+  if(plan.av){ const e = T(P[P.length-1]); api.rect(e[0]-7,e[1]-7,14,14,1.8,grn); api.text("AV x"+plan.av, e[0]+12, e[1]+4, 11, grn); }
+  // legend
+  plan.legend.forEach((ln,i)=>api.text(ln, box.x+16, box.y+box.h-16-(plan.legend.length-1-i)*18, 12, "#111111"));
+}
+function isoCanvasApi(ctx){
+  return {
+    line:(x1,y1,x2,y2,w,c)=>{ ctx.strokeStyle=c; ctx.lineWidth=w; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); },
+    circle:(x,y,r,w,c)=>{ ctx.strokeStyle=c; ctx.lineWidth=w; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); },
+    rect:(x,y,w,h,lw,c)=>{ ctx.strokeStyle=c; ctx.lineWidth=lw; ctx.strokeRect(x,y,w,h); },
+    text:(t,x,y,sz,c)=>{ ctx.fillStyle=c; ctx.font=`bold ${sz+2}px Arial`; ctx.fillText(t,x,y); }
+  };
+}
+function isoPdfApi(pdf){
+  return {
+    line:(x1,y1,x2,y2,w,c)=>{ pdf.setDrawColor(c); pdf.setLineWidth(w*FP_MM*0.6); pdf.line(x1*FP_MM,y1*FP_MM,x2*FP_MM,y2*FP_MM); },
+    circle:(x,y,r,w,c)=>{ pdf.setDrawColor(c); pdf.setLineWidth(w*FP_MM*0.6); pdf.circle(x*FP_MM,y*FP_MM,r*FP_MM,"S"); },
+    rect:(x,y,w,h,lw,c)=>{ pdf.setDrawColor(c); pdf.setLineWidth(lw*FP_MM*0.6); pdf.rect(x*FP_MM,y*FP_MM,w*FP_MM,h*FP_MM,"S"); },
+    text:(t,x,y,sz,c)=>{ pdf.setTextColor(c); pdf.setFontSize(sz*0.72); pdf.text(String(t), x*FP_MM, y*FP_MM); }
+  };
+}
+function autoSketch(silent){
+  const canvas = document.getElementById("sketchCanvas");
+  const cust = customers.find(c=>c.id===currentCustomerId);
+  if(!canvas || !sketchCtx || !cust) return;
+  const plan = isoPlan(cust);
+  if(!plan){ if(!silent) showToast("Is customer ka GI data abhi nahi bhara hai."); return; }
+  clearSketch();
+  isoRender(isoCanvasApi(sketchCtx), {x:0,y:0,w:canvas.width,h:canvas.height}, plan);
+  sketchBase = sketchCtx.getImageData(0,0,canvas.width,canvas.height);
+  if(!silent) showToast("Isometric drawing GI data se ban gayi.");
+}
+
 function clearSketch(){
   const canvas = document.getElementById("sketchCanvas");
   if(!canvas || !sketchCtx) return;
