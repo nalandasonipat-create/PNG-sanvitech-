@@ -2361,6 +2361,8 @@ function ffIso(v){
 function ffNum(v){ if(v===null || v===undefined || v==="") return 0; const n = Number(v); return isNaN(n) ? 0 : n; }
 function ffStr(v){ return (v===null || v===undefined || typeof v==="boolean") ? "" : String(v); }
 function ffN(v){ const n = ffNum(v); return n ? String(Math.round(n*100)/100) : ""; }
+const FP_CONTRACTOR = "TEJASAV ENTERPRISES INDIA PRIVATE LIMITED";
+const FP_FREE_PIPE = 15;   // metres of GI pipe included in the connection charge
 function formAutoFill(formId, c){
   const sl = slRowFor(c) || [], gi = giRowFor(c) || [], ng = ngRowFor(c) || [], rest = c.restRow || [];
   const wm = c.wizMeter || {};
@@ -2371,11 +2373,11 @@ function formAutoFill(formId, c){
   const done = ffIso(ng[8]) || ffIso(gi[47]) || ffIso(c.jobCompletedAt);
   const f = {}, tb = {};
   // ---- common to every form
-  f.consumer_name = c.name || ""; f.customer_name = c.name || ""; f.agree_name = c.name || "";
+  f.consumer_name = c.name || ""; f.customer_name = c.name || "";
   f.address = c.address || [c.houseNo, c.street, c.society, c.area, c.city, c.pinCode].filter(Boolean).join(", ");
   f.bp_no = c.bpNo || "";
   f.contact_no = cleanPhone; f.phone_no = cleanPhone; f.telephone_no = cleanPhone; f.mobile = cleanPhone; f.mobile_no = cleanPhone;
-  f.contractor_name = "M/S TEJASAV"; f.contractor_top = "M/S TEJASAV"; f.contractor = "M/S TEJASAV";
+  f.contractor_name = FP_CONTRACTOR; f.contractor_top = FP_CONTRACTOR; f.contractor = FP_CONTRACTOR;
   f.serial_no = c.sn ? String(c.sn) : "";
   f.meter_make = wm.make || c.meterCompany || ffStr(gi[2]);
   f.meter_type = wm.type || ffStr(gi[3]);
@@ -2398,10 +2400,6 @@ function formAutoFill(formId, c){
   f.pit1_details = pitBits([["T",sl[13]],["Reducer 63x32",sl[16]],["Reducer 32x20",sl[17]],["Total Pits",sl[23]]]) + (ffStr(sl[26]) ? `, Depth ${ffStr(sl[26])}` : "");
   f.pit2_details = pitBits([["T 32",sl[14]],["T 20",sl[15]],["Coupler 32",sl[18]],["Coupler 20",sl[19]],["Total Joints",sl[22]]]);
   f.pit1_details = f.pit1_details.replace(/^, /,""); 
-  // ---- Agreement (extra pipe beyond the standard length)
-  const extra = ffNum(gi[7]) + ffNum(gi[8]);
-  if(extra){ f.agree_amount = String(Math.round(extra*350*1.18*100)/100); }
-
   // ---- tables
   const pipe12 = ffNum(gi[5]) + ffNum(gi[7]), pipe34 = ffNum(gi[6]) + ffNum(gi[8]);
   tb.gi_material = {
@@ -2420,9 +2418,11 @@ function formAutoFill(formId, c){
   const totLen = ffNum(sl[6]) + ffNum(sl[7]);
   tb.pipe_details = {2:{"Value":ffN(totLen) ? ffN(totLen)+" M" : ""}, 1:{"Value":ffNum(sl[7]) ? "20 MM" : (ffNum(sl[6]) ? "32 MM" : "")},
        8:{"Value":/done|pressure/i.test(ffStr(sl[32])) || readings.length ? "OK" : ""}};
-  if(extra){
-    const amt = Math.round(extra*350*100)/100;
-    tb.expenses = {0:{"Qty(Mtrs)":ffN(extra),"Amount":String(amt)}, 1:{"Amount":String(Math.round(amt*0.18*100)/100)}, 2:{"Amount":String(Math.round(amt*1.18*100)/100)}};
+  // Additional-expense estimate: GI pipe beyond the free 15 m is charged at Rs 350/m + 18% GST (as on the filled reference forms)
+  const extraPipe = Math.round(Math.max(0, pipe12 + pipe34 - FP_FREE_PIPE)*100)/100;
+  if(extraPipe > 0){
+    const amt = Math.round(extraPipe*350*100)/100, gst = Math.round(amt*0.18*100)/100;
+    tb.expenses = {0:{"Qty(Mtrs)":ffN(extraPipe),"Amount":amt.toFixed(2)}, 1:{"Qty(Mtrs)":ffN(extraPipe),"Amount":gst.toFixed(2)}, 2:{"Amount":(Math.round((amt+gst)*100)/100).toFixed(2)}};
   }
   return {fields:f, tables:tb};
 }
@@ -2486,85 +2486,92 @@ async function fpClean(url){
 const FP_T = (x,y,s,w,sz)=>({k:"t",x,y,s,w,sz});
 const FP_C = (x,y,s,w,sz)=>({k:"t",x,y,s,w:w||60,sz:sz||8,c:true});
 const FP_GI = [["Pipe(Mtrs)",158],["Elbow-E",200],["Elbow-M/F",235],["Elbow-RE",272],["Socket-Plain",318],["Socket-RS",362],["HexNipple-2\"",405],["HexNipple-3\"",440],["Tee",482],["Hole",523],["A.V",565],["I.V",605],["U/N",642],["Fl.Hose",690],["Reg.",765]];
+const fpd = v => fpHas(v) ? v : "-";                       // every unfilled box on a printed form gets a dash
+const FP_TD = (x,y,s,w,sz)=>FP_T(x,y,fpd(s),w,sz);
+const FP_CD = (x,y,s,w,sz)=>FP_C(x,y,fpd(s),w,sz);
+function fpDateD(iso){ const x = fpDmy(iso); return x ? `${x.d}-${x.m}-${x.y}` : ""; }
+const FP_COPPER = [["Pipe(Mtrs)",175],["Elbow",232],["Tee",289],["Coupler",349],["Brass Union 3/4\"",431],["Brass Union 1/2\"",514],["Brass Adapter",610],["WP",702]];
+const FP_CHK1 = [["NG Date",150],["Burners",265],["No. of Grills",365],["No. of Oven",480],["Rubber Tube Type-IV",612],["PVC Sleeve",735]];
+const FP_CHK2 = [["TF with Pedestal",150],["GI Sleeve",265],["Sand Filling",365],["Meter Clamp",480],["GI Painting",612],["Remarks",735]];
 const FP_SPECS = {
   conversion_report(d){
     const f = d.f, c = (d.t.conversion_details||{})[0] || {}, o = [];
-    o.push(FP_T(212,340,"M/S TEJASAV",200));
-    o.push(FP_T(232,372,f.contractor_name,300), FP_T(232,401,f.consumer_name,150));
+    o.push(FP_T(212,340,FP_CONTRACTOR,430,8));
+    o.push(FP_T(232,372,f.contractor_name,400,8), FP_T(232,401,f.consumer_name,150));
     o.push({k:"bp",xs:FP_BPX,y:403,s:f.bp_no,skip0:true});
     o.push(FP_T(238,431,fpPhone(f.contact_no),140), {k:"bp",xs:FP_BPX,y:432,s:fpPhone(f.mobile||f.contact_no)});
-    o.push(FP_T(240,457,f.address,520));
-    o.push(FP_T(100,548,f.meter_make,140), FP_T(255,548,f.meter_type,130), FP_T(395,548,f.meter_number,175), FP_T(582,548,f.initial_reading,175));
+    o.push(FP_TD(240,457,f.address,520));
+    o.push(FP_TD(100,548,f.meter_make,140), FP_TD(255,548,f.meter_type,130), FP_TD(395,548,f.meter_number,175), FP_TD(582,548,f.initial_reading,175));
     const cd = fpDmy(f.conversion_date); if(cd) o.push(FP_T(556,668,`${cd.d}-${cd.m}-${cd.y.slice(2)}`,75,8));
     o.push(FP_T(442,750,f.consumer_name,160), FP_T(655,750,fpDate(f.cert_date),95));
     o.push({k:"img",c:d.sig.consumer_sign_name,x:195,y:718,w:190,h:32});
-    o.push(FP_T(205,886,c["NG Charge Date"] ? fpDate(c["NG Charge Date"]) : "",90,8), FP_T(310,886,c["No. of Burners"],100), FP_T(672,886,c["Remarks"],100,7));
-    o.push(FP_T(210,1035,"M/S TEJASAV",200));
+    o.push(FP_TD(205,886,fpDateD(c["NG Charge Date"]),90,8), FP_TD(310,886,c["No. of Burners"],100), FP_TD(672,886,c["Remarks"],100,7));
+    o.push(FP_T(210,1035,"TEJASAV",200));
     return o;
   },
   expense_estimate(d){
     const f = d.f, e = d.t.expenses || {}, o = [];
-    o.push(FP_T(278,343,f.bp_no,150), FP_T(250,366,f.customer_name,330), FP_T(182,388,f.address,540), FP_T(185,445,fpPhone(f.phone_no),180));
+    o.push(FP_TD(278,343,f.bp_no,150), FP_TD(250,366,f.customer_name,330), FP_TD(182,388,f.address,540), FP_TD(185,445,fpPhone(f.phone_no),180));
     const r0 = e[0]||{}, r1 = e[1]||{}, r2 = e[2]||{};
-    o.push(FP_T(345,614,r0["Qty(Mtrs)"],60), FP_T(527,614,r0["Amount"],70), FP_T(605,614,r0["Remarks"],75,7));
-    o.push(FP_T(527,664,r1["Amount"],70), FP_T(527,722,r2["Amount"],70));
-    o.push(FP_T(485,817,f.agree_name,185,8), FP_T(312,845,f.agree_amount,100));
+    o.push(FP_TD(345,614,r0["Qty(Mtrs)"],60), FP_TD(527,614,r0["Amount"],70), FP_TD(605,614,r0["Remarks"],75,7));
+    o.push(FP_TD(345,664,r1["Qty(Mtrs)"],60), FP_TD(527,664,r1["Amount"],70), FP_TD(527,722,r2["Amount"],70));
     o.push({k:"img",c:d.sig.sign_contractor,x:98,y:915,w:150,h:38}, {k:"img",c:d.sig.sign_site_incharge,x:310,y:915,w:170,h:38}, {k:"img",c:d.sig.sign_customer,x:610,y:915,w:140,h:38});
     return o;
   },
   joint_meter(d){
     const f = d.f, o = [];
-    o.push(FP_T(215,337,f.customer_name,500));
-    o.push({k:"t",x:160,y:377,s:f.address,w:560,two:{x:100,y:410,w:620}});
-    o.push(FP_T(282,450,f.bp_no,90), FP_T(480,450,fpPhone(f.telephone_no),240), FP_T(305,488,f.ready_for_conversion,300));
-    o.push(FP_T(172,525,f.meter_no,215), FP_T(540,525,f.initial_reading,185), FP_T(192,561,f.meter_make,520));
+    o.push(FP_TD(215,337,f.customer_name,500));
+    o.push({k:"t",x:160,y:377,s:fpd(f.address),w:560,two:{x:100,y:410,w:620}});
+    o.push(FP_TD(282,450,f.bp_no,90), FP_TD(480,450,fpPhone(f.telephone_no),240), FP_TD(305,488,f.ready_for_conversion,300));
+    o.push(FP_TD(172,525,f.meter_no,215), FP_TD(540,525,f.initial_reading,185), FP_TD(192,561,f.meter_make,520));
     [[140,192,f.date1],[380,430,f.date2],[612,662,f.date3]].forEach(a=>{ const x = fpDmy(a[2]); if(x){ o.push(FP_T(a[0],897,x.d,30), FP_T(a[1],897,x.m,30)); } });
     o.push({k:"img",c:d.sig.customer_sign,x:98,y:735,w:150,h:40}, {k:"img",c:d.sig.site_incharge_sign,x:335,y:735,w:170,h:40}, {k:"img",c:d.sig.contractor_sign,x:585,y:735,w:150,h:40});
     return o;
   },
   installation_report(d){
-    const f = d.f, g = d.t.gi_material || {}, k = (d.t.gi_checklist||{})[0] || {}, o = [];
-    o.push(FP_T(228,191,f.contractor_name,400), FP_T(702,191,f.serial_no,90));
+    const f = d.f, g = d.t.gi_material || {}, k = (d.t.gi_checklist||{})[0] || {}, cu = (d.t.copper||{})[0] || {}, o = [];
+    o.push(FP_T(228,191,f.contractor_name,400,8), FP_TD(702,191,f.serial_no,90));
     o.push(FP_T(225,216,f.consumer_name,150), {k:"bp",xs:FP_BPX,y:218,s:f.bp_no,skip0:true});
     o.push(FP_T(205,244,fpPhone(f.contact_no),170), {k:"bp",xs:FP_BPX,y:245,s:fpPhone(f.mobile||f.contact_no)});
-    o.push(FP_T(152,271,f.address,640));
-    o.push(FP_T(88,360,f.meter_make,160), FP_T(262,360,f.meter_type,120), FP_T(392,360,f.meter_number,185), FP_T(592,360,f.initial_reading,190));
-    [0,1].forEach(r=>{ const row = g[r]||{}; FP_GI.forEach(cl=>{ if(row[cl[0]]) o.push(FP_C(cl[1],458+24*r,row[cl[0]],34,8)); }); });
+    o.push(FP_TD(152,271,f.address,640));
+    o.push(FP_TD(88,360,f.meter_make,160), FP_TD(262,360,f.meter_type,120), FP_TD(392,360,f.meter_number,185), FP_TD(592,360,f.initial_reading,190));
+    [0,1].forEach(r=>{ const row = g[r]||{}; FP_GI.forEach(cl=>{ o.push(FP_CD(cl[1],458+24*r,row[cl[0]],34,8)); }); });
+    FP_COPPER.forEach(cl=>o.push(FP_CD(cl[1],612,cu[cl[0]],60,8)));
     o.push(FP_T(150,711,"TEJASAV",200));
     const cd = fpDmy(f.conversion_date); if(cd) o.push(FP_T(560,790,`${cd.d}-${cd.m}`,50,8));
     o.push(FP_T(375,836,f.consumer_name,170));
     const ct = fpDmy(f.cert_date); if(ct) o.push(FP_T(593,836,ct.d,25,8), FP_T(630,836,ct.m,25,8), FP_T(668,836,ct.y.slice(2),25,8));
     o.push({k:"img",c:d.sig.consumer_sign_name,x:195,y:808,w:130,h:30});
-    [["NG Date",150],["Burners",265],["No. of Grills",365],["No. of Oven",480],["Rubber Tube Type-IV",612],["PVC Sleeve",735]].forEach(a=>{ if(k[a[0]]) o.push(FP_C(a[1],931,a[0]==="NG Date" ? fpDate(k[a[0]]) : k[a[0]],110,8)); });
-    [["TF with Pedestal",150],["GI Sleeve",265],["Sand Filling",365],["Meter Clamp",480],["GI Painting",612],["Remarks",735]].forEach(a=>{ if(k[a[0]]) o.push(FP_C(a[1],974,k[a[0]],a[0]==="Remarks"?78:110,7)); });
+    FP_CHK1.forEach(a=>o.push(FP_CD(a[1],931,a[0]==="NG Date" ? fpDateD(k[a[0]]) : k[a[0]],110,8)));
+    FP_CHK2.forEach(a=>o.push(FP_CD(a[1],974,k[a[0]],a[0]==="Remarks"?78:110,7)));
     return o;
   },
   isometric_graph(d){
     const f = d.f, p = (d.t.pipe_lengths||{})[0] || {}, pr = d.t.pressure_readings || {}, o = [];
-    o.push(FP_T(208,200,f.customer_name,245), FP_T(520,200,f.bp_no,120), FP_T(168,220,f.address,520), FP_T(222,249,f.contractor_name||"M/S TEJASAV",500));
-    o.push(FP_T(40,317,p["1/2\" GI Pipe(Mtrs)"],200), FP_T(270,317,p["3/4\" GI Pipe(Mtrs)"],160), FP_T(440,317,p["1\" GI Pipe(Mtrs)"],100), FP_T(555,317,p["12mm Cu(Mtrs)"],80), FP_T(645,317,p["Total(Mtrs)"],150));
-    [437,458,479,500,524].forEach((y,i)=>{ const r = pr[i]; if(!r) return;
-      o.push(FP_T(40,y,r["Time"],200,8), FP_T(270,y,r["PG-1"],120,8), FP_T(405,y,r["PG-2"],130,8), FP_T(553,y,r["Date"],95,8), FP_T(660,y,r["Remarks"],130,8)); });
-    o.push({k:"img",c:d.sketch,x:34,y:557,w:770,h:532});
-    o.push({k:"iso",plan:(d.sketch ? null : d.iso),box:{x:34,y:557,w:770,h:532}});
+    o.push(FP_T(208,200,f.customer_name,245), FP_T(520,200,f.bp_no,120), FP_TD(168,220,f.address,520), FP_T(222,249,f.contractor_name||FP_CONTRACTOR,500,8));
+    o.push(FP_TD(40,317,p["1/2\" GI Pipe(Mtrs)"],200), FP_TD(270,317,p["3/4\" GI Pipe(Mtrs)"],160), FP_TD(440,317,p["1\" GI Pipe(Mtrs)"],100), FP_TD(555,317,p["12mm Cu(Mtrs)"],80), FP_TD(645,317,p["Total(Mtrs)"],150));
+    [437,458,479,500,524].forEach((y,i)=>{ const r = pr[i] || {};
+      o.push(FP_TD(40,y,r["Time"],200,8), FP_TD(270,y,r["PG-1"],120,8), FP_TD(405,y,r["PG-2"],130,8), FP_TD(553,y,r["Date"],95,8), FP_TD(660,y,r["Remarks"],130,8)); });
+    o.push({k:"img",c:(d.iso ? null : d.sketch),x:34,y:557,w:770,h:532});
+    o.push({k:"iso",plan:d.iso,box:{x:34,y:557,w:770,h:532}});
     return o;
   },
   service_line_card(d){
     const f = d.f, ft = (d.t.fittings||{})[0] || {}, pd = d.t.pipe_details || {}, ob = d.t.pressure_observation || {}, o = [];
-    o.push(FP_T(718,129,f.serial_no,80), FP_T(140,166,f.contractor||"M/S TEJASAV",300));
+    o.push(FP_TD(718,129,f.serial_no,80), FP_T(140,166,f.contractor||FP_CONTRACTOR,300,8));
     const dd = fpDmy(f.date); if(dd){ o.push(FP_T(670,167,dd.d,28), FP_T(712,167,dd.m,25)); }
     o.push(FP_T(188,199,f.consumer_name,255), {k:"bp",xs:FP_BPX6,y:199,s:f.bp_no});
     o.push(FP_T(172,227,fpPhone(f.contact_no),270), {k:"bp",xs:FP_BPX6,y:227,s:fpPhone(f.mobile_no||f.contact_no)});
-    o.push(FP_T(100,253,f.address,700,8));
-    [["MDPE Pipe(20MM)",55],["Reducer(32x20MM)",112],["Saddle 63x20MM",175],["Saddle 32x20MM",232],["Tee 32MM",318],["Tee 20MM",363],["Coupler 32MM",405],["Coupler 20MM",436]].forEach(a=>{ if(ft[a[0]]) o.push(FP_C(a[1],336,ft[a[0]],40,8)); });
-    if(ft["NOR"]) o.push(FP_C(778,282,ft["NOR"],45,8)); if(ft["MOL"]) o.push(FP_C(778,309,ft["MOL"],45,8)); if(ft["TOTAL"]) o.push(FP_C(778,337,ft["TOTAL"],45,8));
-    o.push(FP_T(100,366,f.latitude,190), FP_T(100,389,f.longitude,190));
+    o.push(FP_TD(100,253,f.address,700,8));
+    [["MDPE Pipe(20MM)",55],["Reducer(32x20MM)",112],["Saddle 63x20MM",175],["Saddle 32x20MM",232],["Tee 32MM",318],["Tee 20MM",363],["Coupler 32MM",405],["Coupler 20MM",436]].forEach(a=>o.push(FP_CD(a[1],336,ft[a[0]],40,8)));
+    o.push(FP_CD(778,282,ft["NOR"],45,8), FP_CD(778,309,ft["MOL"],45,8), FP_CD(778,337,ft["TOTAL"],45,8));
+    o.push(FP_TD(100,366,f.latitude,190), FP_TD(100,389,f.longitude,190));
     o.push(FP_T(318,362,f.pit1_details ? "PIT-1: "+f.pit1_details : "",485,7), FP_T(318,383,f.pit2_details ? "PIT-2: "+f.pit2_details : "",485,7));
     const info = [f.vertical_pipe_length?`V/P ${f.vertical_pipe_length} m`:"", f.horizontal_pipe_length?`H/P ${f.horizontal_pipe_length} m`:"", f.breaking?`Breaking ${f.breaking} m`:"", f.restoration?`Restoration: ${f.restoration}`:""].filter(Boolean).join("     ");
     o.push(FP_T(40,420,info,760,8));
     o.push({k:"img",c:d.sketch,x:36,y:430,w:768,h:450});
-    o.push(FP_T(365,1019,(pd[2]||{})["Value"],70,8));
-    [966,990,1017,1043,1070].forEach((y,i)=>{ const r = ob[i]; if(r && r["Time"]) o.push(FP_C(700,y,r["Time"],85,7)); });
+    o.push(FP_TD(365,1019,(pd[2]||{})["Value"],70,8));
+    [966,990,1017,1043,1070].forEach((y,i)=>{ const r = ob[i]; o.push(FP_CD(700,y,r && r["Time"],85,7)); });
     o.push(FP_T(130,1137,"TEJASAV",200));
     return o;
   }
@@ -2578,7 +2585,7 @@ function fpDraw(pdf, ops){
       pdf.addImage(o.c.url, "PNG", o.x*FP_MM + (bw-w)/2, o.y*FP_MM + (bh-h)/2, w, h);
       return;
     }
-    if(o.k==="iso"){ if(o.plan){ isoRender(isoPdfApi(pdf), o.box, o.plan); pdf.setTextColor(10,25,120); } return; }
+    if(o.k==="iso"){ if(o.plan){ isoRender(isoPdfApi(pdf), o.box, o.plan, 100/25.4); pdf.setTextColor(10,25,120); } return; }
     if(o.k==="bp"){
       const s = String(o.s||"").replace(/\D/g,"").slice(0,10);
       pdf.setFontSize(10);
@@ -2627,7 +2634,7 @@ const FP_REQ = {
     ["PVC sleeve",fpHas(k["PVC Sleeve"])],["Meter clamp",fpHas(k["Meter Clamp"])],["GI painting",fpHas(k["GI Painting"])]]; },
   isometric_graph: d=>{ const f=d.f, p=(d.t.pipe_lengths||{})[0]||{}; return [
     ["Customer name",fpHas(f.customer_name)],["BP no.",fpHas(f.bp_no)],["Address",fpHas(f.address)],["Pipe total",fpHas(p["Total(Mtrs)"])],
-    ["Pressure reading",!!(d.t.pressure_readings && d.t.pressure_readings[0])],["Isometric drawing",!!(d.sketch || d.iso)]]; },
+    ["Pressure reading",!!(d.t.pressure_readings && d.t.pressure_readings[0])],["Isometric route",!!d.iso]]; },
   service_line_card: d=>{ const f=d.f, ft=(d.t.fittings||{})[0]||{}, pd=d.t.pipe_details||{}; return [
     ["Consumer name",fpHas(f.consumer_name)],["BP no.",fpHas(f.bp_no)],["Contact",fpHas(f.contact_no||f.mobile_no)],["Address",fpHas(f.address)],["Serial no.",fpHas(f.serial_no)],["Date",fpHas(f.date)],
     ["Latitude",fpHas(f.latitude)],["Longitude",fpHas(f.longitude)],["20 MM pipe",fpHas(ft["MDPE Pipe(20MM)"])],["Total pipe length",fpHas((pd[2]||{})["Value"])],
@@ -3006,67 +3013,87 @@ function setSketchTool(tool){
 function setSketchColor(color){ sketchColor = color; }
 
 /* ============ AUTO ISOMETRIC DRAWING (built from the customer's GI data) ============ */
-function isoPlan(c){
-  const gi = giRowFor(c) || [];
-  const n = k=>ffNum(gi[k]);
-  const p12 = n(5)+n(7), p34 = n(6)+n(8);
-  const el = n(9)+n(10)+n(11)+n(12)+n(13), tee = n(23)+n(24), av = n(25)+n(26), iv = n(27)+n(28);
-  const reg = /INSTAL|REPLAC/i.test(ffStr(gi[38]));
-  const total = p12 + p34;
-  if(!total && !el && !tee && !av && !iv) return null;
-  const segN = Math.max(1, Math.min(10, Math.round(el)+1));
-  const dirs = [[1,0,0],[0,0,0.8],[0,-1,0],[0,0,-0.8]];   // right-down, up, right-up, down: the run keeps moving to the right, so it never overlaps itself
-  let q = [0,0,0]; const pts = [q.slice()], segs = [];
-  for(let i=0;i<segN;i++){
-    const d = dirs[i%4], b = [q[0]+d[0], q[1]+d[1], q[2]+d[2]];
-    segs.push({a:q.slice(), b, size: total && ((i+0.5)/segN*total < p34) ? "3/4" : "1/2"});
-    q = b; pts.push(b.slice());
-  }
-  const lg = [];
-  if(p12) lg.push(`GI 1/2": ${Math.round(p12*100)/100} m`);
-  if(p34) lg.push(`GI 3/4": ${Math.round(p34*100)/100} m`);
-  lg.push(`Elbow: ${el}   Tee: ${tee}   AV: ${av}   IV: ${iv}`);
-  if(reg) lg.push("Regulator: installed");
-  if(gi[2] || gi[3]) lg.push(`Meter: ${ffStr(gi[2])} ${ffStr(gi[3])}`.trim());
-  lg.push("Schematic isometric - not to scale");
-  return {pts, segs, el: Math.round(el), tee: Math.round(tee), av: Math.round(av), iv: Math.round(iv), reg, legend: lg};
-}
-function isoRender(api, box, plan){
-  if(!plan) return;
-  const pr = p=>[(p[0]-p[1])*0.866, (p[0]+p[1])*0.5 - p[2]];
-  const P = plan.pts.map(pr);
-  const xs = P.map(a=>a[0]), ys = P.map(a=>a[1]);
-  const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
-  const bw = Math.max(maxx-minx, 1), bh = Math.max(maxy-miny, 1);
-  const availW = box.w - 150, availH = box.h*0.55;
-  const sc = Math.min(availW/bw, availH/bh, 110);
-  const ox = box.x + 110 + (availW - bw*sc)/2 - minx*sc, oy = box.y + box.h*0.1 + (availH - bh*sc)/2 - miny*sc;
-  const T = a=>[ox + a[0]*sc, oy + a[1]*sc];
-  const col = "#1d3a8a", red = "#b91c1c", grn = "#0D904F";
-  plan.segs.forEach((sg,i)=>{
-    const a = T(P[i]), b = T(P[i+1]);
-    api.line(a[0],a[1],b[0],b[1], sg.size==="3/4" ? 3.4 : 2.2, col);
-    api.text(sg.size+'"', (a[0]+b[0])/2 + 6, (a[1]+b[1])/2 - 6, 11, col);
+const ISO_DIRS = {U:[0,-1], D:[0,1], RU:[0.866,-0.5], LD:[-0.866,0.5], RD:[0.866,0.5], LU:[-0.866,-0.5]};
+const ISO_ARROW = {U:"⬆", D:"⬇", RU:"↗", LD:"↙", RD:"↘", LU:"↖"};
+const ISO_FITS = [["IV","IV"],["AV","AV"],["R","Regulator"],["M","Meter"],["T","Tee"],["U","Union"]];
+function isoRouteOf(c){ return (c && c.isoRoute && Array.isArray(c.isoRoute.segs) && c.isoRoute.segs.some(g=>ffNum(g.len)>0)) ? c.isoRoute : null; }
+function isoTotals(route){
+  const t = {p12:0, p34:0, turns:0, IV:0, AV:0, T:0, U:0, R:0, M:0, total:0};
+  const segs = (route && route.segs || []).filter(g=>ffNum(g.len)>0);
+  segs.forEach((g,i)=>{
+    const L = ffNum(g.len); if(g.sz==="3/4") t.p34 += L; else t.p12 += L;
+    if(i>0 && segs[i-1].d !== g.d) t.turns++;
+    (g.fit||[]).forEach(f=>{ if(t[f]!==undefined) t[f]++; });
   });
-  // start: wall hole + regulator + meter
-  const s0 = T(P[0]);
-  api.rect(s0[0]-46, s0[1]-12, 30, 22, 1.8, red); api.text("M", s0[0]-35, s0[1]+4, 12, red);
-  api.line(s0[0]-16, s0[1], s0[0], s0[1], 1.8, red);
-  if(plan.reg){ api.circle(s0[0]-62, s0[1], 7, 1.8, red); api.text("REG", s0[0]-74, s0[1]-12, 10, red); }
-  api.text("Wall hole / TF", s0[0]-30, s0[1]+26, 10, red);
-  // elbows
-  for(let i=1;i<plan.pts.length-1;i++){ const e = T(P[i]); api.circle(e[0],e[1],5,1.6,red); }
-  if(plan.el) { const e1 = T(P[Math.min(1,P.length-1)]); api.text("E x"+plan.el, e1[0]+8, e1[1]+16, 10, red); }
-  // tees on segment middles
-  for(let t=0;t<Math.min(plan.tee, plan.segs.length);t++){
-    const i = (t*2+1) % plan.segs.length, a = T(P[i]), b = T(P[i+1]), m = [(a[0]+b[0])/2,(a[1]+b[1])/2];
-    api.line(m[0],m[1],m[0]-14,m[1]-18,1.8,col); api.text("T", m[0]-26, m[1]-20, 11, red);
-  }
-  // valves: IV near start, AV at the end
-  if(plan.iv){ const a = T(P[0]), b = T(P[1]); const m = [a[0]+(b[0]-a[0])*0.3, a[1]+(b[1]-a[1])*0.3]; api.rect(m[0]-6,m[1]-6,12,12,1.8,grn); api.text("IV x"+plan.iv, m[0]-8, m[1]+22, 10, grn); }
-  if(plan.av){ const e = T(P[P.length-1]); api.rect(e[0]-7,e[1]-7,14,14,1.8,grn); api.text("AV x"+plan.av, e[0]+12, e[1]+4, 11, grn); }
-  // legend
-  plan.legend.forEach((ln,i)=>api.text(ln, box.x+16, box.y+box.h-16-(plan.legend.length-1-i)*18, 12, "#111111"));
+  t.p12 = Math.round(t.p12*100)/100; t.p34 = Math.round(t.p34*100)/100; t.total = Math.round((t.p12+t.p34)*100)/100;
+  return t;
+}
+function isoPlan(c){
+  const r = isoRouteOf(c); if(!r) return null;
+  const m = c.wizMeter || {};
+  return {route:r, totals:isoTotals(r), meter:{make:m.make || c.meterCompany || "", no:m.number || c.meterSerialNumber || "", side:r.meterSide || "LH"}};
+}
+const ISO_RATIOS = [20,25,30,40,50,60,75,100,125,150,200,250,300,400,500];
+function isoRender(api, box, plan, pxPerMm){
+  if(!plan) return null;
+  const segs = plan.route.segs.filter(g=>ffNum(g.len)>0);
+  const ppm = pxPerMm || (box.w/195.6);              // drawing pixels per paper-millimetre
+  // layout in metres (screen axes, y down)
+  const nodes = [[0,0]]; segs.forEach(g=>{ const d = ISO_DIRS[g.d] || ISO_DIRS.RU, L = ffNum(g.len), q = nodes[nodes.length-1]; nodes.push([q[0]+d[0]*L, q[1]+d[1]*L]); });
+  let minx = Math.min(...nodes.map(n=>n[0])), maxx = Math.max(...nodes.map(n=>n[0])), miny = Math.min(...nodes.map(n=>n[1])), maxy = Math.max(...nodes.map(n=>n[1]));
+  const meterNodes = []; segs.forEach((g,i)=>{ if((g.fit||[]).includes("M")) meterNodes.push(nodes[i+1]); });
+  meterNodes.forEach(n=>{ minx = Math.min(minx, n[0]-0.7); maxx = Math.max(maxx, n[0]+0.7); maxy = Math.max(maxy, n[1]+1.9); });
+  minx -= 0.6; miny -= 0.7; maxx += 0.9; maxy += 0.5;
+  const availW = box.w - 30, availH = box.h - 90;
+  let ratio = ISO_RATIOS.find(r=>((maxx-minx)*1000/r*ppm <= availW) && ((maxy-miny)*1000/r*ppm <= availH)) || ISO_RATIOS[ISO_RATIOS.length-1];
+  const pm = 1000/ratio*ppm;                            // pixels per metre at this scale
+  const ox = box.x + 15 + (availW - (maxx-minx)*pm)/2 - minx*pm, oy = box.y + 10 + (availH - (maxy-miny)*pm)/2 - miny*pm;
+  const X = n=>[ox+n[0]*pm, oy+n[1]*pm];
+  const ink = "#1a237e";
+  const arrow = (x,y,vx,vy,sz)=>{ const a = Math.atan2(vy,vx); [0.45,-0.45].forEach(k=>api.line(x,y,x-sz*Math.cos(a+k),y-sz*Math.sin(a+k),1.8,ink)); };
+  const valve = (x,y,lab)=>{ api.rect(x-6,y-6,12,12,1.5,ink); api.line(x-6,y-6,x+6,y+6,1.2,ink); api.line(x-6,y+6,x+6,y-6,1.2,ink); if(lab) api.text(lab,x+8,y-8,9,ink); };
+  const fmtL = v=>{ const n = Math.round(ffNum(v)*100)/100; return (n<1 ? n.toFixed(2).replace(/^0/,"") : String(n)); };
+  // pipes + lengths
+  segs.forEach((g,i)=>{
+    const a = X(nodes[i]), b = X(nodes[i+1]), d = ISO_DIRS[g.d] || ISO_DIRS.RU;
+    api.line(a[0],a[1],b[0],b[1], g.sz==="3/4" ? 3.6 : 2.2, ink);
+    const mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2, px = d[1], py = -d[0];
+    api.text(fmtL(g.len), mx + px*12 - 8, my + py*12 + 4, 11, ink);
+  });
+  // start (service riser) arrow
+  { const a = X(nodes[0]), d = ISO_DIRS[segs[0].d] || ISO_DIRS.RU; api.line(a[0]-d[0]*26, a[1]-d[1]*26, a[0], a[1], 1.8, ink); arrow(a[0]-d[0]*8, a[1]-d[1]*8, d[0], d[1], 8); }
+  // fittings at the end of each segment
+  segs.forEach((g,i)=>{
+    const n = X(nodes[i+1]), d = ISO_DIRS[g.d] || ISO_DIRS.RU;
+    (g.fit||[]).forEach((f,j)=>{
+      const x = n[0] - d[0]*j*17, y = n[1] - d[1]*j*17;
+      if(f==="IV"||f==="AV") valve(x,y,f);
+      else if(f==="R"){ api.line(x-13,y,x,y-13,1.6,ink); api.line(x,y-13,x+13,y,1.6,ink); api.line(x+13,y,x,y+13,1.6,ink); api.line(x,y+13,x-13,y,1.6,ink); api.text("R",x-4,y+4,11,ink); }
+      else if(f==="T"){ api.line(x,y,x-d[1]*16,y+d[0]*16,1.8,ink); api.text("T",x-d[1]*20-3,y+d[0]*22,10,ink); }
+      else if(f==="U"){ api.circle(x,y,4.5,1.5,ink); }
+      else if(f==="M"){
+        const w = 0.8*pm, h = 0.95*pm, top = y + 0.22*pm;
+        api.rect(x-w/2, top, w, h, 1.8, ink);
+        api.circle(x-w*0.28, top-3, 4.5, 1.5, ink); api.circle(x+w*0.28, top-3, 4.5, 1.5, ink);
+        api.line(x-w*0.28, top-7, x-w*0.28, y, 1.5, ink); api.line(x+w*0.28, top-7, x+w*0.28, y, 1.5, ink);
+        api.text("M", x-5, top+h/2+5, 14, ink);
+        api.text(plan.meter.side, x-9, top+h-6, 9, ink);
+        api.text(String(plan.meter.no||""), x-w/2, top+h+14, 9, ink);
+      }
+    });
+  });
+  // end arrow towards the appliance
+  { const b = X(nodes[nodes.length-1]), d = ISO_DIRS[segs[segs.length-1].d] || ISO_DIRS.RU; arrow(b[0]+d[0]*14, b[1]+d[1]*14, d[0], d[1], 11); api.line(b[0], b[1], b[0]+d[0]*14, b[1]+d[1]*14, 1.8, ink); }
+  // legend + scale
+  const t = plan.totals, lg = [];
+  lg.push(`Scale 1:${ratio}  (1 m = ${Math.round(1000/ratio*10)/10} mm)`);
+  lg.push(`GI pipe: ${t.p12? '1/2" '+t.p12+' m   ':''}${t.p34? '3/4" '+t.p34+' m   ':''}Total ${t.total} m`);
+  lg.push(`Elbows ${t.turns}   IV ${t.IV}   AV ${t.AV}   Tee ${t.T}   Union ${t.U}${t.R? '   Regulator '+t.R : ''}`);
+  if(plan.meter.make || plan.meter.no) lg.push(`Meter ${plan.meter.make} ${plan.meter.side}   No. ${plan.meter.no}`.trim());
+  lg.forEach((ln,i)=>api.text(ln, box.x+14, box.y+box.h-12-(lg.length-1-i)*16, 11, "#111111"));
+  const bx = box.x+box.w-20-pm, by = box.y+box.h-26;
+  api.line(bx,by,bx+pm,by,2,"#111111"); api.line(bx,by-4,bx,by+4,2,"#111111"); api.line(bx+pm,by-4,bx+pm,by+4,2,"#111111"); api.text("1 m",bx+pm/2-8,by-8,10,"#111111");
+  return ratio;
 }
 function isoCanvasApi(ctx){
   return {
@@ -3089,11 +3116,11 @@ function autoSketch(silent){
   const cust = customers.find(c=>c.id===currentCustomerId);
   if(!canvas || !sketchCtx || !cust) return;
   const plan = isoPlan(cust);
-  if(!plan){ if(!silent) showToast("Is customer ka GI data abhi nahi bhara hai."); return; }
+  if(!plan){ if(!silent) showToast("Pehle Work Sheet → GI → Isometric route bharein."); return; }
   clearSketch();
-  isoRender(isoCanvasApi(sketchCtx), {x:0,y:0,w:canvas.width,h:canvas.height}, plan);
+  isoRender(isoCanvasApi(sketchCtx), {x:0,y:0,w:canvas.width,h:canvas.height}, plan, canvas.width/195.6);
   sketchBase = sketchCtx.getImageData(0,0,canvas.width,canvas.height);
-  if(!silent) showToast("Isometric drawing GI data se ban gayi.");
+  if(!silent) showToast("Isometric drawing route se ban gayi.");
 }
 
 function clearSketch(){
@@ -4594,7 +4621,7 @@ function wsTabsFor(c){
 function wsCanEditTab(c, tab){ return wsTabsFor(c).includes(tab); }
 function wsCanEdit(c){ return wsTabsFor(c).length > 0; }
 function wsBtn(c){
-  return (wsCanEdit(c) ? `<button onclick="openWorkSheet('${c.id}')" class="w-full bg-[#8430CE] text-white text-xs font-bold py-2 rounded mt-2">📋 Work Sheet — ${wsTabsFor(c).map(x=>x==="REST"?"Restoration":x).join(" / ")}</button>` : "") + formsPdfBtn(c);
+  return (wsCanEdit(c) ? `<button onclick="wzOpen('${c.id}')" class="w-full bg-[#0D904F] text-white text-xs font-bold py-2 rounded mt-2">🧭 Step-by-step bharein — ${wsTabsFor(c).map(x=>x==="REST"?"Restoration":x).join(" / ")}</button><button onclick="openWorkSheet('${c.id}')" class="w-full bg-[#8430CE] text-white text-xs font-bold py-2 rounded mt-2">📋 Poori Work Sheet — ${wsTabsFor(c).map(x=>x==="REST"?"Restoration":x).join(" / ")}</button>` : "") + formsPdfBtn(c);
 }
 function openWorkSheet(cid, tab){
   const c = customers.find(c=>c.id===cid);
@@ -4689,6 +4716,196 @@ function wsGetLocation(){
 }
 
 
+/* ============ TECHNICIAN STEP-BY-STEP WIZARD + SCALED ISOMETRIC ROUTE BUILDER ============
+   Technician fills one small step at a time (SL / GI / NG / Restoration, only allotted work). Every Next autosaves into the
+   same slRow/giRow/ngRow/restRow the Master Sheet and the 6 forms read. The GI route step records the measured pipe
+   route (direction, length, size, fittings) and the drawing is generated from it TO SCALE. */
+let wzState = {cid:null, tab:"GI", step:0, row:[], route:null};
+const WZ_DIR_LABEL = {U:"⬆ Upar", D:"⬇ Neeche", RU:"↗ Right-Up", LD:"↙ Left-Down", RD:"↘ Right-Down", LU:"↖ Left-Up"};
+const wzEsc = s=>String(s===null||s===undefined?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+function wzSteps(tab){
+  const steps = [];
+  WS_DEFS[tab].groups.forEach(g=>{
+    const n = Math.ceil(g.fields.length/6), per = Math.ceil(g.fields.length/n);
+    for(let k=0;k<n;k++) steps.push({kind:"fields", group:g.name, fields:g.fields.slice(k*per,(k+1)*per), part:n>1?`${k+1}/${n}`:""});
+    if(tab==="GI" && g.name==="Job & Meter") steps.push({kind:"route", group:"Isometric route (scale drawing)", fields:[]});
+  });
+  steps.push({kind:"review", group:"Review & Submit", fields:[]});
+  return steps;
+}
+function wzLoad(c, tab){
+  const row = (wsRowFor(c, tab) || []).slice();
+  const def = WS_DEFS[tab];
+  def.groups.forEach(g=>g.fields.forEach(f=>{
+    if(f.worker && (row[f.i]===null||row[f.i]===undefined||row[f.i]==="") && c.assignedTechnician) row[f.i] = techName(c.assignedTechnician);
+  }));
+  const r = c.isoRoute && Array.isArray(c.isoRoute.segs) ? JSON.parse(JSON.stringify(c.isoRoute)) : {meterSide:null, segs:[]};
+  if(!r.meterSide) r.meterSide = String(row[3]||"").toUpperCase()==="RHS" ? "RH" : "LH";
+  wzState = {cid:c.id, tab, step:0, row, route:r};
+}
+function wzOpen(cid, tab){
+  const c = customers.find(c=>c.id===cid);
+  if(!wsCanEdit(c)) return;
+  const ok = wsTabsFor(c);
+  tab = tab && ok.includes(tab) ? tab : (ok.find(t=>!stageDone(c,t)) || ok[0]);
+  wzLoad(c, tab);
+  let ov = document.getElementById("wizardOverlay");
+  if(!ov){ ov = document.createElement("div"); ov.id = "wizardOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:65;background:#f3f4f6;overflow-y:auto;padding:0 0 100px 0;";
+  wzRender();
+}
+function wzClose(){ const ov = document.getElementById("wizardOverlay"); if(ov) ov.remove(); wzState.cid = null; }
+function wzInput(tab, f, val, c){
+  return wsInput(tab, f, val, c).replace(/id="ws_/g,'id="wz_').replace("wsGetLocation()","wzGetLocation()");
+}
+function wzGetLocation(){
+  if(!navigator.geolocation){ alert("Location available nahi hai."); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const la = document.getElementById("wz_SL_3"), lo = document.getElementById("wz_SL_4");
+    if(la) la.value = pos.coords.latitude.toFixed(6); if(lo) lo.value = pos.coords.longitude.toFixed(6);
+  }, ()=>alert("Location nahi mili — GPS on karke dobara try karein."), {enableHighAccuracy:true, timeout:15000});
+}
+function wzCollectStep(){
+  const steps = wzSteps(wzState.tab), st = steps[wzState.step];
+  if(!st || st.kind!=="fields") return;
+  st.fields.forEach(f=>{
+    const el = document.getElementById(`wz_${wzState.tab}_${f.i}`); if(!el) return;
+    const v = String(el.value).trim();
+    if(v==="") wzState.row[f.i] = null;
+    else if(f.t==="number"){ const n = Number(v); wzState.row[f.i] = isNaN(n) ? null : n; }
+    else wzState.row[f.i] = v;
+  });
+}
+/* GI row  <-  route:  pipe always follows the route; counts are filled only where the technician has not typed his own */
+function isoSyncRow(row, route){
+  const t = isoTotals(route), r = row.slice(); while(r.length<49) r.push(null);
+  route.auto = route.auto || {};
+  const blank = i=>r[i]===null||r[i]===undefined||r[i]==="";
+  const put = (i,val)=>{ const v = (val===0||val===""||val===undefined) ? null : val;
+    if(blank(i) || String(r[i])===String(route.auto[i])){ r[i] = v; if(v===null) delete route.auto[i]; else route.auto[i] = v; } };
+  r[5] = t.p12 || null; r[6] = t.p34 || null;
+  const by = {IV:[0,0], AV:[0,0], T:[0,0], U:[0,0]};
+  (route.segs||[]).filter(g=>ffNum(g.len)>0).forEach(g=>{ (g.fit||[]).forEach(f=>{ if(by[f]) by[f][g.sz==="3/4"?1:0]++; }); });
+  const elbowIdx = t.p12 >= t.p34 ? 9 : 12;
+  put(9, elbowIdx===9 ? t.turns : 0); put(12, elbowIdx===12 ? t.turns : 0);
+  put(23,by.T[0]); put(24,by.T[1]); put(25,by.AV[0]); put(26,by.AV[1]); put(27,by.IV[0]); put(28,by.IV[1]); put(29,by.U[0]); put(30,by.U[1]);
+  put(38, t.R ? "INSTALD" : null);
+  put(3, route.meterSide==="RH" ? "RHS" : "LHS");
+  return r;
+}
+async function wzPersist(){
+  const c = customers.find(c=>c.id===wzState.cid); if(!c || !wsCanEditTab(c, wzState.tab)) return false;
+  wzCollectStep();
+  const tab = wzState.tab, def = WS_DEFS[tab];
+  let row = wzState.row.slice(); const patch = {};
+  if(tab==="GI"){
+    const hasRoute = isoRouteOf({isoRoute:wzState.route});
+    if(hasRoute){ row = isoSyncRow(row, wzState.route); wzState.row = row; patch.isoRoute = JSON.parse(JSON.stringify(wzState.route)); }
+  }
+  for(let i=0;i<row.length;i++) if(row[i]===undefined) row[i] = null;
+  while(row.length && row[row.length-1]===null) row.pop();
+  patch[def.key] = row; Object.assign(patch, WS_SYNC[tab](row));
+  return await saveJobField(c.id, patch);
+}
+async function wzNext(){ if(!(await wzPersist())) return; const n = wzSteps(wzState.tab).length; if(wzState.step < n-1) wzState.step++; wzRender(true); }
+async function wzBack(){ wzCollectStep(); if(wzState.step>0) wzState.step--; wzRender(true); }
+async function wzJump(i){ if(!(await wzPersist())) return; wzState.step = i; wzRender(true); }
+async function wzTab(tab){ const c = customers.find(c=>c.id===wzState.cid); if(!wsCanEditTab(c,tab)) return; if(!(await wzPersist())) return; wzLoad(c, tab); wzRender(true); }
+async function wzSubmit(){
+  const c0 = customers.find(c=>c.id===wzState.cid);
+  if(!(await wzPersist())) return;
+  showToast(`${wzState.tab==="REST"?"Restoration":wzState.tab} sheet submit ho gayi — Master Sheet aur forms mein aa gayi.`);
+  const c = customers.find(c=>c.id===wzState.cid) || c0;
+  const next = wsTabsFor(c).find(t=>t!==wzState.tab && !stageDone(c,t));
+  if(next){ wzLoad(c, next); wzRender(true); } else { wzClose(); renderMain(); }
+}
+/* ---- route builder ---- */
+function wzRt(){ return wzState.route; }
+function wzRtAdd(){ const r = wzRt(), last = r.segs[r.segs.length-1]; r.segs.push({d: last ? last.d : "RU", len:"", sz: last ? last.sz : "1/2", fit:[]}); wzRender(true); }
+function wzRtDel(i){ wzRt().segs.splice(i,1); wzRender(true); }
+function wzRtUndo(){ wzRt().segs.pop(); wzRender(true); }
+function wzRtDir(i,d){ wzRt().segs[i].d = d; wzRender(true); }
+function wzRtSz(i,s){ wzRt().segs[i].sz = s; wzRender(true); }
+function wzRtLen(i,v){ wzRt().segs[i].len = v; wzRtDraw(); }
+function wzRtFit(i,f){ const g = wzRt().segs[i]; g.fit = g.fit||[]; const k = g.fit.indexOf(f); if(k>=0) g.fit.splice(k,1); else g.fit.push(f); wzRender(true); }
+function wzRtSide(s){ wzRt().meterSide = s; wzRender(true); }
+function wzRtDraw(){
+  const cv = document.getElementById("wzIsoCanvas"), info = document.getElementById("wzIsoInfo"); if(!cv) return;
+  const ctx = cv.getContext("2d"), c = customers.find(c=>c.id===wzState.cid) || {};
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height); drawIsoGrid(ctx, cv.width, cv.height, 20);
+  const plan = isoPlan(Object.assign({}, c, {isoRoute: wzRt()}));
+  if(!plan){ ctx.fillStyle="#6b7280"; ctx.font="bold 22px Arial"; ctx.fillText("Segment ki lambai (m) bharte hi drawing yahan banegi", 40, cv.height/2); if(info) info.textContent = ""; return; }
+  const ratio = isoRender(isoCanvasApi(ctx), {x:0,y:0,w:cv.width,h:cv.height}, plan, cv.width/195.6);
+  const t = plan.totals;
+  if(info) info.innerHTML = `Scale <b>1:${ratio}</b> • GI pipe <b>${t.total} m</b> (½" ${t.p12} / ¾" ${t.p34}) • Elbow ${t.turns} • IV ${t.IV} • AV ${t.AV} • Tee ${t.T} • Union ${t.U}${t.R?" • Regulator":""}`;
+}
+function wzRouteHtml(){
+  const r = wzRt();
+  const dirs = Object.keys(ISO_DIRS);
+  return `<div class="bg-white rounded-lg shadow p-3 mb-3">
+    <p class="text-xs text-gray-600 mb-2">Service riser se shuru karke, pipe jis taraf jaati hai wahi disha chuniye, us hisse ki <b>naap (meter mein)</b> likhiye, size chuniye, aur us hisse ke <b>end par jo fitting</b> lagi hai use dabaiye. Har mod par naya segment jodiye. Drawing apne aap <b>scale</b> mein banegi.</p>
+    <div class="flex items-center gap-2 mb-2"><span class="text-xs font-bold">Meter side:</span>
+      ${["LH","RH"].map(s=>`<button onclick="wzRtSide('${s}')" class="px-3 py-1 rounded text-xs font-bold ${r.meterSide===s?'bg-[#8430CE] text-white':'bg-gray-100'}">${s==="LH"?"LH (left)":"RH (right)"}</button>`).join("")}</div>
+    ${r.segs.map((g,i)=>`<div class="border rounded-lg p-2 mb-2">
+      <div class="flex items-center justify-between mb-1"><b class="text-xs">Segment ${i+1}</b><button onclick="wzRtDel(${i})" class="text-red-600 text-xs font-bold">🗑 hatao</button></div>
+      <div class="grid grid-cols-3 gap-1 mb-2">${dirs.map(d=>`<button onclick="wzRtDir(${i},'${d}')" class="py-1 rounded text-[11px] font-bold ${g.d===d?'bg-[#0D904F] text-white':'bg-gray-100'}">${WZ_DIR_LABEL[d]}</button>`).join("")}</div>
+      <div class="flex gap-2 items-center mb-2"><input type="number" step="any" inputmode="decimal" placeholder="Lambai (m)" value="${wzEsc(g.len)}" oninput="wzRtLen(${i},this.value)" class="ff-input" style="flex:1">
+        ${["1/2","3/4"].map(s=>`<button onclick="wzRtSz(${i},'${s}')" class="px-3 py-2 rounded text-xs font-bold ${(g.sz||"1/2")===s?'bg-[#8430CE] text-white':'bg-gray-100'}">${s}"</button>`).join("")}</div>
+      <div class="flex flex-wrap gap-1">${ISO_FITS.map(([k,l])=>`<button onclick="wzRtFit(${i},'${k}')" class="px-2 py-1 rounded text-[11px] font-bold ${(g.fit||[]).includes(k)?'bg-[#1a237e] text-white':'bg-gray-100'}">${l}</button>`).join("")}</div>
+    </div>`).join("")}
+    <div class="flex gap-2"><button onclick="wzRtAdd()" class="flex-1 bg-[#0D904F] text-white font-bold py-2 rounded text-sm">+ Segment</button>
+      <button onclick="wzRtUndo()" class="px-4 bg-gray-200 font-bold py-2 rounded text-sm">↶ Undo</button></div>
+  </div>
+  <div class="bg-white rounded-lg shadow p-2 mb-3"><canvas id="wzIsoCanvas" width="770" height="532" style="width:100%;height:auto;border:1px solid #e5e7eb"></canvas>
+    <p id="wzIsoInfo" class="text-[11px] text-gray-700 mt-1"></p></div>`;
+}
+function wzReviewHtml(){
+  const tab = wzState.tab, steps = wzSteps(tab), row = wzState.row;
+  let filled = 0, total = 0;
+  const show = (f)=>{ total++; const v = row[f.i]; const has = !(v===null||v===undefined||v===""); if(has) filled++; return `<div class="flex justify-between text-xs py-0.5 border-b border-gray-100"><span class="text-gray-500">${f.l}</span><b>${has?wzEsc(v):"—"}</b></div>`; };
+  const blocks = WS_DEFS[tab].groups.map(g=>{
+    const si = steps.findIndex(s=>s.kind==="fields" && s.group===g.name);
+    return `<div class="bg-white rounded-lg shadow p-3 mb-2"><div class="flex justify-between items-center mb-1"><p class="text-xs font-bold text-gray-600">${g.name}</p><button onclick="wzJump(${si})" class="text-[11px] text-[#8430CE] font-bold">✏️ Edit</button></div>${g.fields.map(show).join("")}</div>`;
+  }).join("");
+  let routeBlock = "";
+  if(tab==="GI"){ const t = isoTotals(wzState.route), ri = steps.findIndex(s=>s.kind==="route");
+    routeBlock = `<div class="bg-white rounded-lg shadow p-3 mb-2"><div class="flex justify-between items-center mb-1"><p class="text-xs font-bold text-gray-600">Isometric route</p><button onclick="wzJump(${ri})" class="text-[11px] text-[#8430CE] font-bold">✏️ Edit</button></div>
+      <p class="text-xs">${t.total>0 ? `Total ${t.total} m • Elbow ${t.turns} • IV ${t.IV} • AV ${t.AV} • Tee ${t.T}` : "— (route nahi bhara; isometric form mein dash aayega)"}</p></div>`; }
+  return `<p class="text-xs text-gray-600 mb-2">Bhare gaye: <b>${filled}/${total}</b>. Jo khali hai wo forms mein <b>"—"</b> dikhega.</p>${routeBlock}${blocks}`;
+}
+function wzRender(keepScroll){
+  const ov = document.getElementById("wizardOverlay"); if(!ov) return;
+  const c = customers.find(c=>c.id===wzState.cid); if(!c){ wzClose(); return; }
+  const tab = wzState.tab, tabsOk = wsTabsFor(c); if(!tabsOk.length){ wzClose(); return; }
+  const steps = wzSteps(tab), st = steps[wzState.step], n = steps.length;
+  const pct = Math.round((wzState.step)/(n-1)*100);
+  let body = "";
+  if(st.kind==="fields"){
+    body = `<div class="bg-white rounded-lg shadow p-3 mb-3"><div class="grid grid-cols-1 gap-3">${st.fields.map(f=>`<div><label class="ff-label">${f.l}</label>${wzInput(tab,f,wzState.row[f.i],c)}</div>`).join("")}</div></div>`;
+  } else if(st.kind==="route") body = wzRouteHtml();
+  else body = wzReviewHtml();
+  const tabBtn = k=>`<button onclick="wzTab('${k}')" class="flex-1 text-xs font-bold py-2 rounded ${k===tab?'bg-[#8430CE] text-white':'bg-white text-gray-600 border'}">${WS_DEFS[k].icon} ${k==="REST"?"REST":k}${stageDone(c,k)?" ✓":""}</button>`;
+  ov.innerHTML = `
+    <div class="bg-[#0D904F] text-white p-3 flex items-center gap-3 sticky top-0 z-10">
+      <button onclick="wzClose()" class="text-2xl font-bold">←</button>
+      <div class="flex-1"><p class="font-bold text-sm">${wzEsc(c.name)}</p><p class="text-[11px] text-green-100">${wzEsc(c.area||"")} ${c.bpNo?"• BP "+wzEsc(c.bpNo):""}</p></div>
+    </div>
+    <div class="p-3">
+      ${tabsOk.length>1 ? `<div class="flex gap-1 mb-2">${tabsOk.map(tabBtn).join("")}</div>` : ""}
+      <div class="flex justify-between text-[11px] text-gray-500 mb-1"><span>Step ${wzState.step+1} / ${n}</span><span>${pct}%</span></div>
+      <div class="h-2 bg-gray-200 rounded mb-3"><div class="h-2 bg-[#0D904F] rounded" style="width:${pct}%"></div></div>
+      <h2 class="font-bold text-gray-800 mb-2">${WS_DEFS[tab].icon} ${wzEsc(st.group)} ${st.part?`<span class="text-xs text-gray-400">(${st.part})</span>`:""}</h2>
+      ${body}
+    </div>
+    <div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #e5e7eb;padding:10px;display:flex;gap:8px;z-index:66">
+      <button onclick="wzBack()" ${wzState.step===0?"disabled":""} class="px-4 py-3 rounded-lg bg-gray-200 font-bold text-sm ${wzState.step===0?'opacity-40':''}">← Back</button>
+      ${st.kind==="review" ? `<button onclick="wzSubmit()" class="flex-1 bg-[#0D904F] text-white font-bold py-3 rounded-lg">✅ Submit ${tab==="REST"?"Restoration":tab}</button>`
+        : `<button onclick="wzNext()" class="flex-1 bg-[#8430CE] text-white font-bold py-3 rounded-lg">Save & Next →</button><button onclick="wzNext()" class="px-3 py-3 rounded-lg bg-gray-100 text-xs font-bold">Skip</button>`}
+    </div>`;
+  if(st.kind==="route") wzRtDraw();
+  if(!keepScroll) ov.scrollTop = 0; else ov.scrollTop = 0;
+}
+
 /* ============ ADMIN: MASTER SHEET (live — common data + every stage + technician + forms %) ============ */
 let masterQuery = "";
 function masterSetQuery(v){ masterQuery = String(v||"").trim().toLowerCase(); renderMain(); }
@@ -4716,9 +4933,9 @@ function renderMasterSheet(){
     <button onclick="exportTejasavMasterWorkbook()" class="w-full bg-[#0D904F] text-white font-bold py-2 rounded-lg mb-3 text-sm">⬇ Export (MASTER SHEET + saari sheets)</button>
     <div class="bg-white rounded-lg shadow overflow-x-auto mb-4">
       <table class="text-[11px] w-full"><thead class="bg-[#e5f4ec] text-left"><tr>
-        ${["S.N","Name","Area","BP No","Meter No","Phone","Status","SL","GI","NG","Rest.","SL tech","GI tech","NG tech","Rest. tech","Forms %"].map(h=>`<th class="px-2 py-1 whitespace-nowrap">${h}</th>`).join("")}
+        ${["S.N","Name","Area","BP No","Meter No","Phone","Status","SL","GI","NG","Rest.","SL tech","GI tech","NG tech","Rest. tech","GI pipe (m)","Forms %"].map(h=>`<th class="px-2 py-1 whitespace-nowrap">${h}</th>`).join("")}
       </tr></thead><tbody>
-      ${list.map(c=>{ const o = fpOverall(c); return `<tr onclick="openFormsPdf('${c.id}')" class="cursor-pointer">${cell(c.sn)}${cell(c.name)}${cell(c.area)}${cell(c.bpNo)}${cell(c.meterSerialNumber)}${cell(c.phone)}${cell(tejOurStatus(c))}${cell(stg(c,"slWork"))}${cell(stg(c,"giWork"))}${cell(stg(c,"ngWork"))}${cell(stg(c,"restoreWork"))}${cell(techOf(c,"SL"))}${cell(techOf(c,"GI"))}${cell(techOf(c,"NG"))}${cell(techOf(c,"REST"))}${cell(`<b class="${o.allDone?'text-green-700':'text-orange-600'}">${o.pct}%</b> (${o.complete}/6)`)}</tr>`; }).join("")}
+      ${list.map(c=>{ const o = fpOverall(c); return `<tr onclick="openFormsPdf('${c.id}')" class="cursor-pointer">${cell(c.sn)}${cell(c.name)}${cell(c.area)}${cell(c.bpNo)}${cell(c.meterSerialNumber)}${cell(c.phone)}${cell(tejOurStatus(c))}${cell(stg(c,"slWork"))}${cell(stg(c,"giWork"))}${cell(stg(c,"ngWork"))}${cell(stg(c,"restoreWork"))}${cell(techOf(c,"SL"))}${cell(techOf(c,"GI"))}${cell(techOf(c,"NG"))}${cell(techOf(c,"REST"))}${cell((()=>{const g=giRowFor(c)||[];const t=(Number(g[5])||0)+(Number(g[6])||0);return t?Math.round(t*100)/100:"";})())}${cell(`<b class="${o.allDone?'text-green-700':'text-orange-600'}">${o.pct}%</b> (${o.complete}/6)`)}</tr>`; }).join("")}
       </tbody></table>
     </div>`;
 }
