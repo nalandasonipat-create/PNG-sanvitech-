@@ -686,6 +686,8 @@ async function initDb(){
     let mx = all.reduce((m,c)=>Math.max(m, Number(c.sn)||0), 0);
     for(const c of noSn){ await db.doc("customers/"+c.id).update({sn: ++mx}); }
   }catch(e){ console.error("sn backfill error", e); }
+  try{ const iv = await db.doc("settings/invoiceCfg").get(); if(iv.exists) invCfg = Object.assign({}, invCfg, iv.data()||{}); }catch(e){ console.error("invoice cfg load error", e); }
+  try{ const rd = await db.doc("settings/raDraft").get(); if(rd.exists) raCfg = Object.assign({final:false, invoiceDate:"", periodFrom:"", chk:{}, hold:[]}, rd.data()||{}); }catch(e){ console.error("ra draft load error", e); }
   try{ const fdS = await db.doc("settings/formDefaults").get(); if(fdS.exists) formDefaults = fdS.data() || {}; }catch(e){ console.error("form defaults load error", e); }
   try{ const bs = await db.doc("settings/billingCfg").get(); if(bs.exists){ const o = bs.data()||{}; BILL_SAVED_KEYS.forEach(k=>{ if(o[k]!==undefined) billCfg[k] = o[k]; }); } if(LOA_OLD_NOS.includes(String(billCfg.loaNo))) billCfg.loaNo = LOA_NO_DEFAULT; }catch(e){ console.error("billing cfg load error", e); }
   try{
@@ -700,6 +702,7 @@ async function initDb(){
   db.collection("submissions").onSnapshot(snap=>{ submissions = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
   db.collection("customers").onSnapshot(snap=>{ customers = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
   db.collection("attendance").onSnapshot(snap=>{ attendance = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("bills").onSnapshot(snap=>{ raBills = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=>(Number(a.seq)||0)-(Number(b.seq)||0)); renderMain(); }, e=>console.error(e));
   db.collection("safety_checks").onSnapshot(snap=>{ safetyChecks = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
   db.doc("settings/capitalisation").onSnapshot(snap=>{ if(snap && snap.exists) capConfig = snap.data(); renderMain(); }, e=>console.error(e));
   db.doc("settings/payoutRates").onSnapshot(snap=>{ if(snap && snap.exists) payoutRates = {crmRate:50, formRate:100, ...snap.data()}; renderMain(); }, e=>console.error(e));
@@ -854,6 +857,7 @@ function renderMain(){
     else if(currentView==="capitalisation") el.innerHTML = renderCapitalisation();
     else if(currentView==="master") el.innerHTML = renderMasterSheet();
     else if(currentView==="billing") el.innerHTML = renderBilling();
+    else if(currentView==="rabill") el.innerHTML = renderRaBill();
   } else if(currentUser.role === "telecaller"){
     if(currentView==="newCall") el.innerHTML = renderTelecallerNewCall();
     else if(currentView==="trackA") el.innerHTML = renderTelecallerTrackA();
@@ -2007,6 +2011,7 @@ function renderTechCustomerDetail(customerId){
       <p class="text-sm"><span class="font-bold">Address:</span> ${c.address||"—"}</p>
       <p class="text-sm"><span class="font-bold">Phone:</span> ${c.phone||"—"}</p>
       ${c.bpNo ? `<p class="text-sm"><span class="font-bold">BP No:</span> ${c.bpNo}</p>` : ""}
+      ${(currentUser && currentUser.role==="admin" && (c.billed||[]).length) ? `<p class="text-sm"><span class="font-bold">🧾 Bill:</span> ${wzEsc(raSummary(c))}</p>` : ""}
       ${c.email ? `<p class="text-sm"><span class="font-bold">Email:</span> ${c.email}</p>` : ""}
       ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-sm"><span class="font-bold">Pending Work:</span> ${c.pendingWork.join(", ")}</p>` : ""}
       ${(c.connectionType&&c.connectionType.length) ? `<p class="text-sm"><span class="font-bold">Connection Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
@@ -4222,6 +4227,7 @@ function renderAdminOverview(){
     <button onclick="setView('master')" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-2">🗂 Master Sheet (live) + Forms status</button>
     <button onclick="if(confirm('Saare ' + customers.filter(c=>c.status!=='completed').length + ' chal rahe/pending customers ka bacha hua kaam technicians mein baant diya jayega. Pakka?')) autoAllotAll()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">⚡ Pending kaam technicians ko auto-allot karein</button>
     <button onclick="formDefaultsOpen()" class="w-full bg-white border border-[#0D904F] text-[#0D904F] font-bold py-2.5 rounded-lg mb-2">📝 Forms ki fixed details (gauge certificate, testing) ${FD_FIELDS.every(f=>formDefaults[f.k]) ? "✓" : "— bharni hain"}</button>
+    <button onclick="setView('rabill')" class="w-full bg-[#0b3d91] text-white font-bold py-2.5 rounded-lg mb-2">🧾 RA Bill — GAIL ko bill (master sheet se, dobara claim nahi)</button>
     <button onclick="setView('billing')" class="w-full bg-[#1a237e] text-white font-bold py-2.5 rounded-lg mb-2">💰 Monetize / Billing (LOA rates) + Summary + PDFs ZIP</button>
     <button onclick="setView('capitalisation')" class="w-full bg-[#8430CE] text-white font-bold py-2.5 rounded-lg mb-2">📑 Capitalisation Sheet (rates bharein)</button>
     <button onclick="exportTejasavMasterWorkbook()" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Export TEJASAV Master Workbook (all sheets + Summary)</button>
@@ -5562,6 +5568,7 @@ function renderBilling(){
   const th = x=>`<th class="px-2 py-1 whitespace-nowrap">${x}</th>`, td = (x,cls)=>`<td class="px-2 py-1 border-b ${cls||""}">${x}</td>`;
   return `<button onclick="setView('overview')" class="text-sm text-[#0D904F] font-bold mb-2">← Back</button>
     <h2 class="font-bold text-gray-800 mb-1">💰 Monetize / Billing</h2>
+    <button onclick="setView('rabill')" class="w-full bg-[#0b3d91] text-white font-bold py-2.5 rounded-lg mb-3">🧾 RA Bill banayein — GAIL ko (jo kaam ek baar bill hua wo dobara nahi aata)</button>
     <div class="bg-white rounded-lg shadow p-3 mb-3 text-xs">
       <p class="font-bold text-gray-800">LOA ${LOA_INFO.ref}</p>
       <p class="text-gray-500">Dt. ${LOA_INFO.date} • ${LOA_INFO.contractor} (vendor ${LOA_INFO.vendorCode}) • validity ${fpDateD(LOA_INFO.validTill)} tak</p>
@@ -5606,6 +5613,475 @@ function renderBilling(){
       <p class="text-[10px] text-gray-400 mt-2">"(extra item)" wale kaam ka khana master sheet me nahi hai — admin customer ki checklist me "LOA ke extra items" se jode, to bill me judte hain. Plumber incentive (₹150/connection) LOA ke hisaab se GAIL seedha plumber ko deta hai — is bill me nahi.</p></details>`;
 }
 
+/* ============ RA BILL GENERATION (admin) — bills to GAIL from the master sheet ============
+   Every customer's work is billed milestone by milestone as per LOA 5600008408. When a bill is marked
+   "Updated to GAIL" each customer × SOR item × milestone that went into it is written to that customer's
+   ledger (customer.billed), so it never comes again; work finished later (or the next milestone of the
+   same work, or extra quantity) comes into the next RA bill by itself. */
+let raBills = [];                                    // submitted bills (collection "bills"), oldest first
+let raCfg = {final:false, invoiceDate:"", periodFrom:"", chk:{}, hold:[]};
+let invCfg = {gstin:"", pan:"", address:"", phone:"", email:"", bank:"", account:"", ifsc:"", branch:"", prefix:"TEJ/SNP/", sac:"995464", itTds:2, gstTds:2};
+const RA_INV_FIELDS = [
+  {k:"gstin", l:"TEJASAV GSTIN"}, {k:"pan", l:"PAN"}, {k:"address", l:"Address (invoice par)", t:"area"}, {k:"phone", l:"Mobile"}, {k:"email", l:"Email"},
+  {k:"bank", l:"Bank name"}, {k:"account", l:"Account no."}, {k:"ifsc", l:"IFSC"}, {k:"branch", l:"Branch"},
+  {k:"prefix", l:"Invoice no. prefix (jaise TEJ/SNP/)"}, {k:"sac", l:"SAC code (995464 = gas fitting installation — apne CA se confirm karein)"}, {k:"itTds", l:"Income-tax TDS % (GAIL kaatega)", n:1}, {k:"gstTds", l:"GST TDS % (GAIL kaatega)", n:1}
+];
+const RA_BILL_CHK = { // "Check List For RA Bill" (GAIL Gas / Resonance format)
+  A:["Invoice","Memorandum of Payment","Abstract of Payment","Abstract of Measurement Sheet","Month wise PF/ESI challan copies",
+     "Separate invoice for extra work / AHR items more than SOR qty","Approval of PMC and GAIL Gas for extra work / AHR items","Separate invoice for INR & USD portion (agar ho)",
+     "State wise bifurcation of invoiced amount (agar laagu)","Hard copy of bill (2 original + 1 copy)","Soft copy of bill (hard copy se tally)",
+     "Bill amount / MOP matches SES amount","All corrections in bill signed by PMC / GAIL Gas","All bill documents (measurement sheets, bills) tally",
+     "SAP service entry sheet tallies with abstract of payment","Undertaking for T4S regulations compliance","Material reconciliation certificate / statement"],
+  B:["Contractor all risk policy (validity)","Free issue material (FIM) insurance (validity)","Indemnity bond for FIM (validity)","Employee insurance policy (validity)",
+     "Workman compensation policy (validity)","Lower / nil TDS certificate (agar ho)","Contract PBG (agar laagu)","Contract agreement copy",
+     "Power of attorney / indemnity bond of bill signatory","PAN of contractor","GST registration certificate","Copy of LOA","Copy of FOA"]
+};
+const RA_STAGE_LABEL = {REG:"Registration", SL:"SL", GI:"GI", NG:"NG", REST:"Restoration", CIVIL:"Civil", PRES:"N2 preservation", EXTRA:"Extra"};
+function raStageOf(code){
+  if(code==="9") return "REG";
+  if(/^1\.1\.|^1\.3|^1\.4/.test(code)) return "SL";
+  if(/^1\.2\./.test(code)) return "REST";
+  if(code==="7.3 b") return "NG";
+  if(/^1\.12|^3\.|^10$/.test(code)) return "CIVIL";
+  if(/^8\./.test(code)) return "PRES";
+  return "GI";
+}
+const RA_FAMILY = {"7.1.1 a":"GI12","7.1.1 b":"GI12","7.1.1 c":"GI34","7.1.1 d":"GI34","7.1.1 e":"GI1","7.1.1 f":"GI1"};
+const raFam = code=>RA_FAMILY[code] || code;
+function raClaimed(c, code, kind){ return bround((c.billed||[]).filter(e=>raFam(e.k)===raFam(code) && e.m===kind).reduce((t,e)=>t+(Number(e.q)||0),0)); }
+// what the master sheet says about this customer's work
+function raStatus(c){
+  const sl = slRowFor(c)||[], gi = giRowFor(c)||[], ng = ngRowFor(c)||[], rs = c.restRow||[];
+  const form = k=>fpStatus(c, k).pct===100, d = x=>ffIso(x)||"";
+  const giTested = /PRESSURE/i.test(String(gi[44]||"")) || (((c.wizTesting||{}).readings)||[]).length>0;
+  const ngDone = stageDone(c,"NG") || /^done$/i.test(String(ng[2]||""));
+  return {
+    bp: !!String(c.bpNo||"").trim(),
+    slDone: stageDone(c,"SL") || /^done$/i.test(String(sl[2]||"")),
+    slTested: /done/i.test(String(sl[32]||"")),
+    giDone: stageDone(c,"GI") || ((bnum(gi,5)+bnum(gi,6))>0 && giTested),
+    giTested, gasIn: /GAS\s*IN/i.test(String(gi[46]||"")), ngDone, ngTested: /PRESS/i.test(String(ng[7]||"")),
+    meterIn: !!(gi[2] || c.meterSerialNumber),
+    restDone: stageDone(c,"REST") || String(rs[0]||"").toUpperCase()==="DONE",
+    noc: loaNocOk(c),
+    fSL: form("service_line_card"), fGI: form("isometric_graph"), fNG: form("conversion_report") && form("installation_report"),
+    all: fpOverall(c).allDone,
+    dSL: d(sl[1]), dGI: d(gi[47]) || d(gi[1]), dNG: d(ng[8]) || d(ng[0]), dRS: d(rs[2])
+  };
+}
+// quantities of each LOA item this customer's work has (the master sheet + extra items the admin added)
+function raQty(c, s){
+  const sl = slRowFor(c)||[], gi = giRowFor(c)||[], rs = c.restRow||[], q = {};
+  const put = (code, v, extra)=>{ v = bround(Number(v)||0); if(v>0 && LOA_RATE[code]) q[code] = {q:v, extra:!!extra}; };
+  put("9", 1);
+  if(s.slDone || bnum(sl,7)>0) put("1.1.a", 1);
+  put("1.1.b", Math.max(0, bnum(sl,7)-4)); put("1.1.c", bnum(sl,6));
+  put("1.2.a", bnum(rs,7)+bnum(rs,8)); put("1.2.b", bnum(rs,3)+bnum(rs,4)); put("1.2.c", bnum(rs,5)); put("1.2.d", bnum(rs,6));
+  if(/^done$/i.test(String(gi[41]||""))) put("1.8 iii", 1);
+  put(billCfg.gi12==="contractor" ? "7.1.1 a" : "7.1.1 b", bnum(gi,5));
+  put(billCfg.gi34==="contractor" ? "7.1.1 c" : "7.1.1 d", bnum(gi,6));
+  if(s.meterIn) put("7.3 a", 1);
+  if(s.ngDone) put("7.3 b", 1);
+  put("7.4 a", bnum(gi,27)); put("7.4 b", bnum(gi,28)); put("7.4 d", bnum(gi,25));
+  if(/INSTAL|REPLACE/i.test(String(gi[38]||""))) put("7.7 b", 1);
+  const ex = c.extraSor || {}; Object.keys(ex).forEach(code=>{ if(!q[code]) put(code, ex[code], true); });
+  return q;
+}
+// has the work reached this payment milestone (LOA payment terms), with its document on file, by the as-on date?
+function raReached(c, code, kind, s, extra){
+  const on = dt=>!dt || dt <= billCfg.asOn;
+  const fin = !!raCfg.final && s.all;                                   // closure 5% only in a final bill, once all 6 forms are complete
+  const commOK = s.fNG && s.meterIn && (s.ngDone || s.gasIn) && on(s.dNG);   // gas charging + meter installation & conversion
+  if(extra){
+    if(kind==="supply" || kind==="work") return true;
+    if(kind==="test") return s.giTested || s.slTested || s.gasIn;
+    if(kind==="comm") return commOK;
+    if(kind==="noc") return s.noc && commOK;
+    return kind==="close" && fin;
+  }
+  const st = raStageOf(code);
+  if(st==="REG") return kind==="work" ? s.bp : (kind==="close" && fin);
+  if(st==="SL"){ const w = s.slDone && s.fSL && on(s.dSL);
+    return kind==="work" ? w : kind==="test" ? w && (s.slTested || s.giTested || s.gasIn) : kind==="comm" ? w && s.giDone && commOK : kind==="close" ? w && fin : false; }
+  if(st==="REST"){ const w = s.restDone && on(s.dRS);
+    return kind==="work" ? w : kind==="noc" ? w && s.noc && commOK : kind==="close" ? w && fin : false; }
+  if(st==="NG"){ const w = s.ngDone && s.fNG && on(s.dNG);
+    return kind==="work" ? w : kind==="test" ? w && (s.ngTested || s.gasIn || s.giTested) : kind==="close" ? w && fin : false; }
+  const w = s.giDone && s.fGI && on(s.dGI);                            // GI pipe, valves, meter, regulator, warning plate …
+  if(code==="7.3 a") return kind==="work" ? w && s.meterIn : kind==="test" ? w && s.meterIn && (s.giTested || s.gasIn) : kind==="close" ? w && fin : false;
+  return (kind==="supply" || kind==="work") ? w : kind==="test" ? w && s.giTested : kind==="comm" ? w && commOK : kind==="close" ? w && fin : false;
+}
+function raCustLines(c){
+  const s = raStatus(c), lines = [], over = [], held = [];
+  if(!s.bp) return {s, lines, over, held};
+  const q = raQty(c, s), hold = raCfg.hold || [];
+  Object.keys(q).forEach(code=>{
+    const it = LOA_RATE[code], Q = q[code].q;
+    it.mk.forEach((kind,i)=>{
+      if(!raReached(c, code, kind, s, q[code].extra)) return;
+      const dq = bround(Q - raClaimed(c, code, kind));
+      if(dq > 0.0001) (hold.includes(code) ? held : lines).push({code, kind, i, qty:dq, rate:it.ms[i], amount:bround(dq*it.ms[i])});
+      else if(dq < -0.0001) over.push({code, kind, more:-dq});
+    });
+  });
+  return {s, lines, over, held};
+}
+function raAbstract(rows){
+  const abs = {};
+  rows.forEach(r=>r.lines.forEach(l=>{ const key = l.code+"|"+l.kind;
+    const a = abs[key] || (abs[key] = {code:l.code, kind:l.kind, rate:l.rate, qty:0, amount:0}); a.qty = bround(a.qty+l.qty); a.amount = bround(a.amount+l.amount); }));
+  return abs;
+}
+function raPrev(seqBelow){                            // cumulative quantities & amounts of the submitted bills before this one
+  const p = {};
+  raBills.filter(b=>b.status==="submitted" && Number(b.seq) < seqBelow).forEach(b=>(b.abstract||[]).forEach(a=>{ const key = a.k+"|"+a.m;
+    const x = p[key] || (p[key] = {qty:0, amount:0}); x.qty = bround(x.qty+(Number(a.q)||0)); x.amount = bround(x.amount+(Number(a.a)||0)); }));
+  return p;
+}
+const raLoaIdx = code=>{ const i = LOA_SOR.findIndex(x=>x.code===code); return i<0 ? 999 : i; };
+function raDev(abs, prev){
+  const by = {};
+  [...Object.keys(prev), ...Object.keys(abs)].forEach(key=>{ const code = key.slice(0, key.lastIndexOf("|")), it = LOA_RATE[code]; if(!it) return;
+    const cum = bround(((prev[key]||{}).qty||0) + ((abs[key]||{}).qty||0));
+    const x = by[code] || (by[code] = {code, loa:Number(it.qty)||0, cum:0, now:false}); x.cum = Math.max(x.cum, cum); if(abs[key]) x.now = true; });
+  return Object.values(by).filter(x=>x.now && x.cum > x.loa + 0.0001).map(x=>({code:x.code, loa:x.loa, cum:x.cum, excess:bround(x.cum-x.loa)})).sort((a,b)=>raLoaIdx(a.code)-raLoaIdx(b.code));
+}
+function raNext(){ const seq = raBills.reduce((m,b)=>Math.max(m, Number(b.seq)||0), 0) + 1; return {seq, no:"RA-"+String(seq).padStart(2,"0")}; }
+function raDraft(){
+  billDefaults();
+  const rows = [], skip = [], over = [], heldBy = {};
+  customers.slice().sort((a,b)=>(Number(a.sn)||9999)-(Number(b.sn)||9999)).forEach(c=>{
+    const r = raCustLines(c), s = r.s;
+    r.over.forEach(o=>over.push({c, ...o}));
+    r.held.forEach(l=>{ const h = heldBy[l.code] || (heldBy[l.code] = {code:l.code, ids:new Set(), amount:0}); h.ids.add(c.id); h.amount = bround(h.amount+l.amount); });
+    if(r.lines.length){ rows.push({c, lines:r.lines, total:bround(r.lines.reduce((t,l)=>t+l.amount,0))}); return; }
+    const why = [];
+    if(!s.bp && (s.slDone || s.giDone || s.ngDone)) why.push("BP no. nahi");
+    if(s.bp && s.slDone && !s.fSL) why.push("SL ho gaya — Service Line Job Card adhoora");
+    if(s.bp && s.giDone && !s.fGI) why.push("GI ho gaya — Isometric Graph adhoora");
+    if(s.bp && s.ngDone && !s.fNG) why.push("NG ho gaya — Conversion / Installation Report adhoora");
+    if(why.length) skip.push({c, why});
+  });
+  const nx = raNext(), abs = raAbstract(rows), prev = raPrev(nx.seq);
+  const held = Object.values(heldBy).map(h=>({code:h.code, n:h.ids.size, amount:h.amount})).sort((a,b)=>raLoaIdx(a.code)-raLoaIdx(b.code));
+  const sub = bround(rows.reduce((t,r)=>t+r.total,0)), gst = bround(sub*billCfg.gst/100);
+  return {draft:true, no:nx.no, seq:nx.seq, invoiceNo:(invCfg.prefix||"")+nx.no, invoiceDate:raCfg.invoiceDate || localISODate(),
+    periodFrom:raCfg.periodFrom || raDefaultFrom(), periodTo:billCfg.asOn, final:!!raCfg.final, gstPct:billCfg.gst, chk:raCfg.chk||{},
+    rows, abs, prev, sub, gst, total:bround(sub+gst), skip, over, held, dev:raDev(abs, prev)};
+}
+function raDefaultFrom(){
+  const last = raBills.filter(b=>b.status==="submitted").slice(-1)[0];
+  if(last && last.periodTo){ const d = new Date(last.periodTo+"T00:00:00"); d.setDate(d.getDate()+1); return localISODate(d); }
+  return LOA_INFO.date.split(".").reverse().join("-");
+}
+function raBillModel(no){                             // a submitted bill, rebuilt from its record + the customers' ledgers
+  const b = raBills.find(x=>x.no===no); if(!b) return null;
+  const rows = (b.customers||[]).map(x=>{ const c = customers.find(y=>y.id===x.id) || {id:x.id, name:x.n, bpNo:x.bp, sn:x.sn};
+    const lines = (c.billed||[]).filter(e=>e.b===no).map(e=>{ const it = LOA_RATE[e.k] || {mk:[]}; return {code:e.k, kind:e.m, i:it.mk.indexOf(e.m), qty:Number(e.q)||0, rate:Number(e.r)||0, amount:bround((Number(e.q)||0)*(Number(e.r)||0))}; });
+    return {c, lines, total:bround(lines.reduce((t,l)=>t+l.amount,0))}; });
+  const abs = {}; (b.abstract||[]).forEach(a=>{ abs[a.k+"|"+a.m] = {code:a.k, kind:a.m, rate:Number(a.r)||0, qty:Number(a.q)||0, amount:Number(a.a)||0}; });
+  const prev = raPrev(Number(b.seq));
+  return {draft:false, no:b.no, seq:Number(b.seq), invoiceNo:b.invoiceNo||b.no, invoiceDate:b.invoiceDate||"", periodFrom:b.periodFrom||"", periodTo:b.periodTo||"",
+    final:!!b.final, gstPct:Number(b.gstPct)||18, chk:b.chk||{}, rows, abs, prev, sub:Number(b.sub)||0, gst:Number(b.gst)||0, total:Number(b.total)||0, skip:[], over:[], held:[], dev:raDev(abs, prev), status:b.status};
+}
+const raPct = (code, kind)=>{ const it = LOA_RATE[code]; const i = it ? it.mk.indexOf(kind) : -1; return i<0 || !it.rate ? 0 : Math.round(it.ms[i]/it.rate*100); };
+const raKindTxt = (code, kind)=>`${raPct(code,kind)}% ${LOA_MS[kind]||kind}`;
+// per customer: which bill took which work — "RA-01: SL GI • RA-02: NG"
+function raSummary(c){
+  const by = {}; (c.billed||[]).forEach(e=>{ (by[e.b] = by[e.b] || new Set()).add(RA_STAGE_LABEL[raStageOf(e.k)] || e.k); });
+  return Object.keys(by).sort().map(b=>`${b}: ${[...by[b]].join(" ")}`).join(" • ");
+}
+function raStageClaim(c, stage){                      // {bills, pct} of a stage's full value claimed so far
+  const s = raStatus(c), q = raQty(c, s); let full = 0, got = 0; const bills = new Set();
+  Object.keys(q).forEach(code=>{ if(raStageOf(code)!==stage) return; full += q[code].q * LOA_RATE[code].rate; });
+  (c.billed||[]).forEach(e=>{ if(raStageOf(e.k)!==stage) return; got += (Number(e.q)||0)*(Number(e.r)||0); bills.add(e.b); });
+  return {bills:[...bills].sort().join(", "), pct: full ? Math.min(100, Math.round(got/full*100)) : (got ? 100 : 0)};
+}
+async function raSaveCfg(){ if(db){ try{ await db.doc("settings/raDraft").set(raCfg); }catch(e){ console.error(e); } } }
+function raSet(k, v){ raCfg[k] = v; raSaveCfg(); renderMain(); }
+function raChk(key, v){ raCfg.chk = Object.assign({}, raCfg.chk||{}, {[key]:v}); raSaveCfg(); }
+function raHold(code, on){ const h = new Set(raCfg.hold||[]); if(on) h.add(code); else h.delete(code); raCfg.hold = [...h]; raSaveCfg(); renderMain(); }
+// warning lines shared by the screen and the preview
+function raWarnHtml(m){
+  const prevSub = bround(Object.values(m.prev).reduce((t,p)=>t+p.amount,0)), up = bround(prevSub+m.sub), pct = x=>Math.round(x/LOA_INFO.value*1000)/10;
+  let h = `<p class="text-[11px] text-gray-600 mt-2">LOA value ₹ ${billInr(LOA_INFO.value)} me se: ab tak ₹ ${billInr(prevSub)} (${pct(prevSub)}%) • is bill ke baad ₹ ${billInr(up)} (${pct(up)}%)</p>`;
+  if(up > LOA_INFO.value) h += `<p class="text-[11px] text-red-600 font-bold mt-1">⚠ Is bill se LOA ki kul value paar ho rahi hai — GAIL se amendment / approval chahiye.</p>`;
+  if((m.dev||[]).length) h += `<div class="bg-orange-50 text-orange-800 rounded p-2 mt-2 text-[11px]"><p class="font-bold">⚠ ${m.dev.length} item LOA quantity se zyada (deviation approval chahiye):</p>${m.dev.map(x=>`<p>• ${x.code} ${wzEsc((LOA_RATE[x.code]||{}).desc||"")} — LOA ${x.loa}, is bill tak ${x.cum} (+${x.excess})</p>`).join("")}<p class="mt-1">Approval nahi hai to neeche "Item hold" se us item ko rok dein — wo kaam khula rahega aur hold hatate hi agle bill me aa jayega. Excel me "DEVIATION" sheet bhi hai.</p></div>`;
+  if((m.held||[]).length) h += `<p class="text-[11px] text-gray-600 mt-2">⏸ Hold par (is bill me nahi): ${m.held.map(x=>`${x.code} — ${x.n} customer, ₹ ${billInr(x.amount)}`).join(" • ")}</p>`;
+  return h;
+}
+
+/* ---- "Updated to GAIL": lock this bill's work into every customer's ledger ---- */
+async function raSubmit(){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const d = raDraft();
+  if(!d.rows.length){ alert("Is bill me koi naya kaam nahi hai."); return; }
+  if(d.dev.length && !confirm(`⚠ ${d.dev.length} item LOA quantity se zyada hain (${d.dev.map(x=>x.code).join(", ")}). In par GAIL / PMC ki deviation approval chahiye.\n\nApproval hai to OK dabayein; nahi to Cancel karke "Item hold" se un items ko rok dein.`)) return;
+  if(d.over.length && !confirm(`${d.over.length} jagah master sheet ki quantity pichle bill se kam ho gayi hai (wo is bill me nahi judegi). Phir bhi aage badhein?`)) return;
+  if(!confirm(`${d.no} GAIL ko bhej diya — "Updated to GAIL" karein?\n\n${d.rows.length} customers • ₹ ${billInr(d.sub)} + GST ₹ ${billInr(d.gst)} = ₹ ${billInr(d.total)}\n\nIske baad ye kaam dobara kisi bill me nahi aayega; jo kaam baad me poora hoga wo agle bill (RA-${String(d.seq+1).padStart(2,"0")}) me aayega.`)) return;
+  const t = showToast(`${d.no} save ho raha hai...`);
+  try{
+    const bill = {no:d.no, seq:d.seq, invoiceNo:d.invoiceNo, invoiceDate:d.invoiceDate, periodFrom:d.periodFrom, periodTo:d.periodTo, final:d.final,
+      gstPct:d.gstPct, gi12:billCfg.gi12, gi34:billCfg.gi34, chk:d.chk, loa:LOA_INFO.no,
+      abstract:Object.values(d.abs).map(a=>({k:a.code, m:a.kind, q:a.qty, r:a.rate, a:a.amount})),
+      customers:d.rows.map(r=>({id:r.c.id, sn:r.c.sn||null, n:r.c.name||"", bp:r.c.bpNo||"", a:r.total})),
+      sub:d.sub, gst:d.gst, total:d.total, status:"saving", createdAt:new Date().toISOString(), createdBy:currentUser.username};
+    await db.doc("bills/"+d.no).set(bill);
+    let done = 0;
+    for(const r of d.rows){
+      const cur = customers.find(x=>x.id===r.c.id) || r.c;
+      const keep = (cur.billed||[]).filter(e=>e.b!==d.no);
+      await db.doc("customers/"+r.c.id).update({billed:[...keep, ...r.lines.map(l=>({k:l.code, m:l.kind, q:l.qty, r:l.rate, b:d.no}))]});
+      done++;
+    }
+    await db.doc("bills/"+d.no).update({status:"submitted", submittedAt:new Date().toISOString(), submittedBy:currentUser.username});
+    raCfg = {final:false, invoiceDate:"", periodFrom:"", chk:{}, hold:(raCfg.hold||[])}; await raSaveCfg();
+    hideToast(t); raPreviewClose(); showToast(`${d.no} GAIL ko update ho gaya — ${done} customers ka kaam lock`);
+  }catch(e){ console.error(e); hideToast(t); alert("Bill save poora nahi hua: "+(e.message||e)+"\nDobara 'Updated to GAIL' dabayein — jo customers ho chuke hain wo dobara nahi judenge."); }
+  renderMain();
+}
+async function raCancel(no){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const b = raBills.find(x=>x.no===no); if(!b) return;
+  const last = raBills.filter(x=>x.status==="submitted").slice(-1)[0];
+  if(b.status==="submitted" && (!last || last.no!==no)){ alert("Sirf sabse aakhri bill hi cancel ho sakta hai."); return; }
+  if(!confirm(`${no} cancel karein? Iska kaam wapas agle bill ke draft me aa jayega.`) || !confirm(`Pakka? ${no} (₹ ${billInr(b.total)}) hata diya jayega.`)) return;
+  const t = showToast(`${no} cancel ho raha hai...`);
+  try{
+    for(const x of (b.customers||[])){
+      const cur = customers.find(y=>y.id===x.id); if(!cur || !(cur.billed||[]).some(e=>e.b===no)) continue;
+      await db.doc("customers/"+x.id).update({billed:(cur.billed||[]).filter(e=>e.b!==no)});
+    }
+    await db.doc("bills/"+no).delete();
+    hideToast(t); showToast(`${no} cancel ho gaya`);
+  }catch(e){ console.error(e); hideToast(t); alert("Cancel poora nahi hua: "+(e.message||e)); }
+  renderMain();
+}
+
+/* ---- preview (admin only) ---- */
+function raPreviewOpen(no){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const m = no ? raBillModel(no) : raDraft(); if(!m) return;
+  let ov = document.getElementById("raPreviewOverlay");
+  if(!ov){ ov = document.createElement("div"); ov.id = "raPreviewOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:75;background:#f3f4f6;overflow-y:auto;padding:0 0 90px 0;";
+  const th = x=>`<th class="px-1 py-1 text-left whitespace-nowrap">${x}</th>`, td = (x,cl)=>`<td class="px-1 py-0.5 border-b ${cl||""}">${x}</td>`;
+  const keys = Object.keys(m.abs).sort((x,y)=>raLoaIdx(m.abs[x].code)-raLoaIdx(m.abs[y].code) || (LOA_RATE[m.abs[x].code]||{mk:[]}).mk.indexOf(m.abs[x].kind)-(LOA_RATE[m.abs[y].code]||{mk:[]}).mk.indexOf(m.abs[y].kind));
+  const prevSub = bround(Object.values(m.prev).reduce((t,p)=>t+p.amount,0));
+  ov.innerHTML = `<div class="bg-[#1a237e] text-white p-3 flex items-center gap-3 sticky top-0 z-10"><button onclick="raPreviewClose()" class="text-2xl font-bold">←</button>
+    <div class="flex-1"><p class="font-bold text-sm">👁 ${m.no} ${m.draft?"(draft — abhi GAIL ko nahi gaya)":"— Updated to GAIL"}</p><p class="text-[11px] text-blue-100">Invoice ${wzEsc(m.invoiceNo)} • ${fpDateD(m.invoiceDate)} • period ${fpDateD(m.periodFrom)} se ${fpDateD(m.periodTo)}${m.final?" • FINAL bill":""}</p></div></div>
+    <div class="p-3 text-xs">
+      <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold">${FP_CONTRACTOR}</p><p class="text-gray-500">LOA ${LOA_INFO.ref} dt. ${LOA_INFO.date} • vendor ${LOA_INFO.vendorCode}</p>
+        <div class="grid grid-cols-3 gap-2 mt-2 text-center">
+          <div class="bg-gray-50 rounded p-2"><p class="font-bold">₹ ${billInr(prevSub)}</p><p class="text-[10px] text-gray-500">Pichle bills tak</p></div>
+          <div class="bg-green-50 rounded p-2"><p class="font-bold text-[#0D904F]">₹ ${billInr(m.sub)}</p><p class="text-[10px] text-gray-500">Is bill me (GST se pehle)</p></div>
+          <div class="bg-gray-50 rounded p-2"><p class="font-bold">₹ ${billInr(bround(prevSub+m.sub))}</p><p class="text-[10px] text-gray-500">Ab tak kul</p></div></div>
+        <p class="mt-2">GST ${m.gstPct}%: ₹ ${billInr(m.gst)} • <b>Kul ₹ ${billInr(m.total)}</b> • ${m.rows.length} customers</p>${raWarnHtml(m)}</div>
+      <p class="font-bold text-sm mb-1">Abstract of Payment</p>
+      <div class="bg-white rounded-lg shadow overflow-x-auto mb-3"><table class="text-[10px] w-full"><thead class="bg-[#e5f4ec]"><tr>${["SOR","Kaam","Milestone","Rate","Pichla qty","Is bill qty","Kul qty","Is bill ₹","Kul ₹"].map(th).join("")}</tr></thead><tbody>
+        ${keys.map(k=>{ const a = m.abs[k], p = m.prev[k] || {qty:0, amount:0}, it = LOA_RATE[a.code] || {desc:a.code};
+          return `<tr>${td(a.code,"whitespace-nowrap")}${td(wzEsc(it.desc))}${td(raKindTxt(a.code,a.kind),"whitespace-nowrap")}${td(billInr(a.rate),"text-right")}${td(p.qty,"text-right")}${td(a.qty,"text-right font-bold")}${td(bround(p.qty+a.qty),"text-right")}${td(billInr(a.amount),"text-right font-bold")}${td(billInr(bround(p.amount+a.amount)),"text-right")}</tr>`; }).join("") || `<tr><td colspan="9" class="p-2 text-gray-400">Is bill me koi kaam nahi.</td></tr>`}
+      </tbody></table></div>
+      <p class="font-bold text-sm mb-1">Customer-wise (${m.rows.length})</p>
+      <div class="space-y-1 mb-3">${m.rows.map((r,i)=>`<details class="bg-white rounded shadow px-2 py-1"><summary class="flex justify-between gap-2"><span>${i+1}. <b>${wzEsc(r.c.name||"")}</b> • BP ${wzEsc(r.c.bpNo||"—")} • ${[...new Set(r.lines.map(l=>RA_STAGE_LABEL[raStageOf(l.code)]))].join(" + ")}</span><b class="whitespace-nowrap">₹ ${billInr(r.total)}</b></summary>
+        <table class="text-[10px] w-full mt-1">${r.lines.map(l=>`<tr><td class="pr-1 whitespace-nowrap">${l.code}</td><td>${raKindTxt(l.code,l.kind)}</td><td class="text-right whitespace-nowrap">${l.qty} × ${billInr(l.rate)}</td><td class="text-right whitespace-nowrap">₹ ${billInr(l.amount)}</td></tr>`).join("")}</table></details>`).join("")}</div>
+      ${m.draft && m.skip.length ? `<details class="bg-white rounded-lg shadow p-2 mb-3"><summary class="font-bold">⏳ Kaam hua par is bill me nahi (${m.skip.length})</summary>${m.skip.map(x=>`<p class="border-b py-1"><b>${wzEsc(x.c.name||"")}</b> — ${wzEsc(x.why.join("; "))}</p>`).join("")}</details>` : ""}
+      ${m.draft && m.over.length ? `<p class="text-orange-600 mb-3">⚠ ${m.over.length} jagah master sheet ki quantity pichle bill se kam hai: ${m.over.slice(0,6).map(o=>`${wzEsc(o.c.name||"")} ${o.code} (${o.more} kam)`).join(", ")}</p>` : ""}
+      <button onclick="raExcel(${m.draft?"null":`'${m.no}'`})" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Bill Excel (Invoice, MOP, AOP, AOM, measurement sheets, JMR, RECCO, checklist)</button>
+      ${m.draft ? `<button onclick="raSubmit()" class="w-full bg-[#1a237e] text-white font-bold py-3 rounded-lg">✅ Updated to GAIL — ${m.no} lock karein</button>` : ""}
+    </div>`;
+}
+function raPreviewClose(){ const ov = document.getElementById("raPreviewOverlay"); if(ov) ov.remove(); }
+
+/* ---- invoice details (once) ---- */
+function raInvOpen(){
+  let ov = document.getElementById("custEditOverlay");
+  if(!ov){ ov = document.createElement("div"); ov.id = "custEditOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.45);overflow-y:auto;padding:16px;";
+  ov.innerHTML = `<div class="bg-white rounded-lg shadow max-w-md mx-auto p-4"><div class="flex items-center justify-between mb-2"><h2 class="font-bold text-gray-800">🧾 Invoice ki details</h2><button onclick="custEditClose()" class="text-gray-500 text-xl font-bold px-2">✕</button></div>
+    <p class="text-[11px] text-gray-500 mb-3">Ek baar bharein — har RA bill ke Tax Invoice aur MOP par chhapta hai. GSTIN "06" (Haryana) se shuru ho to CGST+SGST, warna IGST lagta hai.</p>
+    ${RA_INV_FIELDS.map(f=>`<label class="ff-label">${f.l}</label>${f.t==="area" ? `<textarea id="inv_${f.k}" rows="2" class="ff-input mb-2">${wzEsc(invCfg[f.k]||"")}</textarea>` : `<input id="inv_${f.k}" ${f.n?'type="number" step="0.01"':""} class="ff-input mb-2" value="${wzEsc(invCfg[f.k]===undefined?"":invCfg[f.k])}">`}`).join("")}
+    <button onclick="raInvSave()" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg">Save</button></div>`;
+}
+async function raInvSave(){
+  const o = {}; RA_INV_FIELDS.forEach(f=>{ const el = document.getElementById("inv_"+f.k); o[f.k] = el ? (f.n ? (Number(el.value)||0) : el.value.trim()) : ""; });
+  try{ if(db) await db.doc("settings/invoiceCfg").set(o); invCfg = Object.assign({}, invCfg, o); custEditClose(); showToast("Invoice details save ho gayi"); renderMain(); }
+  catch(e){ console.error(e); alert("Save nahi hua"); }
+}
+
+/* ---- the admin screen ---- */
+function renderRaBill(){
+  if(!currentUser || currentUser.role!=="admin") return `<p class="text-center text-gray-400 mt-10">Sirf admin ke liye.</p>`;
+  const d = raDraft(), subs = raBills.filter(b=>b.status==="submitted"), saving = raBills.filter(b=>b.status!=="submitted");
+  const cum = bround(subs.reduce((t,b)=>t+(Number(b.sub)||0),0));
+  const chkRow = (key, txt)=>`<label class="flex items-start gap-2 py-1 border-b text-[11px]"><input type="checkbox" class="mt-0.5" ${raCfg.chk && raCfg.chk[key] ? "checked" : ""} onchange="raChk('${key}', this.checked)"> <span>${wzEsc(txt)}</span></label>`;
+  return `<button onclick="setView('billing')" class="text-sm text-[#0D904F] font-bold mb-2">← Monetize / Billing</button>
+    <h2 class="font-bold text-gray-800 mb-1">🧾 RA Bill — GAIL ko bill</h2>
+    <p class="text-xs text-gray-500 mb-3">Master sheet se apne aap banta hai. Jis customer ka jo kaam (aur jo milestone) ek bill me "Updated to GAIL" ho gaya, wo dobara nahi aata; baaki kaam jab poora hoga, agle bill me khud aa jayega.</p>
+    ${saving.length ? `<p class="bg-orange-50 text-orange-700 text-xs rounded p-2 mb-3">⚠ ${saving.map(b=>b.no).join(", ")} poora save nahi hua tha — draft khol kar dobara "Updated to GAIL" dabayein.</p>` : ""}
+    <div class="bg-white rounded-lg shadow p-3 mb-3">
+      <div class="flex items-center justify-between"><p class="font-bold text-gray-800">Agla bill: ${d.no} <span class="text-[11px] text-gray-400 font-normal">(draft)</span></p><button onclick="raInvOpen()" class="text-[11px] text-[#8430CE] font-bold">🧾 Invoice details ${invCfg.gstin ? "✓" : "— bharni hain"}</button></div>
+      <div class="grid grid-cols-2 gap-2 mt-2">
+        <div><label class="ff-label">Invoice date</label><input type="date" class="ff-input text-xs" value="${d.invoiceDate}" onchange="raSet('invoiceDate', this.value)"></div>
+        <div><label class="ff-label">Kaam ki tareekh tak (as-on)</label><input type="date" class="ff-input text-xs" value="${billCfg.asOn}" onchange="billSet('asOn', this.value)"></div>
+        <div><label class="ff-label">Measurement period se</label><input type="date" class="ff-input text-xs" value="${d.periodFrom}" onchange="raSet('periodFrom', this.value)"></div>
+        <label class="flex items-end gap-2 text-xs pb-2"><input type="checkbox" ${raCfg.final?"checked":""} onchange="raSet('final', this.checked)"> Final bill (closure ka 5% bhi)</label>
+      </div>
+      <div class="grid grid-cols-3 gap-2 mt-2 text-center">
+        <div class="bg-gray-50 rounded p-2"><p class="font-bold">${d.rows.length}</p><p class="text-[10px] text-gray-500">customers</p></div>
+        <div class="bg-gray-50 rounded p-2"><p class="font-bold">₹ ${billInr(d.sub)}</p><p class="text-[10px] text-gray-500">GST se pehle</p></div>
+        <div class="bg-green-50 rounded p-2"><p class="font-bold text-[#0D904F]">₹ ${billInr(d.total)}</p><p class="text-[10px] text-gray-500">GST ${billCfg.gst}% ke saath</p></div>
+      </div>
+      <p class="text-[10px] text-gray-500 mt-2">GI pipe supply: ½" ${billCfg.gi12==="contractor"?"contractor":"owner free issue"}, ¾" ${billCfg.gi34==="contractor"?"contractor":"owner free issue"} (Monetize screen se badlein) • NOC milestone checklist point 2 se • ${d.skip.length} customers ka kaam hua par document adhoora</p>
+      ${raWarnHtml(d)}
+      <button onclick="raPreviewOpen(null)" class="w-full bg-gray-700 text-white font-bold py-2.5 rounded-lg mt-3">👁 Bill preview</button>
+      <button onclick="raExcel(null)" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mt-2">⬇ Draft bill Excel</button>
+      <button onclick="raSubmit()" ${d.rows.length?"":"disabled"} class="w-full ${d.rows.length?"bg-[#1a237e] text-white":"bg-gray-200 text-gray-400"} font-bold py-3 rounded-lg mt-2">✅ Updated to GAIL — ${d.no} lock karein</button>
+    </div>
+    ${(()=>{ const hold = raCfg.hold||[], codes = [...new Set([...Object.values(d.abs).map(a=>a.code), ...d.held.map(x=>x.code), ...hold])].sort((a,b)=>raLoaIdx(a)-raLoaIdx(b));
+      const amt = code=>bround(Object.values(d.abs).filter(a=>a.code===code).reduce((t,a)=>t+a.amount,0));
+      return `<details class="bg-white rounded-lg shadow p-3 mb-3" ${hold.length?"open":""}><summary class="font-bold text-sm text-gray-800">⏸ Item hold — bill me na lein (${hold.length})</summary>
+        <p class="text-[11px] text-gray-500 my-2">Jis item ka paisa abhi GAIL se nahi lena (jaise LOA quantity se zyada aur approval baaki) use tick karein. Hold wala kaam kisi bill me lock nahi hota — tick hatate hi agle bill me apne aap aa jayega.</p>
+        ${codes.map(code=>{ const on = hold.includes(code), h = d.held.find(x=>x.code===code), dv = d.dev.find(x=>x.code===code);
+          return `<label class="flex items-start gap-2 py-1 border-b text-[11px]"><input type="checkbox" class="mt-0.5" ${on?"checked":""} onchange="raHold('${code}', this.checked)"> <span><b>${code}</b> ${wzEsc((LOA_RATE[code]||{}).desc||"")} — ${on ? `<span class="text-orange-700">hold: ₹ ${billInr(h?h.amount:0)}</span>` : `is bill me ₹ ${billInr(amt(code))}`}${dv ? ` <span class="text-orange-700">(LOA ${dv.loa}, ab tak ${dv.cum})</span>` : ""}</span></label>`; }).join("") || `<p class="text-[11px] text-gray-400">Is draft me koi item nahi.</p>`}</details>`; })()}
+    <details class="bg-white rounded-lg shadow p-3 mb-3"><summary class="font-bold text-sm text-gray-800">☑ RA bill ke documents (check list)</summary>
+      <p class="text-[11px] font-bold mt-2">(A) Bill specific</p>${RA_BILL_CHK.A.map((t,i)=>chkRow("A"+(i+1), (i+1)+". "+t)).join("")}
+      <p class="text-[11px] font-bold mt-2">(B) General</p>${RA_BILL_CHK.B.map((t,i)=>chkRow("B"+(i+1), (i+1)+". "+t)).join("")}</details>
+    <h3 class="font-bold text-sm text-gray-800 mb-1">GAIL ko gaye bills (${subs.length}) — ab tak ₹ ${billInr(cum)} + GST</h3>
+    <div class="space-y-2 mb-6">${subs.slice().reverse().map((b,i)=>`<div class="bg-white rounded-lg shadow p-2 text-xs">
+        <div class="flex justify-between"><b>${wzEsc(b.no)}</b><b>₹ ${billInr(b.total)}</b></div>
+        <p class="text-[10px] text-gray-500">Invoice ${wzEsc(b.invoiceNo||"")} • ${fpDateD(b.invoiceDate)} • ${(b.customers||[]).length} customers • period ${fpDateD(b.periodFrom)}–${fpDateD(b.periodTo)}${b.final?" • FINAL":""}</p>
+        <div class="flex gap-3 mt-1"><button onclick="raPreviewOpen('${b.no}')" class="text-[#1a237e] font-bold">👁 Preview</button><button onclick="raExcel('${b.no}')" class="text-[#0D904F] font-bold">⬇ Excel</button>${i===0?`<button onclick="raCancel('${b.no}')" class="text-red-600 font-bold ml-auto">✕ Cancel</button>`:""}</div></div>`).join("") || '<p class="text-xs text-gray-400">Abhi koi bill GAIL ko nahi gaya.</p>'}</div>`;
+}
+
+/* ---- Excel in the GAIL / Resonance RA-bill format ---- */
+function inrWords(n){
+  const a = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+  const b = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const two = x=>x<20 ? a[x] : b[Math.floor(x/10)] + (x%10 ? " "+a[x%10] : "");
+  const three = x=>(x>=100 ? a[Math.floor(x/100)]+" Hundred"+(x%100?" ":"") : "") + (x%100 ? two(x%100) : "");
+  const w = x=>{ if(!x) return "Zero"; const parts = []; const cr = Math.floor(x/1e7); x %= 1e7; const la = Math.floor(x/1e5); x %= 1e5; const th = Math.floor(x/1e3); x %= 1e3;
+    if(cr) parts.push(w(cr)+" Crore"); if(la) parts.push(two(la)+" Lakh"); if(th) parts.push(two(th)+" Thousand"); if(x) parts.push(three(x)); return parts.join(" "); };
+  const r = Math.round((Number(n)||0)*100), rs = Math.floor(r/100), ps = r%100;
+  return "Rupees " + w(rs) + (ps ? " and " + two(ps) + " Paise" : "") + " Only";
+}
+async function raExcel(no){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const m = no ? raBillModel(no) : raDraft(); if(!m) return;
+  const t = showToast("Bill Excel ban rahi hai...");
+  try{ await ensureXlsxLib(); await saveXlsxFile(raWorkbook(m), `${m.no}_${m.draft?"DRAFT_":""}${LOA_INFO.no}_${m.invoiceDate||localISODate()}.xlsx`); }
+  catch(e){ console.error(e); alert("Bill Excel nahi ban payi: "+(e.message||e)); }
+  hideToast(t);
+}
+function raWorkbook(m){
+  const wb = XLSX.utils.book_new();
+  const sheet = (name, aoa, widths)=>{ const ws = XLSX.utils.aoa_to_sheet(aoa); if(widths) ws["!cols"] = widths.map(w=>({wch:w})); XLSX.utils.book_append_sheet(wb, ws, name); };
+  const D = x=>fpDateD(x) || "", inv = invCfg, intra = String(inv.gstin||"").slice(0,2)==="06";
+  const prevSub = bround(Object.values(m.prev).reduce((t,p)=>t+p.amount,0)), upSub = bround(prevSub+m.sub);
+  const g = x=>bround(x*m.gstPct/100), itT = x=>bround(x*(Number(inv.itTds)||0)/100), gT = x=>bround(x*(Number(inv.gstTds)||0)/100);
+  const head = [["CONTRACTOR NAME : M/S "+FP_CONTRACTOR], ["WORK : LMC works for DPNG connections — GAIL Gas CGD network, Sonipat GA (walk-in)"], ["LOA NO. : "+LOA_INFO.ref+" DATED "+LOA_INFO.date],
+    ["FOA NO. : "+LOA_INFO.foa], ["VENDOR CODE : "+LOA_INFO.vendorCode+"    BILL NO : "+m.no+"    INVOICE NO : "+m.invoiceNo], ["MEASUREMENT PERIOD : "+D(m.periodFrom)+" TO "+D(m.periodTo)+"    BILL DATE : "+D(m.invoiceDate)+(m.draft?"    (DRAFT)":"")]];
+  // 1. submission letter
+  sheet("SUBMISSION", [["To,"],["The RCM"],["M/s Resonance Energy Pvt. Ltd."],["GAIL Gas Limited — CGD Sonipat"],[],["Sub: Submission of RA Bill "+m.no+" (Invoice No. "+m.invoiceNo+")"],
+    ["LOA: "+LOA_INFO.ref+" dated "+LOA_INFO.date],["FOA: "+LOA_INFO.foa],[],
+    ["We hereby submit our invoice no. "+m.invoiceNo+" for Rs. "+billInr(m.total)+" ("+inrWords(m.total)+") for the work done during "+D(m.periodFrom)+" to "+D(m.periodTo)+"."],[],
+    ["You are requested to kindly release our payment."],[],["Thank you"],[],["For M/s "+FP_CONTRACTOR],[],[],["Authorized Signatory"]], [110]);
+  // 2. tax invoice
+  const taxRows = intra ? [["","","","CGST @ "+(m.gstPct/2)+"%","",bround(m.gst/2)],["","","","SGST @ "+(m.gstPct/2)+"%","",bround(m.gst-bround(m.gst/2))]] : [["","","","IGST @ "+m.gstPct+"%","",m.gst]];
+  sheet("TAX INVOICE", [["TAX INVOICE"],["M/S "+FP_CONTRACTOR,"","","Invoice No.",m.invoiceNo],["Address: "+(inv.address||""),"","","Invoice Date",D(m.invoiceDate)],
+    ["GSTIN: "+(inv.gstin||""),"","","LOA No. & Date",LOA_INFO.ref+" dt. "+LOA_INFO.date],["PAN: "+(inv.pan||""),"","","FOA No. & Date",LOA_INFO.foa],["Mobile: "+(inv.phone||""),"","","RFQ No.",LOA_INFO.rfq],
+    ["Email: "+(inv.email||""),"","","Vendor Code",LOA_INFO.vendorCode],[],["BILL TO / SHIP TO","","","",""],["GAIL Gas Limited — City Gate Sonepat (Plant 9004)"],["GSTIN: "+LOA_INFO.gailGstin],["State: Haryana   Code: 06   Place of supply: Haryana"],[],
+    ["SL. NO.","DESCRIPTION","SAC","","","AMOUNT (₹)"],[1,"LMC works for DPNG connections, Sonipat GA — RA bill "+m.no+(m.final?" (FINAL)":""),(inv.sac||""),"","",m.sub],[],
+    ["","","","TAXABLE AMOUNT","",m.sub], ...taxRows, ["","","","PAYABLE AMOUNT","",m.total],["Amount (in words): "+inrWords(m.total)],[],
+    ["Bank: "+(inv.bank||"")+"   A/c No.: "+(inv.account||"")+"   IFSC: "+(inv.ifsc||"")+"   Branch: "+(inv.branch||"")],[],["For M/S "+FP_CONTRACTOR,"","For Resonance Energy (PMC)","","","For GAIL Gas Limited"],["Sign","","Sign","","","Sign"]], [40,52,22,18,4,16]);
+  // 3. memorandum of payment
+  const mopRow = (sl, txt, f)=>[sl, txt, f(prevSub), f(m.sub), f(upSub)];
+  sheet("MOP", [["GAIL Gas Limited — MEMORANDUM OF PAYMENT (MOP)"],[],["Name of Project","LMC works for DPNG connections, Sonipat GA"],["Name of the Agency","M/S "+FP_CONTRACTOR],["LOA No. & Date",LOA_INFO.ref+" dt. "+LOA_INFO.date],
+    ["FOA No. & Date",LOA_INFO.foa],["Contractual completion date",D(LOA_INFO.validTill)],["Contract value excl. GST",LOA_INFO.value],["PAN",inv.pan||""],["Vendor code",LOA_INFO.vendorCode],[],
+    ["Sl","Description","Upto previous bill","In this bill","Upto date"],
+    mopRow(1,"Value of work done excluding GST",x=>x), mopRow(2,"Value of extra work done excluding GST",()=>0), mopRow(3,"Total amount of work done (excl. GST)",x=>x),
+    ...(intra ? [mopRow(4,"CGST ("+(m.gstPct/2)+"%)",x=>bround(g(x)/2)), mopRow(5,"SGST ("+(m.gstPct/2)+"%)",x=>bround(g(x)-bround(g(x)/2)))] : [mopRow(4,"IGST ("+m.gstPct+"%)",g)]),
+    mopRow(6,"Total work done value including GST",x=>bround(x+g(x))), mopRow(7,"Recovery — Income tax @ "+(Number(inv.itTds)||0)+"%",itT), mopRow(8,"GST TDS @ "+(Number(inv.gstTds)||0)+"%",gT),
+    mopRow(9,"Total recovery",x=>bround(itT(x)+gT(x))), mopRow(10,"Net payable amount",x=>bround(x+g(x)-itT(x)-gT(x))),
+    ["Net amount payable (in words): "+inrWords(bround(m.sub+g(m.sub)-itT(m.sub)-gT(m.sub)))],[],["CERTIFIED THAT:"],[1,"This bill is not referred earlier."],[2,"The work has been executed satisfactorily as per terms & conditions of the LOA."],[3,"100% measurements have been checked."],[],
+    ["For M/S "+FP_CONTRACTOR,"","For Resonance Energy","","For GAIL Gas"]], [8,48,18,16,16]);
+  // 4/5. abstract of payment & of measurement — every LOA item with its milestones (upto previous / this bill / cumulative)
+  const aop = [["ABSTRACT OF PAYMENT"], ...head, [], ["Sl.","Item description","Item code","UOM","Quantity (LOA)","Unit rate (excl. GST)","Total amount (excl. GST)","% of payment","Payable rate","Upto previous qty","In this bill qty","Cumm. qty","Upto previous amt","In this bill amt","Cumm. amt","Remarks"]];
+  const aom = [["ABSTRACT OF MEASUREMENT"], ...head, [], ["Sl.","Item description","Item code","UOM","Quantity (LOA)","Unit rate (excl. GST)","Total amount (excl. GST)","% of payment","Payable rate","Upto previous qty","In this bill qty","Cumm. qty","Remarks"]];
+  let tp = 0, tt = 0;
+  LOA_SOR.forEach((it,n)=>{
+    const dv = (m.dev||[]).find(x=>x.code===it.code), rem = dv ? "Exceeds LOA qty by "+dv.excess+" — deviation approval required" : "";
+    aop.push([n+1, it.desc, it.code, it.unit, it.qty, it.rate, bround(it.qty*it.rate), "", "", "", "", "", "", "", "", rem]); aom.push([n+1, it.desc, it.code, it.unit, it.qty, it.rate, bround(it.qty*it.rate), "", "", "", "", "", rem]);
+    it.mk.forEach((kind,i)=>{ const key = it.code+"|"+kind, a = m.abs[key] || {qty:0, amount:0}, p = m.prev[key] || {qty:0, amount:0};
+      tp = bround(tp+p.amount); tt = bround(tt+a.amount);
+      const lab = Math.round(it.ms[i]/it.rate*100)+"% — "+LOA_MS[kind];
+      aop.push(["", lab, "", "", "", "", "", Math.round(it.ms[i]/it.rate*100)/100, it.ms[i], p.qty||"", a.qty||"", bround(p.qty+a.qty)||"", p.amount||"", a.amount||"", bround(p.amount+a.amount)||"", ""]);
+      aom.push(["", lab, "", "", "", "", "", Math.round(it.ms[i]/it.rate*100)/100, it.ms[i], p.qty||"", a.qty||"", bround(p.qty+a.qty)||"", ""]); });
+  });
+  aop.push(["","TOTAL VALUE (EXCLUDING GST)","","","","",LOA_INFO.value,"","","","","",tp,tt,bround(tp+tt),""],[],["M/S "+FP_CONTRACTOR,"","","","Resonance Energy (PMC)","","","","","GAIL Gas Limited"]);
+  aom.push([],["M/S "+FP_CONTRACTOR,"","","","Resonance Energy (PMC)","","","","","GAIL Gas Limited"]);
+  sheet("AOP", aop, [5,58,9,7,9,10,12,8,10,10,10,10,12,12,12,10]);
+  sheet("AOM", aom, [5,58,9,7,9,10,12,8,10,10,10,10,10]);
+  sheet("DEVIATION", [["DEVIATION STATEMENT — quantities beyond LOA (up to bill "+m.no+")"], ...head, [],
+    ["Sl.","Item code","Item description","UOM","LOA qty","Executed qty up to this bill","Excess qty","Unit rate (₹)","Excess value (₹)","Remarks"],
+    ...((m.dev||[]).length ? m.dev.map((x,i)=>{ const it = LOA_RATE[x.code]||{}; return [i+1, x.code, it.desc||"", it.unit||"", x.loa, x.cum, x.excess, it.rate||0, bround(x.excess*(Number(it.rate)||0)), "Deviation approval required"]; })
+      : [["","","No item in this bill exceeds its LOA quantity."]])], [5,9,58,8,9,14,10,10,12,26]);
+  // 6-9. measurement sheets (customers in this bill)
+  const R = m.rows, rowOf = c=>({sl:slRowFor(c)||[], gi:giRowFor(c)||[], ng:ngRowFor(c)||[], rs:c.restRow||[]});
+  const claim = (r, st)=>{ const ls = r.lines.filter(l=>raStageOf(l.code)===st); return ls.length ? [...new Set(ls.map(l=>raPct(l.code,l.kind)+"% "+LOA_MS[l.kind]))].join(", ") : ""; };
+  const has = (r, st)=>r.lines.some(l=>raStageOf(l.code)===st);
+  const n0 = v=>{ const x = Number(v); return x ? Math.round(x*100)/100 : ""; };
+  const slR = R.filter(r=>has(r,"SL"));
+  sheet("MDPE LAYING", [["Measurement sheet — laying of MDPE service line, testing & commissioning"], ...head, [],
+    ["Sl.","BP No.","Name","Area","Mobile","IR No.","Lat","Long","Laying date","Testing date","Commissioning date","20 MM up to 4 m (Nos)","20 MM beyond 4 m (m)","32 MM (m)","Total 20 MM (m)","Claimed in this bill"],
+    ...slR.map((r,i)=>{ const x = rowOf(r.c); return [i+1, r.c.bpNo||"", r.c.name||"", r.c.area||"", r.c.phone||"", "IR-"+(r.c.sn||i+1), x.sl[3]||"", x.sl[4]||"", D(x.sl[1]), D(x.sl[1]), D(x.ng[8]||x.ng[0]), 1, n0(Math.max(0, bnum(x.sl,7)-4)), n0(x.sl[6]), n0(x.sl[7]), claim(r,"SL")]; }),
+    ["","","","","","","","","","","TOTAL", slR.length, n0(slR.reduce((t,r)=>t+Math.max(0,bnum(rowOf(r.c).sl,7)-4),0)), n0(slR.reduce((t,r)=>t+bnum(rowOf(r.c).sl,6),0)), n0(slR.reduce((t,r)=>t+bnum(rowOf(r.c).sl,7),0))]], [5,13,22,16,12,8,10,10,11,11,12,10,10,9,10,30]);
+  const giR = R.filter(r=>has(r,"GI"));
+  const giCols = [["½\" GI (m)",x=>n0(x.gi[5])],["¾\" GI (m)",x=>n0(x.gi[6])],["Meter",x=>(x.gi[2]?1:"")],["Regulator 4 bar×21 mbar",x=>/INSTAL|REPLAC/i.test(String(x.gi[38]||""))?1:""],
+    ["IV ½\"",x=>n0(x.gi[27])],["IV ¾\"",x=>n0(x.gi[28])],["AV ½\"",x=>n0(x.gi[25])],["Warning plate",x=>/^done$/i.test(String(x.gi[41]||""))?1:""]];
+  sheet("GI INSTALLATION", [["Measurement sheet — GI installation & commissioning"], ...head, [],
+    ["Sl.","BP No.","Customer name","Address","Area","Mobile","IR No.","GI installation date","GI testing date","RFC / gas-in date","Meter No.", ...giCols.map(x=>x[0]), "Claimed in this bill"],
+    ...giR.map((r,i)=>{ const x = rowOf(r.c); return [i+1, r.c.bpNo||"", r.c.name||"", r.c.address||"", r.c.area||"", r.c.phone||"", "IR-"+(r.c.sn||i+1), D(x.gi[1]), D(x.gi[47]||x.gi[1]), D(x.ng[8]||x.ng[0]), r.c.meterSerialNumber||"", ...giCols.map(cc=>cc[1](x)), claim(r,"GI")]; }),
+    ["","","","","","","","","","","TOTAL", ...giCols.map(cc=>n0(giR.reduce((t,r)=>t+(Number(cc[1](rowOf(r.c)))||0),0))), ""]], [5,13,22,26,14,12,8,11,11,11,13,9,9,7,10,7,7,7,8,30]);
+  const ngR = R.filter(r=>has(r,"NG"));
+  sheet("CONVERSION JMR", [["Measurement sheet — domestic conversion, JMR"], ...head, [],
+    ["Sl.","BP No.","JMR No.","Name","Society / address","Area","Mobile","Date of conversion","Meter No.","Meter reading (IMR)","Meter make","Lat","Long","Burners","Domestic conversion (Nos)","Claimed in this bill"],
+    ...ngR.map((r,i)=>{ const x = rowOf(r.c), geo = r.c.wizArrivalGeo || r.c.geotag || {}; return [i+1, r.c.bpNo||"", x.ng[12]||String(i+1).padStart(2,"0"), r.c.name||"", r.c.address||"", r.c.area||"", r.c.phone||"", D(x.ng[8]||x.ng[0]), r.c.meterSerialNumber||"", x.gi[4]===null||x.gi[4]===undefined?"":x.gi[4], x.gi[2]||r.c.meterCompany||"", geo.lat||"", geo.lng||"", n0(x.ng[3]), 1, claim(r,"NG")]; }),
+    ["","","","","","","","","","","","","","TOTAL", ngR.length, ""]], [5,13,9,22,26,14,12,11,13,10,10,10,10,8,10,30]);
+  const rsR = R.filter(r=>has(r,"REST"));
+  sheet("RESTORATION", [["Measurement sheet — restoration"], ...head, [], ["Sl.","BP No.","Name","Area","Restoration date","RCC + PCC (m)","Blocks / tiles (m)","Bricks (m)","Asphalt (m)","NOC","Claimed in this bill"],
+    ...rsR.map((r,i)=>{ const x = rowOf(r.c); return [i+1, r.c.bpNo||"", r.c.name||"", r.c.area||"", D(x.rs[2]), n0(bnum(x.rs,3)+bnum(x.rs,4)), n0(x.rs[5]), n0(x.rs[6]), n0(bnum(x.rs,7)+bnum(x.rs,8)), loaNocOk(r.c)?"YES":"", claim(r,"REST")]; })], [5,13,22,16,12,11,11,9,9,6,30]);
+  // 10. cumulative JMR summary (one line per customer, like the RA GI summary sheet)
+  sheet("JMR SUMMARY", [["CUMULATIVE JMR SUMMARY SHEET (BILL NO. "+m.no+")"], ...head, [],
+    ["Sl.","Graph No.","Name","BP No.","Area","House No.","Mobile","Meter make","Type (LHS/RHS)","Meter No.","IMR","½\" GI","¾\" GI","Total pipe","Extra pipe (>15 m)","Burner qty","Conversion","SD amount","NG date","AV ½\"","IV ½\"","IV ¾\"","Meter qty","Regulator 4 bar×21 mbar","Warning plate","Leak test date","Meter installed date","Work in this bill","Amount (₹)"],
+    ...R.map((r,i)=>{ const x = rowOf(r.c), pipe = bnum(x.gi,5)+bnum(x.gi,6), rd = (((r.c.wizTesting||{}).readings)||[])[0];
+      return [i+1, "TEJ/SNP/LMC/"+m.no+"/"+String(i+1).padStart(2,"0"), r.c.name||"", r.c.bpNo||"", r.c.area||"", r.c.houseNo||"", r.c.phone||"", x.gi[2]||r.c.meterCompany||"", x.gi[3]||"", r.c.meterSerialNumber||"", x.gi[4]===null||x.gi[4]===undefined?"":x.gi[4],
+        n0(x.gi[5]), n0(x.gi[6]), n0(pipe), n0(Math.max(0, pipe-FP_FREE_PIPE)), n0(x.ng[3]), raStatus(r.c).ngDone?1:"", r.c.sdAmount||"", D(x.ng[8]||x.ng[0]), n0(x.gi[25]), n0(x.gi[27]), n0(x.gi[28]), x.gi[2]?1:"",
+        /INSTAL|REPLAC/i.test(String(x.gi[38]||""))?1:"", /^done$/i.test(String(x.gi[41]||""))?1:"", rd ? D(String(rd.time||"").slice(0,10)) : "", D(r.c.switchOnDate||x.gi[1]),
+        [...new Set(r.lines.map(l=>RA_STAGE_LABEL[raStageOf(l.code)]))].join(" + "), r.total]; })],
+    [5,24,22,13,14,10,12,10,8,13,7,7,7,8,9,7,8,9,11,6,6,6,7,9,8,11,12,16,12]);
+  // 11. material reconciliation — material taken by technicians vs. material in the bills so far
+  const cumQ = code=>{ const it = LOA_RATE[code]; if(!it) return 0; const key = code+"|"+it.mk[0]; return bround((m.prev[key]||{qty:0}).qty + (m.abs[key]||{qty:0}).qty); };
+  const issued = re=>bround(issues.filter(x=>re.test(x.itemName||"")).reduce((t,x)=>t+(Number(x.qty)||0),0));
+  const mat = [["MDPE pipe 20 mm (m)", /MDPE.*20/i, bround(cumQ("1.1.a")*4 + cumQ("1.1.b"))], ["MDPE pipe 32 mm (m)", /MDPE.*32/i, cumQ("1.1.c")],
+    ["GI pipe ½\" (m)", /GI\s*Pipe\s*1\/2/i, bround(cumQ("7.1.1 a")+cumQ("7.1.1 b"))], ["GI pipe ¾\" (m)", /GI\s*Pipe\s*3\/4/i, bround(cumQ("7.1.1 c")+cumQ("7.1.1 d"))],
+    ["Domestic meter", /Meter/i, cumQ("7.3 a")], ["Domestic regulator (4 bar to 21 mbar)", /Regulator/i, cumQ("7.7 b")]];
+  sheet("RECCO", [["Material Reconciliation Statement"],["Client : GAIL Gas Limited"],["Consultant : Resonance Energy Pvt. Ltd."],["Contractor : M/S "+FP_CONTRACTOR],["LOA : "+LOA_INFO.ref],["Up to bill : "+m.no+"   Date : "+D(m.invoiceDate)],[],
+    ["Sr.","Material","Issued to technicians from store (A)","Consumed as per bills up to "+m.no+" (B)","Balance (A-B)","Remarks"],
+    ...mat.map((x,i)=>{ const A = issued(x[1]); return [i+1, x[0], A, x[2], bround(A-x[2]), A < x[2] ? "Store issue entry kam hai — check karein" : ""]; }),[],["Contractor's name & signature: M/S "+FP_CONTRACTOR]], [5,36,22,24,14,30]);
+  // 12. index + RA bill check list
+  const idx = ["Covering letter (submission)","Tax invoice","Memorandum of payment (MOP)","Abstract of payment (AOP)","Abstract of measurement (AOM)","Measurement sheets (MDPE laying, GI installation, conversion/JMR, restoration)","JMR summary","Material reconciliation (RECCO)","Inspection reports","Copy of LOA / FOA with SOR","PF / ESI documents","Insurance policies","GST certificate & PAN"];
+  sheet("INDEX & CHECKLIST", [["INDEX OF RA BILL "+m.no],["Contractor / vendor code : M/S "+FP_CONTRACTOR+" / "+LOA_INFO.vendorCode],["EIC : "+LOA_INFO.eic],["Billing period : "+D(m.periodFrom)+" to "+D(m.periodTo)],["W.O. / LOA : "+LOA_INFO.ref],[],
+    ["S.No.","Document name","Page No."], ...idx.map((x,i)=>[i+1, x, ""]), [],
+    ["CHECK LIST FOR RA BILL — "+m.no],["S.No.","Document description","Done (contractor)"],["(A) Bill specific points"], ...RA_BILL_CHK.A.map((x,i)=>[i+1, x, m.chk["A"+(i+1)] ? "YES" : ""]),
+    ["(B) General points"], ...RA_BILL_CHK.B.map((x,i)=>[i+1, x, m.chk["B"+(i+1)] ? "YES" : ""])], [7,80,16]);
+  // 13. every line of this bill
+  sheet("CUSTOMER-WISE", [["Customer-wise lines — "+m.no], [], ["S.N","Customer","BP No.","SOR","Description","Milestone","Qty","Rate (₹)","Amount (₹)"],
+    ...R.flatMap((r,i)=>r.lines.map(l=>[r.c.sn||i+1, r.c.name||"", r.c.bpNo||"", l.code, (LOA_RATE[l.code]||{}).desc||"", raKindTxt(l.code,l.kind), l.qty, l.rate, l.amount])),
+    [], ["","","","","","","","Total excl. GST", m.sub], ["","","","","","","","GST @ "+m.gstPct+"%", m.gst], ["","","","","","","","Total incl. GST", m.total]], [6,22,13,9,50,26,8,10,12]);
+  return wb;
+}
+
 /* ============ ADMIN: MASTER SHEET (live — common data + every stage + technician + forms %) ============ */
 let masterQuery = "";
 function masterSetQuery(v){ masterQuery = String(v||"").trim().toLowerCase(); renderMain(); }
@@ -5634,12 +6110,12 @@ function renderMasterSheet(){
     <button onclick="exportTejasavMasterWorkbook()" class="w-full bg-[#0D904F] text-white font-bold py-2 rounded-lg mb-3 text-sm">⬇ Export (MASTER SHEET + saari sheets)</button>
     <div class="bg-white rounded-lg shadow overflow-x-auto mb-4">
       <table class="text-[11px] w-full"><thead class="bg-[#e5f4ec] text-left"><tr>
-        ${["S.N","Name","Area","BP No","Meter No","Phone","Status","SL","GI","NG","Rest.","SL tech","GI tech","NG tech","Rest. tech","MDPE (m)","GI ½\" (m)","GI ¾\" (m)","Elbow","AV / IV","Reg.","Burner","Rest. (PCC/Blk)","Forms %"].map(h=>`<th class="px-2 py-1 whitespace-nowrap">${h}</th>`).join("")}
+        ${["S.N","Name","Area","BP No","Meter No","Phone","Status","SL","GI","NG","Rest.","SL tech","GI tech","NG tech","Rest. tech","MDPE (m)","GI ½\" (m)","GI ¾\" (m)","Elbow","AV / IV","Reg.","Burner","Rest. (PCC/Blk)","Bill (RA)","Forms %"].map(h=>`<th class="px-2 py-1 whitespace-nowrap">${h}</th>`).join("")}
       </tr></thead><tbody>
       ${list.map(c=>{ const o = fpOverall(c); return `<tr onclick="openFormsPdf('${c.id}')" class="cursor-pointer">${cell(c.sn)}${cell(c.name)}${cell(c.area)}${cell(c.bpNo)}${cell(c.meterSerialNumber)}${cell(c.phone)}${cell(tejOurStatus(c))}${cell(stg(c,"slWork"))}${cell(stg(c,"giWork"))}${cell(stg(c,"ngWork"))}${cell(stg(c,"restoreWork"))}${cell(techOf(c,"SL"))}${cell(techOf(c,"GI"))}${cell(techOf(c,"NG"))}${cell(techOf(c,"REST"))}${(()=>{ const sl=slRowFor(c)||[], g=giRowFor(c)||[], ng=ngRowFor(c)||[], rs=c.restRow||[], n=v=>Number(v)||0, q=v=>v?Math.round(v*100)/100:"";
           return cell(q(n(sl[6])+n(sl[7]))) + cell(q(n(g[5])+n(g[7]))) + cell(q(n(g[6])+n(g[8]))) + cell(q(n(g[9])+n(g[10])+n(g[11])+n(g[12])+n(g[13])))
             + cell((n(g[25])+n(g[26])||n(g[27])+n(g[28])) ? `${n(g[25])+n(g[26])} / ${n(g[27])+n(g[28])}` : "") + cell(/INSTAL|REPLAC/i.test(String(g[38]||"")) ? "✓" : "")
-            + cell(q(n(ng[3]))) + cell((n(rs[4])||n(rs[5])) ? `${n(rs[4])} / ${n(rs[5])}` : ""); })()}${cell(`<b class="${o.allDone?'text-green-700':'text-orange-600'}">${o.pct}%</b> (${o.complete}/6)`)}</tr>`; }).join("")}
+            + cell(q(n(ng[3]))) + cell((n(rs[4])||n(rs[5])) ? `${n(rs[4])} / ${n(rs[5])}` : ""); })()}${cell(wzEsc(raSummary(c)))}${cell(`<b class="${o.allDone?'text-green-700':'text-orange-600'}">${o.pct}%</b> (${o.complete}/6)`)}</tr>`; }).join("")}
       </tbody></table>
     </div>`;
 }
@@ -5964,6 +6440,9 @@ async function exportTejasavMasterWorkbook(){
   list.forEach(c=>(giRowFor(c)||[]).forEach((v,j)=>{ const lab = colLabel[j+8]; const n = Number(v); if(lab && v!==null && v!=="" && typeof v!=="boolean" && !isNaN(n)) totals[lab] = (totals[lab]||0) + n; }));
   sum.push(["GI MATERIAL TOTALS"]);
   Object.entries(totals).filter(e=>e[1]>0).forEach(e=>sum.push([e[0], Math.round(e[1]*100)/100]));
+  addSheet("BILL TRACK", [["TEJASAV — BILL TRACK (RA bills to GAIL)"],[],[], ["S N.","NAME","BP NO.","AREA","SL BILL","SL BILL %","GI BILL","GI BILL %","NG BILL","NG BILL %","REST. BILL","REST. %","ALL BILLS"],
+    ...list.map(c=>{ const a = raStageClaim(c,"SL"), b = raStageClaim(c,"GI"), g = raStageClaim(c,"NG"), r = raStageClaim(c,"REST"), p = x=>x.pct ? x.pct+"%" : "";
+      return [c.sn||"", c.name||"", c.bpNo||"", c.area||"", a.bills, p(a), b.bills, p(b), g.bills, p(g), r.bills, p(r), raSummary(c)]; })], [6,22,13,16,10,8,10,8,10,8,10,8,34]);
   addSheet("SUMMARY", sum, [34,16]);
 
   saveXlsxFile(wb, `TEJASAV_MASTER_WORKBOOK_${new Date().toISOString().slice(0,10)}.xlsx`);
