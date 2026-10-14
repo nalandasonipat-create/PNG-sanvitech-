@@ -2421,6 +2421,7 @@ function ffIso(v){
 function ffNum(v){ if(v===null || v===undefined || v==="") return 0; const n = Number(v); return isNaN(n) ? 0 : n; }
 function ffStr(v){ return (v===null || v===undefined || typeof v==="boolean") ? "" : String(v); }
 function ffN(v){ const n = ffNum(v); return n ? String(Math.round(n*100)/100) : ""; }
+function ffOk(v){ const t = ffStr(v).trim(); return !!t && !/^(no|not|pending)\b/i.test(t) && /^(done|yes|ok|y)\b|pressure|checked|chacked/i.test(t); }   // "YES" / "Done" / "PRESSURE CHECKED"
 const FP_CONTRACTOR = "TEJASAV ENTERPRISES INDIA PRIVATE LIMITED";
 const FP_FREE_PIPE = 15;   // metres of GI pipe included in the connection charge
 function formAutoFill(formId, c){
@@ -2454,7 +2455,7 @@ function formAutoFill(formId, c){
   if(sl[4] !== null && sl[4] !== undefined && sl[4] !== ""){ f.longitude = ffStr(sl[4]); }
   f.vertical_pipe_length = ffN(sl[9]); f.horizontal_pipe_length = ffN(sl[10]);
   f.breaking = ffN(sl[25]);
-  const restParts = ["RCC","PCC","Blocks","Bricks","Asphalt"].map((n,i)=> ffNum(rest[3+i]) ? `${n} ${ffNum(rest[3+i])}` : "").filter(Boolean);
+  const restParts = ["RCC","PCC","Blocks","Bricks","Asphalt","Asphalting"].map((n,i)=> ffNum(rest[3+i]) ? `${n} ${ffNum(rest[3+i])}` : "").filter(Boolean);
   f.restoration = restParts.join(", ");
   const pitBits = (arr)=> arr.filter(x=>ffNum(x[1])).map(x=>`${x[0]} ${ffNum(x[1])}`).join(", ");
   f.pit1_details = pitBits([["T",sl[13]],["Reducer 63x32",sl[16]],["Reducer 32x20",sl[17]],["Total Pits",sl[23]]]) + (ffStr(sl[26]) ? `, Depth ${ffStr(sl[26])}` : "");
@@ -2480,7 +2481,7 @@ function formAutoFill(formId, c){
        "T.F(20MM)":ffN(sl[20]),"Plug(1/2\")":ffN(sl[21]),"Warning Mat":ffN(sl[30]),"NOR":ffN(sl[11]),"MOL":ffN(sl[12]),"TOTAL":ffN(ffNum(sl[6])+ffNum(sl[7]))}};
   const totLen = ffNum(sl[6]) + ffNum(sl[7]);
   tb.pipe_details = {2:{"Value":ffN(totLen) ? ffN(totLen)+" M" : ""}, 1:{"Value":[ffNum(sl[6]) ? "32 MM" : "", ffNum(sl[7]) ? "20 MM" : ""].filter(Boolean).join(" + ")},
-       8:{"Value":/done|pressure/i.test(ffStr(sl[32])) || readings.length ? "OK" : ""},
+       8:{"Value":ffOk(sl[32]) || readings.length ? "OK" : ""},
        0:{"Value":ffStr(fdv.gaugeCert)}, 3:{"Value":ffStr(fdv.testMedium)}, 4:{"Value":ffStr(fdv.testPressure)}, 5:{"Value":ffStr(fdv.holdTime)},
        6:{"Value":ffStr(fdv.gaugeMake)}, 7:{"Value":fdv.gaugeDue ? fpDateD(ffIso(fdv.gaugeDue)) : ""}};
   // Additional-expense estimate: GI pipe beyond the free 15 m is charged at Rs 350/m + 18% GST (as on the filled reference forms)
@@ -2499,8 +2500,8 @@ const FP_ORDER = ["conversion_report","expense_estimate","joint_meter","installa
 const FP_TITLE = {conversion_report:"Conversion Report", expense_estimate:"Additional Expense Estimate", joint_meter:"Joint Meter Reading Sheet", installation_report:"PNG Installation Completion Report", isometric_graph:"Isometric Graph", service_line_card:"Service Line Job Card"};
 function fpTpl(){ return window.FP_TPL_DATA || []; }   // page images live in forms-tpl.js (kept separate so index.html stays small)
 const FP_MM = 25.4/100;   // template coordinates below are in 100-dpi pixels of the A4 page (827 x 1170)
-const FP_BPX = [471,497,525,558,593,626,660,693,726,755];
-const FP_BPX6 = [0,1,2,3,4,5,6,7,8,9].map(k=>527.6+29.2*k);
+const FP_BPX = [471,499.3,529.9,560.9,592.5,625,659.7,693.5,725.2,753.8];   // B.P / mobile boxes, conversion report
+const FP_BPX6 = [528.6,557.6,586.2,614.8,643,671.2,700,734.6,769,797.6];   // B.P / mobile boxes, service line job card
 function fpDmy(iso){ const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso||""); return m ? {d:m[3], m:m[2], y:m[1]} : null; }
 function fpDate(iso){ const x = fpDmy(iso); return x ? `${x.d}/${x.m}/${x.y}` : ""; }
 function fpPhone(v){ const s = String(v||"").replace(/\D/g,""); return s.length>10 ? s.slice(-10) : s; }
@@ -2509,7 +2510,7 @@ function fpData(formId, cust){
   const d = {f:Object.assign({}, ff.fields), t:JSON.parse(JSON.stringify(ff.tables)), sig:{}, sketch:null};
   const readings = (cust.wizTesting && cust.wizTesting.readings) || [];
   const rt = r=>{ try{ return new Date(r.time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}); }catch(e){ return ""; } };
-  const rd = r=>{ try{ return new Date(r.time).toLocaleDateString("en-IN"); }catch(e){ return ""; } };
+  const rd = r=>{ try{ const t = new Date(r.time); return isNaN(t) ? "" : `${String(t.getDate()).padStart(2,"0")}/${String(t.getMonth()+1).padStart(2,"0")}/${t.getFullYear()}`; }catch(e){ return ""; } };
   if(formId==="isometric_graph"){ d.t.pressure_readings = {}; readings.slice(0,5).forEach((r,i)=>{ d.t.pressure_readings[i] = {"Time":rt(r),"PG-1":r.pg1||"","PG-2":r.pg2||"","Date":rd(r),"Remarks":""}; }); }
   if(formId==="service_line_card"){ d.t.pressure_observation = {}; readings.slice(0,5).forEach((r,i)=>{ d.t.pressure_observation[i] = {"Time":rt(r),"Reading (kg/cm2)":r.pg1||""}; }); }
   // anything the technician typed/signed/sketched in the app fills the gaps (and is the only source for signatures & sketches)
@@ -2551,71 +2552,95 @@ async function fpClean(url){
 }
 const FP_T = (x,y,s,w,sz)=>({k:"t",x,y,s,w,sz});
 const FP_C = (x,y,s,w,sz)=>({k:"t",x,y,s,w:w||60,sz:sz||8,c:true});
+/* Every position below was measured on the page images in forms-tpl.js, as drawn on the A4 page (827 x 1170 units of 1/100 inch);
+   y is the text baseline. "wipe" whites out a value that the reference form already had printed on it (old year, someone
+   else's gauge certificate, 1 / 1 / OK in the fittings row ...) so only this customer's own data shows there. */
 const FP_GI = [["Pipe(Mtrs)",158],["Elbow-E",200],["Elbow-M/F",235],["Elbow-RE",272],["Socket-Plain",318],["Socket-RS",362],["HexNipple-2\"",405],["HexNipple-3\"",440],["Tee",482],["Hole",523],["A.V",565],["I.V",605],["U/N",642],["Fl.Hose",690],["Reg.",765]];
 const fpd = v => fpHas(v) ? v : "-";                       // every unfilled box on a printed form gets a dash
 const FP_TD = (x,y,s,w,sz)=>FP_T(x,y,fpd(s),w,sz);
 const FP_CD = (x,y,s,w,sz)=>FP_C(x,y,fpd(s),w,sz);
 function fpDateD(iso){ const x = fpDmy(iso); return x ? `${x.d}-${x.m}-${x.y}` : ""; }
 const FP_COPPER = [["Pipe(Mtrs)",175],["Elbow",232],["Tee",289],["Coupler",349],["Brass Union 3/4\"",431],["Brass Union 1/2\"",514],["Brass Adapter",610],["WP",702]];
-const FP_CHK1 = [["NG Date",150],["Burners",265],["No. of Grills",365],["No. of Oven",480],["Rubber Tube Type-IV",612],["PVC Sleeve",735]];
-const FP_CHK2 = [["TF with Pedestal",150],["GI Sleeve",265],["Sand Filling",365],["Meter Clamp",480],["GI Painting",612],["Remarks",735]];
+const FP_CHK1 = [["NG Date",150],["Burners",266],["No. of Grills",370],["No. of Oven",481],["Rubber Tube Type-IV",614],["PVC Sleeve",736]];
+const FP_CHK2 = [["TF with Pedestal",150],["GI Sleeve",266],["Sand Filling",370],["Meter Clamp",481],["GI Painting",614],["Remarks",736]];
+const FP_BPX_IR = [469,496,523,555,588,623,659,693.5,726,770];          // B.P / mobile boxes, installation report
+const FP_WIPE = (x,y,w,h)=>({k:"wipe",x,y,w,h});
+const fpDots = iso=>{ const x = fpDmy(iso); return x ? `${x.d}.${x.m}.${x.y}` : ""; };
+// "Forms ki fixed details" (admin) — pressure gauge & testing values
+function fpFixed(){ return (typeof formDefaults!=="undefined" && formDefaults) || {}; }
 const FP_SPECS = {
   conversion_report(d){
     const f = d.f, c = (d.t.conversion_details||{})[0] || {}, o = [];
-    o.push(FP_T(212,340,FP_CONTRACTOR,430,8));
-    o.push(FP_T(232,372,f.contractor_name,400,8), FP_T(232,401,f.consumer_name,150));
-    o.push({k:"bp",xs:FP_BPX,y:403,s:f.bp_no,skip0:true});
-    o.push(FP_T(238,431,fpPhone(f.contact_no),140), {k:"bp",xs:FP_BPX,y:432,s:fpPhone(f.mobile||f.contact_no)});
-    o.push(FP_TD(240,457,f.address,520));
-    o.push(FP_TD(100,548,f.meter_make,140), FP_TD(255,548,f.meter_type,130), FP_TD(395,548,f.meter_number,175), FP_TD(582,548,f.initial_reading,175));
-    const cd = fpDmy(f.conversion_date); if(cd) o.push(FP_T(556,668,`${cd.d}-${cd.m}-${cd.y.slice(2)}`,75,8));
-    o.push(FP_T(442,750,f.consumer_name,160), FP_T(655,750,fpDate(f.cert_date),95));
-    o.push({k:"img",c:d.sig.consumer_sign_name,x:195,y:718,w:190,h:32});
-    o.push(FP_TD(205,886,fpDateD(c["NG Charge Date"]),90,8), FP_TD(310,886,c["No. of Burners"],100), FP_TD(672,886,c["Remarks"],100,7));
-    o.push(FP_T(210,1035,"TEJASAV",200));
+    o.push(FP_T(237,321,FP_CONTRACTOR,520,9));                                  // CONTRACTOR:- (with GAIL GAS LIMITED / REPL above it)
+    o.push(FP_T(230,351,f.contractor_name,530,9));                              // Name of Contractor:
+    o.push({k:"wrap",x:228,w:158,s:f.consumer_name,opts:[{ys:[382],sz:9,min:7},{ys:[377,389],sz:7,min:5}]}, {k:"bp",xs:FP_BPX,y:383,s:f.bp_no,skip0:true});
+    o.push(FP_T(212,412,fpPhone(f.contact_no),172), {k:"bp",xs:FP_BPX,y:412,s:fpPhone(f.mobile||f.contact_no)});
+    o.push({k:"wrap",x:243,w:520,s:fpd(f.address),opts:[{ys:[441],sz:9,min:7},{ys:[436,448],sz:7,min:5}]});
+    o.push(FP_TD(100,540,f.meter_make,145), FP_TD(255,540,f.meter_type,130), FP_TD(395,540,f.meter_number,178), FP_TD(582,540,f.initial_reading,180));
+    const cd = fpDmy(f.conversion_date); if(cd) o.push(FP_C(587,679,`${cd.d}-${cd.m}-${cd.y}`,86,9));   // "... immediately/ on ______ /"
+    o.push({k:"img",c:d.sig.consumer_sign_name,x:196,y:733,w:194,h:34});
+    o.push({k:"wrap",x:436,w:170,s:f.consumer_name,opts:[{ys:[766],sz:9,min:7},{ys:[756,766],sz:7,min:5}]}, FP_T(652,766,fpDate(f.cert_date),98));
+    // Conversion Details: the reference form's dashes are wiped so every cell shows this customer's value
+    o.push(FP_WIPE(102,896,89,25), FP_WIPE(433,896,128,25), FP_WIPE(566,896,97,25));
+    o.push(FP_CD(147,913,c["JMR No"],88), FP_CD(248,913,fpDateD(c["NG Charge Date"]),100), FP_CD(366,913,c["No. of Burners"],120), FP_CD(497,913,c["No. of Grills"],125), FP_CD(615,913,c["No. of Oven"],95));
+    o.push({k:"wrap",x:669,w:100,s:fpd(c["Remarks"]),opts:[{ys:[913],sz:8,min:7},{ys:[905,915],sz:7,min:6},{ys:[902,910,918],sz:6,min:5}]});
+    o.push(FP_T(212,1080,"TEJASAV",200));
     return o;
   },
   expense_estimate(d){
     const f = d.f, e = d.t.expenses || {}, o = [];
-    o.push(FP_TD(278,343,f.bp_no,150), FP_TD(250,366,f.customer_name,330), FP_TD(182,388,f.address,540), FP_TD(185,445,fpPhone(f.phone_no),180));
+    o.push(FP_TD(285,318,f.bp_no,150), FP_TD(240,339,f.customer_name,330));
+    o.push({k:"wrap",x:168,w:555,s:fpd(f.address),opts:[{ys:[360],sz:9,min:7.5},{ys:[360,392],xs:[168,100],ws:[555,623],sz:9,min:6}]});
+    o.push(FP_TD(180,425,fpPhone(f.phone_no),180));
     const r0 = e[0]||{}, r1 = e[1]||{}, r2 = e[2]||{};
-    o.push(FP_TD(345,614,r0["Qty(Mtrs)"],60), FP_TD(527,614,r0["Amount"],70), FP_TD(605,614,r0["Remarks"],75,7));
-    o.push(FP_TD(345,664,r1["Qty(Mtrs)"],60), FP_TD(527,664,r1["Amount"],70), FP_TD(527,722,r2["Amount"],70));
-    o.push({k:"img",c:d.sig.sign_contractor,x:98,y:915,w:150,h:38}, {k:"img",c:d.sig.sign_site_incharge,x:310,y:915,w:170,h:38}, {k:"img",c:d.sig.sign_customer,x:610,y:915,w:140,h:38});
+    o.push(FP_CD(373,616,r0["Qty(Mtrs)"],76), FP_CD(561,616,r0["Amount"],78), FP_CD(644,616,r0["Remarks"],82,7));
+    o.push(FP_CD(373,676,r1["Qty(Mtrs)"],76), FP_CD(561,676,r1["Amount"],78), FP_CD(561,734,r2["Amount"],78));
+    if(fpHas(f.agree_amount)) o.push(FP_T(477,840,f.agree_name,198), FP_T(309,861,f.agree_amount,102));   // "... customers, I ____ hereby agree to pay ... Rs ____"
+    o.push({k:"img",c:d.sig.sign_contractor,x:98,y:936,w:150,h:42}, {k:"img",c:d.sig.sign_site_incharge,x:310,y:936,w:170,h:42}, {k:"img",c:d.sig.sign_customer,x:605,y:936,w:150,h:42});
     return o;
   },
   joint_meter(d){
     const f = d.f, o = [];
-    o.push(FP_TD(215,337,f.customer_name,500));
-    o.push({k:"t",x:160,y:377,s:fpd(f.address),w:560,two:{x:100,y:410,w:620}});
-    o.push(FP_TD(282,450,f.bp_no,90), FP_TD(480,450,fpPhone(f.telephone_no),240), FP_TD(305,488,f.ready_for_conversion,300));
-    o.push(FP_TD(172,525,f.meter_no,215), FP_TD(540,525,f.initial_reading,185), FP_TD(192,561,f.meter_make,520));
-    [[140,192,f.date1],[380,430,f.date2],[612,662,f.date3]].forEach(a=>{ const x = fpDmy(a[2]); if(x){ o.push(FP_T(a[0],897,x.d,30), FP_T(a[1],897,x.m,30)); } });
-    o.push({k:"img",c:d.sig.customer_sign,x:98,y:735,w:150,h:40}, {k:"img",c:d.sig.site_incharge_sign,x:335,y:735,w:170,h:40}, {k:"img",c:d.sig.contractor_sign,x:585,y:735,w:150,h:40});
+    o.push(FP_TD(214,315,f.customer_name,505));
+    o.push({k:"wrap",x:160,w:560,s:fpd(f.address),opts:[{ys:[355],sz:9,min:7.5},{ys:[355,396],xs:[160,100],ws:[560,620],sz:9,min:6}]});
+    o.push(FP_TD(281,436,f.bp_no,94), FP_TD(478,436,fpPhone(f.telephone_no),240), FP_TD(296,477,f.ready_for_conversion,300));
+    o.push(FP_TD(170,517,f.meter_no,215), FP_TD(540,517,f.initial_reading,185), FP_TD(190,558,f.meter_make,530));
+    o.push({k:"img",c:d.sig.customer_sign,x:98,y:742,w:150,h:44}, {k:"img",c:d.sig.site_incharge_sign,x:340,y:742,w:150,h:44}, {k:"img",c:d.sig.contractor_sign,x:585,y:742,w:150,h:44});
+    // "Date: __ / __ / 2026" x 3 — day and month in the gaps; the printed year is replaced when the date is in another year
+    [[158,198,226,f.date1],[398,437,471,f.date2],[628,668,700,f.date3]].forEach(a=>{ const x = fpDmy(a[3]); if(!x) return;
+      o.push(FP_C(a[0],935,x.d,30,10), FP_C(a[1],935,x.m,30,10));
+      if(x.y!=="2026") o.push(FP_WIPE(a[2]-1,921,34,19), FP_T(a[2],936,x.y,40,10)); });
     return o;
   },
   installation_report(d){
     const f = d.f, g = d.t.gi_material || {}, k = (d.t.gi_checklist||{})[0] || {}, cu = (d.t.copper||{})[0] || {}, o = [];
     o.push(FP_T(228,191,f.contractor_name,400,8), FP_TD(702,191,f.serial_no,90));
-    o.push(FP_T(225,216,f.consumer_name,150), {k:"bp",xs:FP_BPX,y:218,s:f.bp_no,skip0:true});
-    o.push(FP_T(205,244,fpPhone(f.contact_no),170), {k:"bp",xs:FP_BPX,y:245,s:fpPhone(f.mobile||f.contact_no)});
-    o.push(FP_TD(152,271,f.address,640));
+    o.push({k:"wrap",x:225,w:155,s:f.consumer_name,opts:[{ys:[216],sz:9,min:7},{ys:[211,222],sz:7,min:5}]}, {k:"bp",xs:FP_BPX_IR,y:218,s:f.bp_no,skip0:true});
+    o.push(FP_T(205,244,fpPhone(f.contact_no),170), {k:"bp",xs:FP_BPX_IR,y:245,s:fpPhone(f.mobile||f.contact_no)});
+    o.push({k:"wrap",x:152,w:640,s:fpd(f.address),opts:[{ys:[271],sz:9,min:7},{ys:[265,276],sz:7,min:5}]});
     o.push(FP_TD(88,360,f.meter_make,160), FP_TD(262,360,f.meter_type,120), FP_TD(392,360,f.meter_number,185), FP_TD(592,360,f.initial_reading,190));
     [0,1].forEach(r=>{ const row = g[r]||{}; FP_GI.forEach(cl=>{ o.push(FP_CD(cl[1],458+24*r,row[cl[0]],34,8)); }); });
     FP_COPPER.forEach(cl=>o.push(FP_CD(cl[1],612,cu[cl[0]],60,8)));
     o.push(FP_T(150,711,"TEJASAV",200));
-    const cd = fpDmy(f.conversion_date); if(cd) o.push(FP_T(560,790,`${cd.d}-${cd.m}`,50,8));
-    o.push(FP_T(375,836,f.consumer_name,170));
-    const ct = fpDmy(f.cert_date); if(ct) o.push(FP_T(593,836,ct.d,25,8), FP_T(630,836,ct.m,25,8), FP_T(668,836,ct.y.slice(2),25,8));
-    o.push({k:"img",c:d.sig.consumer_sign_name,x:195,y:808,w:130,h:30});
+    const cd = fpDmy(f.conversion_date); if(cd) o.push(FP_C(576,790,`${cd.d}-${cd.m}-${cd.y}`,66,8));   // "... immediately/ on ______ /"
+    o.push(FP_T(375,838,f.consumer_name,205));
+    const ct = fpDmy(f.cert_date); if(ct) o.push(FP_C(602,839,ct.d,28,9), FP_C(634,839,ct.m,26,9), FP_T(673.5,840,ct.y.slice(2),20,10));   // Date: __ / __ / 20__
+    o.push({k:"img",c:d.sig.consumer_sign_name,x:234,y:808,w:94,h:33});
     FP_CHK1.forEach(a=>o.push(FP_CD(a[1],931,a[0]==="NG Date" ? fpDateD(k[a[0]]) : k[a[0]],110,8)));
-    FP_CHK2.forEach(a=>o.push(FP_CD(a[1],974,k[a[0]],a[0]==="Remarks"?78:110,7)));
+    FP_CHK2.forEach(a=>{ if(a[0]==="Remarks") o.push({k:"wrap",x:a[1],c:true,w:86,s:fpd(k[a[0]]),opts:[{ys:[973],sz:8,min:7},{ys:[966,976],sz:6.5,min:5.5},{ys:[962,970,978],sz:5.5,min:5}]});
+      else o.push(FP_CD(a[1],973,k[a[0]],110,8)); });
     return o;
   },
   isometric_graph(d){
-    const f = d.f, p = (d.t.pipe_lengths||{})[0] || {}, pr = d.t.pressure_readings || {}, o = [];
-    o.push(FP_T(208,200,f.customer_name,245), FP_T(520,200,f.bp_no,120), FP_TD(168,220,f.address,520), FP_T(222,249,f.contractor_name||FP_CONTRACTOR,500,8));
-    o.push(FP_TD(40,317,p["1/2\" GI Pipe(Mtrs)"],200), FP_TD(270,317,p["3/4\" GI Pipe(Mtrs)"],160), FP_TD(440,317,p["1\" GI Pipe(Mtrs)"],100), FP_TD(555,317,p["12mm Cu(Mtrs)"],80), FP_TD(645,317,p["Total(Mtrs)"],150));
+    const f = d.f, p = (d.t.pipe_lengths||{})[0] || {}, pr = d.t.pressure_readings || {}, fx = fpFixed(), o = [];
+    o.push(FP_T(208,201,f.customer_name,245), FP_T(514,201,f.bp_no,130), FP_TD(166,217,f.address,520), FP_T(222,249,f.contractor_name||FP_CONTRACTOR,500,8));
+    // pipe lengths go in the value row under the headings
+    o.push(FP_CD(146,338,p["1/2\" GI Pipe(Mtrs)"],200), FP_CD(346,338,p["3/4\" GI Pipe(Mtrs)"],160), FP_CD(488,338,p["1\" GI Pipe(Mtrs)"],100), FP_CD(592,338,p["12mm Cu(Mtrs)"],80), FP_CD(722,338,p["Total(Mtrs)"],150));
+    // pressure gauge details: the reference form's gauge (old certificate, expired date) is replaced by the admin's "Forms ki fixed details"
+    o.push(FP_WIPE(34,381,224,22), FP_WIPE(406,366,136.5,15), FP_WIPE(653,366,151,15));
+    o.push(FP_TD(38,395,ffStr(fx.gaugeCert),218,9));
+    o.push({k:"wrap",x:409,w:133,s:fpd(ffStr(fx.gaugeMake)),opts:[{ys:[375],sz:9,min:7},{ys:[375,394],xs:[409,268],ws:[133,272],sz:8,min:6}]});
+    o.push(FP_TD(658,375,fpDots(ffIso(fx.gaugeDue)),144,9));
     [437,458,479,500,524].forEach((y,i)=>{ const r = pr[i] || {};
       o.push(FP_TD(40,y,r["Time"],200,8), FP_TD(270,y,r["PG-1"],120,8), FP_TD(405,y,r["PG-2"],130,8), FP_TD(553,y,r["Date"],95,8), FP_TD(660,y,r["Remarks"],130,8)); });
     o.push({k:"img",c:(d.iso ? null : d.sketch),x:34,y:557,w:770,h:532});
@@ -2623,25 +2648,63 @@ const FP_SPECS = {
     return o;
   },
   service_line_card(d){
-    const f = d.f, ft = (d.t.fittings||{})[0] || {}, pd = d.t.pipe_details || {}, ob = d.t.pressure_observation || {}, o = [];
-    o.push(FP_TD(718,129,f.serial_no,80), FP_T(140,166,f.contractor||FP_CONTRACTOR,300,8));
-    const dd = fpDmy(f.date); if(dd){ o.push(FP_T(670,167,dd.d,28), FP_T(712,167,dd.m,25)); }
-    o.push(FP_T(188,199,f.consumer_name,255), {k:"bp",xs:FP_BPX6,y:199,s:f.bp_no});
-    o.push(FP_T(172,227,fpPhone(f.contact_no),270), {k:"bp",xs:FP_BPX6,y:227,s:fpPhone(f.mobile_no||f.contact_no)});
-    o.push(FP_TD(100,253,f.address,700,8));
-    [["MDPE Pipe(20MM)",55],["Reducer(32x20MM)",112],["Saddle 63x20MM",175],["Saddle 32x20MM",232],["Tee 32MM",318],["Tee 20MM",363],["Coupler 32MM",405],["Coupler 20MM",436]].forEach(a=>o.push(FP_CD(a[1],336,ft[a[0]],40,8)));
-    o.push(FP_CD(778,282,ft["NOR"],45,8), FP_CD(778,309,ft["MOL"],45,8), FP_CD(778,337,ft["TOTAL"],45,8));
-    o.push(FP_TD(100,366,f.latitude,190), FP_TD(100,389,f.longitude,190));
+    const f = d.f, ft = (d.t.fittings||{})[0] || {}, pd = d.t.pipe_details || {}, ob = d.t.pressure_observation || {}, fx = fpFixed(), o = [];
+    const P = i=>(pd[i]||{})["Value"];
+    o.push(FP_TD(722,131,f.serial_no,80), FP_T(130,169,f.contractor||FP_CONTRACTOR,300,9));
+    o.push(FP_WIPE(746.5,155,34,17));                                          // the reference form's "2024"
+    const dd = fpDmy(f.date); if(dd) o.push(FP_C(689,169,dd.d,28,10), FP_C(723,169,dd.m,28,10), FP_T(748,169,dd.y,32,10));
+    o.push(FP_T(160,198,f.consumer_name,295), {k:"bp",xs:FP_BPX6,y:199,s:f.bp_no});
+    o.push(FP_T(172,227,fpPhone(f.contact_no),280), {k:"bp",xs:FP_BPX6,y:227,s:fpPhone(f.mobile_no||f.contact_no)});
+    o.push({k:"wrap",x:96,w:710,s:fpd(f.address),opts:[{ys:[253],sz:9,min:7},{ys:[244,255],sz:7,min:5}]});
+    // fittings row: the reference form's printed 1 (T.F.), 1 (plug) and OK (warning mat) are replaced by this customer's quantities
+    o.push(FP_WIPE(264,320,35,20.5), FP_WIPE(461,320,51,20.5), FP_WIPE(516,320,196,20.5));
+    const wm = ft["Warning Mat"];
+    [["MDPE Pipe(20MM)",56.5],["Reducer(32x20MM)",114.1],["Saddle 63x20MM",172.75],["Saddle 32x20MM",232.25],["T.F(20MM)",281.6],["Tee 32MM",320.4],["Tee 20MM",360.25],["Coupler 32MM",399.75],["Coupler 20MM",438.75],["Plug(1/2\")",486.5]]
+      .forEach(a=>o.push(FP_CD(a[1],337,ft[a[0]],36,8)));
+    o.push(FP_CD(614,337,fpHas(wm) ? wm+" M" : "",190,8));
+    o.push(FP_CD(783.1,282,ft["NOR"],50,8), FP_CD(783.1,310,ft["MOL"],50,8), FP_CD(783.1,337,ft["TOTAL"],50,8));
+    o.push(FP_TD(100,366,f.latitude,190), FP_TD(100,390,f.longitude,190));
     o.push(FP_T(318,362,f.pit1_details ? "PIT-1: "+f.pit1_details : "",485,7), FP_T(318,383,f.pit2_details ? "PIT-2: "+f.pit2_details : "",485,7));
     const info = [f.vertical_pipe_length?`V/P ${f.vertical_pipe_length} m`:"", f.horizontal_pipe_length?`H/P ${f.horizontal_pipe_length} m`:"", f.breaking?`Breaking ${f.breaking} m`:"", f.restoration?`Restoration: ${f.restoration}`:""].filter(Boolean).join("     ");
     o.push(FP_T(40,420,info,760,8));
     o.push({k:"img",c:d.sketch,x:36,y:430,w:768,h:450});
-    o.push(FP_TD(365,1019,(pd[2]||{})["Value"],70,8));
-    [966,990,1017,1043,1070].forEach((y,i)=>{ const r = ob[i]; o.push(FP_CD(700,y,r && r["Time"],85,7)); });
+    // Details table: reference-form values wiped; this job's values + the admin's gauge / testing details written instead.
+    // Testing medium / pressure / holding time stay as printed until the admin fills them in "Forms ki fixed details".
+    o.push(FP_WIPE(500.5,950.5,154,18.5), FP_WIPE(341.5,973,75,18.5), FP_WIPE(512.5,1006,57,15.5), FP_WIPE(573.5,995.5,81,26), FP_WIPE(573.5,1025.5,81,25.3), FP_WIPE(573.5,1054,81,20.3));
+    o.push(FP_TD(503,966,ffStr(fx.gaugeCert),150,9));
+    o.push(FP_CD(379.4,989,P(1),74,8));
+    if(fpHas(fx.holdTime)) o.push(FP_WIPE(573.5,973,81,18.5), FP_CD(614.3,989,ffStr(fx.holdTime),78,8));
+    o.push(FP_CD(379.4,1019,P(2),74,8));
+    o.push({k:"wrap",x:614.3,c:true,w:78,s:fpd(ffStr(fx.gaugeMake)),opts:[{ys:[1013],sz:8,min:7},{ys:[1006,1018],sz:7.5,min:5.5}]});
+    if(fpHas(fx.testMedium)) o.push(FP_WIPE(341.5,1025.5,75,25.3), FP_CD(379.4,1047,ffStr(fx.testMedium),74,8));
+    o.push(FP_CD(614.3,1047,fpDots(ffIso(fx.gaugeDue)),78,8));
+    if(fpHas(fx.testPressure)) o.push(FP_WIPE(341.5,1054,75,20.3), FP_CD(379.4,1070,ffStr(fx.testPressure),74,8));
+    o.push(FP_CD(614.3,1070,P(8),78,8));
+    // pressure observation chart: time of each observation + the line's test pressure (the printed 6.2 of the reference form is wiped)
+    const tp = fpHas(fx.testPressure) ? (String(fx.testPressure).match(/\d+(\.\d+)?/)||[""])[0] : "6.2", ok = P(8)==="OK";
+    [[966,950.5,18.5],[989,973,18.5],[1019,995.5,26],[1047,1025.5,25.3],[1070,1054,20.3]].forEach((a,i)=>{ const r = ob[i];
+      o.push(FP_WIPE(756.5,a[1],53,a[2]), FP_CD(705.6,a[0],r && r["Time"],85,7), FP_CD(783.4,a[0],(r && r["Time"] && ok) ? tp : "",50,8)); });
     o.push(FP_T(130,1137,"TEJASAV",200));
     return o;
   }
 };
+// greedy word wrap with the PDF's own font metrics; a word longer than the line is broken
+function fpWrapLines(pdf, s, wfn){
+  const out = []; let cur = "";
+  for(let w of String(s).split(" ")){
+    if(!w) continue;
+    let guard = 0;
+    while(pdf.getTextWidth(w) > wfn(out.length) && guard++ < 50){
+      if(cur){ out.push(cur); cur = ""; continue; }
+      let k = w.length - 1; while(k > 1 && pdf.getTextWidth(w.slice(0,k)) > wfn(out.length)) k--;
+      out.push(w.slice(0,k)); w = w.slice(k);
+    }
+    const n = cur ? cur + " " + w : w;
+    if(pdf.getTextWidth(n) <= wfn(out.length)) cur = n; else { if(cur) out.push(cur); cur = w; }
+  }
+  if(cur) out.push(cur);
+  return out;
+}
 function fpDraw(pdf, ops){
   pdf.setTextColor(10,25,120);
   ops.forEach(o=>{
@@ -2651,6 +2714,7 @@ function fpDraw(pdf, ops){
       pdf.addImage(o.c.url, "PNG", o.x*FP_MM + (bw-w)/2, o.y*FP_MM + (bh-h)/2, w, h);
       return;
     }
+    if(o.k==="wipe"){ pdf.setFillColor(255,255,255); pdf.rect(o.x*FP_MM, o.y*FP_MM, o.w*FP_MM, o.h*FP_MM, "F"); return; }
     if(o.k==="iso"){ if(o.plan){ isoRender(isoPdfApi(pdf), o.box, o.plan, 100/25.4); pdf.setTextColor(10,25,120); } return; }
     if(o.k==="bp"){
       const s = String(o.s||"").replace(/\D/g,"").slice(0,10);
@@ -2661,20 +2725,28 @@ function fpDraw(pdf, ops){
       }
       return;
     }
+    if(o.k==="wrap"){
+      const s = String(o.s===undefined || o.s===null ? "" : o.s).replace(/\s+/g," ").trim(); if(!s) return;
+      const put = (lines, op)=>lines.forEach((ln,i)=>pdf.text(ln, ((op.xs||[])[i]!==undefined ? op.xs[i] : o.x)*FP_MM, op.ys[i]*FP_MM, o.c ? {align:"center"} : undefined));
+      for(let oi=0; oi<o.opts.length; oi++){
+        const op = o.opts[oi], n = op.ys.length, wfn = i=>(((op.ws||[])[i]!==undefined ? op.ws[i] : o.w))*FP_MM;
+        for(let sz=op.sz; sz>=op.min-0.001; sz-=0.5){
+          pdf.setFontSize(sz);
+          const lines = fpWrapLines(pdf, s, wfn);
+          if(lines.length<=n){ put(lines, op); return; }
+          if(oi===o.opts.length-1 && sz-0.5 < op.min-0.001){   // still too long at the smallest size: cut the last line
+            const keep = lines.slice(0,n); let t = lines.slice(n-1).join(" ");
+            while(t.length>1 && pdf.getTextWidth(t+"...") > wfn(n-1)) t = t.slice(0,-1);
+            keep[n-1] = t.replace(/\s+$/,"") + "..."; put(keep, op); return;
+          }
+        }
+      }
+      return;
+    }
     const s = (o.s===undefined || o.s===null) ? "" : String(o.s);
     if(!s) return;
     let sz = o.sz || 9; pdf.setFontSize(sz);
     const wmm = (o.w||200)*FP_MM;
-    if(o.two){
-      const lines = pdf.splitTextToSize(s, wmm);
-      pdf.text(lines[0], o.x*FP_MM, o.y*FP_MM);
-      if(lines.length>1){
-        const rest = lines.slice(1).join(" ");
-        while(sz>5 && pdf.getTextWidth(rest) > o.two.w*FP_MM){ sz -= 0.5; pdf.setFontSize(sz); }
-        pdf.text(rest, o.two.x*FP_MM, o.two.y*FP_MM);
-      }
-      return;
-    }
     while(sz>5 && pdf.getTextWidth(s) > wmm){ sz -= 0.5; pdf.setFontSize(sz); }
     pdf.text(s, o.x*FP_MM, o.y*FP_MM, o.c ? {align:"center"} : undefined);
   });
@@ -5238,7 +5310,7 @@ const LOA_CHK = [ // "Check-list for Domestic Connection" (GAIL annexure) + 3 ch
 // the 3 LOA points are read from the master sheet until someone answers them by hand
 function loaChkAuto(c){
   const sl = slRowFor(c)||[], gi = giRowFor(c)||[], ng = ngRowFor(c)||[], y = b=>b ? "YES" : "";
-  const tested = /done/i.test(String(sl[32]||"")) || /PRESSURE/i.test(String(gi[44]||"")) || (((c.wizTesting||{}).readings)||[]).length>0;
+  const tested = ffOk(sl[32]) || /PRESSURE/i.test(String(gi[44]||"")) || (((c.wizTesting||{}).readings)||[]).length>0;
   const ngDone = c.ngWork==="Done" || /^done$/i.test(String(ng[2]||""));
   return {13:y(tested && /^done$/i.test(String(gi[41]||""))), 14:y(/GAS\s*IN/i.test(String(gi[46]||"")) || ngDone), 15:y(!!(gi[2] || c.meterSerialNumber) && ngDone)};
 }
@@ -5658,7 +5730,7 @@ function raStatus(c){
   return {
     bp: !!String(c.bpNo||"").trim(),
     slDone: stageDone(c,"SL") || /^done$/i.test(String(sl[2]||"")),
-    slTested: /done/i.test(String(sl[32]||"")),
+    slTested: ffOk(sl[32]),
     giDone: stageDone(c,"GI") || ((bnum(gi,5)+bnum(gi,6))>0 && giTested),
     giTested, gasIn: /GAS\s*IN/i.test(String(gi[46]||"")), ngDone, ngTested: /PRESS/i.test(String(ng[7]||"")),
     meterIn: !!(gi[2] || c.meterSerialNumber),
