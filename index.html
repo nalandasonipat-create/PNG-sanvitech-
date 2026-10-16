@@ -78,6 +78,7 @@
       <p id="loginDemoHint" class="text-xs text-gray-400 text-center mt-3">Apni Technician ID se login karein</p>
     </div>
     <button onclick="openPublicLeadForm(false)" class="w-full mt-4 bg-white/15 text-white font-bold py-3 rounded-xl text-sm">📝 Naya PNG connection chahiye? Yahan apni details bharein</button>
+    <button onclick="openPortal()" class="w-full mt-2 bg-white/15 text-white font-bold py-3 rounded-xl text-sm">📱 Apne connection ke kaam ka status dekhein</button>
   </div>
 </div>
 
@@ -773,6 +774,8 @@ async function initDb(){
   db.doc("settings/capitalisation").onSnapshot(snap=>{ if(snap && snap.exists) capConfig = snap.data(); renderMain(); }, e=>console.error(e));
   db.doc("settings/payoutRates").onSnapshot(snap=>{ if(snap && snap.exists) payoutRates = {crmRate:50, formRate:100, ...snap.data()}; renderMain(); }, e=>console.error(e));
   db.collection("leads").onSnapshot(snap=>{ leads = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("custFeedback").onSnapshot(snap=>{ custFeedbacks = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
+  db.collection("portalRequests").onSnapshot(snap=>{ portalRequests = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
   db.doc("settings/leadForm").onSnapshot(snap=>{ leadCfg = (snap && snap.exists) ? (snap.data()||{}) : {}; renderMain(); }, e=>console.error(e));
   dbReady = true;
 }
@@ -809,6 +812,7 @@ async function showApp(){
 
 /* Restore session on reload - runs at very end of script (after everything is defined) */
 function restoreSession(){
+  if(isPortalUrl()){ openPortal(); return; }                       // QR link: the customer's status page, no login
   if(isPublicFormUrl()){ openPublicLeadForm(false); return; }      // QR link: the customer's form, no login
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem("png_user")||"null"); }catch(e){}
@@ -854,7 +858,7 @@ function setupBottomNav(){
   } else if(currentUser.role === "telecaller"){
     title.textContent = t("header_telecaller");
     nav.innerHTML = `
-      <button onclick="setView('newCall')" class="nav-btn flex-1 flex flex-col items-center text-[10px] font-bold"><span class="text-lg">📞</span>${t("nav_newcall")}</button>
+      <button onclick="setView('newCall')" class="nav-btn relative flex-1 flex flex-col items-center text-[10px] font-bold"><span class="text-lg">📞</span>${t("nav_newcall")}<span id="navBadge_newcall" class="nav-badge hidden"></span></button>
       <button onclick="setView('leads')" class="nav-btn relative flex-1 flex flex-col items-center text-[10px] font-bold"><span class="text-lg">📥</span>Leads<span id="navBadge_leads" class="nav-badge hidden"></span></button>
       <button onclick="setView('tcwork')" class="nav-btn relative flex-1 flex flex-col items-center text-[10px] font-bold"><span class="text-lg">🗂</span>Assigned<span id="navBadge_tcwork" class="nav-badge hidden"></span></button>
       <button onclick="setView('tcchk')" class="nav-btn flex-1 flex flex-col items-center text-[10px] font-bold"><span class="text-lg">📋</span>Checklist</button>
@@ -898,8 +902,8 @@ function highlightNav(){
 /* ============ MAIN ROUTER ============ */
 function updateNavBadges(){
   const set = (id, n)=>{ const el = document.getElementById(id); if(!el || !el.classList) return; el.textContent = n > 99 ? "99+" : String(n||""); el.classList.toggle("hidden", !n); };
-  if(currentUser.role==="telecaller"){ set("navBadge_leads", leadNewCount()); set("navBadge_tcwork", tcMine().filter(tcNeedsReply).length); }
-  if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount() + svyNewCount());
+  if(currentUser.role==="telecaller"){ set("navBadge_leads", leadNewCount()); set("navBadge_tcwork", tcMine().filter(tcNeedsReply).length); set("navBadge_newcall", cfbNewCount()); }
+  if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount() + svyNewCount() + cfbFwdCount());
 }
 const FORM_KEEP_VIEWS = ["addCustomer", "trackA"];
 let lastMainView = null;
@@ -958,6 +962,7 @@ function renderMainInner(){
     else if(currentView==="rabill") el.innerHTML = renderRaBill();
     else if(currentView==="tcupdates") el.innerHTML = renderTcUpdates();
     else if(currentView==="surveys") el.innerHTML = renderSurveyReports();
+    else if(currentView==="cfbAdmin") el.innerHTML = renderCfbAdmin();
     else if(currentView==="leads") el.innerHTML = renderLeads();
   } else if(currentUser.role === "telecaller"){
     if(currentView==="newCall") el.innerHTML = renderTelecallerNewCall();
@@ -968,6 +973,7 @@ function renderMainInner(){
     else if(currentView==="leads") el.innerHTML = renderLeads();
     else if(currentView==="tcwork") el.innerHTML = renderTcWork();
     else if(currentView==="tcchk") el.innerHTML = renderChecklistHub();
+    else if(currentView==="cfb") el.innerHTML = renderCfbInbox();
   }
 }
 
@@ -4029,6 +4035,10 @@ function renderTelecallerNewCall(){
         <p class="font-bold text-sm">📥 QR form leads ${leadNewCount() ? `<span class="bg-red-600 text-white rounded-full px-2 text-xs">${leadNewCount()} naye</span>` : ""}</p>
         <p class="text-xs text-gray-500 mt-1">Customer ne QR scan karke jo form bhara — call / WhatsApp karke main database mein add karein. QR code bhi yahin hai.</p>
       </button>
+      <button onclick="setView('cfb')" class="w-full text-left bg-white rounded-lg shadow p-4 border-l-4 border-[#EA8600]">
+        <p class="font-bold text-sm">⭐ Customer feedback ${cfbNewCount() ? `<span class="bg-red-600 text-white rounded-full px-2 text-xs">${cfbNewCount()} naye</span>` : ""}</p>
+        <p class="text-xs text-gray-500 mt-1">Customer ne status page se jo feedback diya — call karke verify karein aur admin ko bhejein. PIN requests aur status page ka QR bhi yahin.</p>
+      </button>
       <button onclick="setView('tcwork')" class="w-full text-left bg-white rounded-lg shadow p-4 border-l-4 border-[#1a73e8]">
         <p class="font-bold text-sm">🗂 Admin ne diye customers (${tcMine().length})</p>
         <p class="text-xs text-gray-500 mt-1">Stage-wise kaam dekhein, customer se confirm karke feedback bhejein.</p>
@@ -4362,7 +4372,7 @@ function renderAdminCustomers(){
           ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
           ${srcChip(c)}${svyChip(c)}${tcChip(c)}
           ${wsBtn(c)}
-          ${svyAssignRow(c)}${tcAssignRow(c)}
+          ${svyAssignRow(c)}${tcAssignRow(c)}${portalPinBtn(c)}
           <div class="mt-2 space-y-2">
             <p class="text-[11px] text-gray-500">👷 Technician ko kaam:</p>
             <select id="assignSel_${c.id}" class="ff-input w-full text-xs">
@@ -4401,7 +4411,7 @@ function renderAdminCustomers(){
           ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
           ${srcChip(c)}${svyChip(c)}${tcChip(c)}
           ${wsBtn(c)}
-          ${tcAssignRow(c)}
+          ${tcAssignRow(c)}${portalPinBtn(c)}
           <div class="mt-2 space-y-2">
             <select id="reassignSel_${c.id}" class="ff-input w-full text-xs">
               ${activeTechnicianList().map(t=>`<option value="${t.username}" ${c.assignedTechnician===t.username?"selected":""}>${t.name}</option>`).join("")}
@@ -4515,6 +4525,7 @@ function renderAdminOverview(){
     </div>
     <button onclick="setView('master')" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-2">🗂 Master Sheet (live) + Forms status</button>
     <button onclick="setView('tcupdates')" class="w-full bg-[#1a73e8] text-white font-bold py-2.5 rounded-lg mb-2">📞 Telecaller updates ${tcUnreadCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${tcUnreadCount()} naye</span>` : ""}</button>
+    <button onclick="setView('cfbAdmin')" class="w-full bg-yellow-500 text-white font-bold py-2.5 rounded-lg mb-2">⭐ Customer feedback (Excel / PDF) ${cfbFwdCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${cfbFwdCount()} naye</span>` : ""}</button>
     <button onclick="setView('surveys')" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">🧭 Survey reports (preview / PDF) ${svyNewCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${svyNewCount()} naye</span>` : ""}</button>
     <button onclick="setView('leads')" class="w-full bg-teal-600 text-white font-bold py-2.5 rounded-lg mb-2">📥 QR connection forms + QR code ${leadNewCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${leadNewCount()} naye</span>` : ""}</button>
     <button onclick="if(confirm('Saare ' + customers.filter(c=>c.status!=='completed').length + ' chal rahe/pending customers ka bacha hua kaam technicians mein baant diya jayega. Pakka?')) autoAllotAll()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">⚡ Pending kaam technicians ko auto-allot karein</button>
@@ -4537,6 +4548,8 @@ function renderAdminEmployees(){
       <h2 class="font-bold text-gray-800 mb-3">➕ Add New Employee</h2>
       <label class="ff-label">Name</label>
       <input id="empName" class="ff-input mb-2" placeholder="Employee Name">
+      <label class="ff-label">Mobile number</label>
+      <input id="empPhone" class="ff-input mb-2" placeholder="10 digit mobile (technician ka number customer ko dikhega)" inputmode="numeric" maxlength="13">
       <label class="ff-label">Role</label>
       <select id="empRole" class="ff-input mb-3">
         <option value="technician">Technician</option>
@@ -4568,6 +4581,7 @@ function renderAdminEmployees(){
             <div>
               <p class="font-bold text-sm">${u.name} <span class="text-xs font-normal text-gray-400">(${u.username})</span></p>
               <p class="text-xs text-gray-500 capitalize">${u.role}</p>
+              <p class="text-[11px] text-gray-500">📞 ${u.phone ? wzEsc(u.phone) : "number nahi"} <button onclick="empSetPhone('${u.username}')" class="text-[#0D904F] font-bold">✏️</button></p>
             </div>
             <span class="text-xs font-bold px-2 py-1 rounded ${isActive?'bg-green-100 text-green-700':'bg-red-100 text-red-600'}">${isActive?'Active':'Login Removed'}</span>
           </div>
@@ -4590,14 +4604,17 @@ async function adminAddEmployee(){
   if(!name){ alert("Employee ka naam dalein."); return; }
   const username = generateUsername(name);
   const password = generatePassword(name);
-  const record = {username, password, role, name, active:true, createdAt:new Date().toISOString()};
+  const ephone = phone10(String((document.getElementById("empPhone")||{}).value||"").trim());
+  if(ephone && !/^\d{10}$/.test(ephone)){ alert("Mobile number 10 digit ka hona chahiye."); return; }
+  const record = {username, password, role, name, active:true, createdAt:new Date().toISOString(), ...(ephone ? {phone:ephone} : {})};
   if(db){
     try{ await db.collection("users").doc(username).set(record); }
     catch(e){ console.error(e); alert("Add karne mein error aaya, dobara try karein."); return; }
   } else {
     allUsers.push(record); renderMain();
   }
-  document.getElementById("empName").value = "";
+  document.getElementById("empName").value = ""; { const pe = document.getElementById("empPhone"); if(pe) pe.value = ""; }
+  if(ephone) await staffPublicSave(record);
   alert(`Employee add ho gaya!\n\nUsername: ${username}\nPassword: ${password}\n\nYe details employee ko de dein — dobara yahan nahi dikhengi, isliye abhi note kar lein.`);
 }
 
@@ -7706,6 +7723,7 @@ async function exportAllToExcel(){
     ...Object.fromEntries(TC_ASK.map(([k,l])=>[l, f.conf && f.conf[k] ? TC_CONF[f.conf[k]].replace(/^\S+\s/,"") : ""])), Customer_mood: TC_MOOD[f.mood]||"", Remarks:f.note||"",
     "Next call": f.next || "", "Admin confirmed": f.ackAt ? new Date(f.ackAt).toLocaleString() : "", "Admin note": f.ackNote||""}));
   if(fbRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fbRows), "Telecaller Feedback");
+  if(custFeedbacks.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([...custFeedbacks].sort((a,b)=>String(a.at||"").localeCompare(String(b.at||""))).map(cfbRow)), "Customer Feedback");
 
   saveXlsxFile(wb, `PNG_Enterprise_Full_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
   hideToast(loadingToast);
@@ -9268,6 +9286,7 @@ function tcCard(c){
     ${c.tcNote ? `<p class="text-[11px] bg-yellow-50 rounded p-1 mt-1">Admin: ${wzEsc(c.tcNote)}</p>` : ""}
     <div class="flex gap-2 my-2">${call?`<a href="${call}" class="flex-1 text-center bg-blue-600 text-white text-xs font-bold py-1.5 rounded">📞 Call</a>`:""}${wa?`<a href="${wa}" target="_blank" class="flex-1 text-center bg-green-600 text-white text-xs font-bold py-1.5 rounded">💬 WhatsApp</a>`:""}
       <button onclick="openChk('${c.id}')" class="flex-1 bg-[#1b365d] text-white text-xs font-bold py-1.5 rounded">📋 Checklist</button></div>
+    ${portalPinBtn(c)}
     <div class="bg-gray-50 rounded p-2 mb-2"><p class="text-[11px] font-bold text-gray-600 mb-1">Kaam ka status (app ke hisaab se)</p>${custStagesHtml(c)}</div>
     ${last ? `<p class="text-[11px] text-gray-600 mb-1">Aapka last reply ${fpDate(String(last.at).slice(0,10))}: <b>${wzEsc(TC_RESULT[last.result]||last.result||"")}</b>${last.note?" — "+wzEsc(last.note):""} ${last.ackAt?`<span class="text-green-700 font-bold">✓ Admin ne dekh liya${last.ackNote?": "+wzEsc(last.ackNote):""}</span>`:`<span class="text-gray-400">(admin ne abhi nahi dekha)</span>`}</p>` : ""}
     ${tcOpenFb===c.id ? tcFbForm(c) : `<button onclick="tcOpenFb='${c.id}'; renderMain()" class="w-full bg-[#0D904F] text-white text-xs font-bold py-2 rounded">✍️ Feedback / reply bhejein</button>`}
@@ -9302,8 +9321,11 @@ async function tcSendFeedback(cid){
   const f = {id:"fb"+Date.now().toString(36), at:now, by:currentUser.username, kind:c.tcTask||"status", result, conf, app, mood:g("tcfMood_"+cid), verify, note, next:g("tcfNext_"+cid), ackAt:null, ackBy:null, ackNote:""};
   const patch = {tcFeedback:[...(c.tcFeedback||[]), f].slice(-40), tcLastAt:now, tcLastResult:result,
     callLog:[...(c.callLog||[]), {at:now, by:currentUser.username, category:"Feedback", items:TC_RESULT[result], note, fbId:f.id}].slice(-60)};
+  const verified = result==="talked" && (c.tcTask!=="reverify" || verify==="ok");
+  if(verified && !c.portalPin){ patch.portalPin = genPin(); patch.portalPinAt = now; patch.portalPinBy = currentUser.username; }   // verified on the call: login PIN made
   if(!(await saveJobField(cid, patch))) return;
   tcOpenFb = null; showToast("Feedback admin ko chala gaya."); renderMain();
+  if(patch.portalPin) portalOfferPin(c, patch.portalPin);
 }
 
 /* ---------- admin: telecaller updates (confirm / acknowledge) ---------- */
@@ -9645,6 +9667,7 @@ async function leadAddToDb(id){
     track:"new_connection", issueType:"QR Form Lead", source:"qr", leadId:l.id,
     ...(currentUser.role==="telecaller" ? {telecallerId: currentUser.username} : {}),
     movedToRunningAt: now, createdAt: now, callLog: calls,
+    portalPin: genPin(), portalPinAt: now, portalPinBy: currentUser.username,      // the telecaller has verified the customer: login PIN for the status page
   };
   let newId = null;
   if(db){
@@ -9655,6 +9678,7 @@ async function leadAddToDb(id){
   leadOpen = null;
   showToast(`${d.name} customer database mein add — admin ke "Pending Assignment" mein dikhega.`);
   renderMain();
+  portalOfferPin({name:d.name, phone:d.phone}, record.portalPin);
 }
 function leadNewCount(){ return leads.filter(l=>(l.status||"new")==="new").length; }
 
@@ -9897,6 +9921,11 @@ function renderChecklistHub(){
    The picture is kept in the "media" collection in small parts (so no single record gets too big);
    the customer record keeps only what was taken, when, by whom and where. ---------- */
 const MEDIA_KINDS = [
+  {k:"slpit", st:"SL", l:"Pit ki gehrai (depth)", icon:"📏", type:"photo"},
+  {k:"slfusion", st:"SL", l:"Fusion (EF jointing) karte time", icon:"🔗", type:"photo"},
+  {k:"slleak", st:"SL", l:"SL leakage testing (gauge)", icon:"🧪", type:"photo"},
+  {k:"sltf", st:"SL", l:"TF connection ka leakage test", icon:"🔩", type:"photo"},
+  {k:"slmat", st:"SL", l:"Warning mat dalna", icon:"🟨", type:"photo"},
   {k:"meter", st:"GI", l:"Meter (lat / long ke saath)", icon:"📟", type:"photo"},
   {k:"regvideo", st:"GI", l:"Regulator — 10 sec video", icon:"🎥", type:"video"},
   {k:"warning", st:"GI", l:"Warning plate", icon:"⚠️", type:"photo"},
@@ -10556,6 +10585,436 @@ function svyPdfBuild(c, photos){
   const pages = typeof pdf.getNumberOfPages === "function" ? pdf.getNumberOfPages() : (pdf.internal && typeof pdf.internal.getNumberOfPages === "function" ? pdf.internal.getNumberOfPages() : 1);
   for(let p=1;p<=pages;p++){ if(typeof pdf.setPage === "function") pdf.setPage(p); txt(`PNG Enterprise  |  survey of ${c.name||""}  |  generated ${pgDate(new Date())} ${pgTime(new Date())}`, L, 290, 7, false, GREY); txt(`Page ${p} of ${pages}`, R, 290, 7, false, GREY, {align:"right"}); }
   return pdf;
+}
+
+
+/* ---------- customer status page (v50): the customer opens it from a QR / link, enters the mobile number + a 4-digit code
+   (PIN the team sends on WhatsApp, or the last 4 digits of the BP number), sees every stage of the work and gives feedback
+   step by step: each of the 6 work photos (did it really happen?) and 6 questions. The feedback goes to the telecaller,
+   who verifies it and forwards it to the admin; the admin downloads it as Excel or a PDF form. ---------- */
+let custFeedbacks = [], portalRequests = [];
+let portal = {phone:"", list:[], cid:null, step:0, fb:null, tries:0};
+const PORTAL_Q = [
+  {k:"sl", l:"SL (service line) ka kaam hua?", need:"SL", ok:"yes", o:{yes:"✅ Haan, hua", no:"❌ Nahi hua"}},
+  {k:"gi", l:"GI pipe ka kaam hua?", need:"GI", ok:"yes", o:{yes:"✅ Haan, hua", no:"❌ Nahi hua"}},
+  {k:"stove", l:"Chulha (PNG gas) chalu hua?", need:"NG", ok:"yes", o:{yes:"✅ Haan, chalu hai", no:"❌ Nahi"}},
+  {k:"complete", l:"Aapka poora kaam ho gaya?", need:"ALL", ok:"yes", o:{yes:"✅ Haan, poora", no:"❌ Nahi, kuch baaki hai"}},
+  {k:"leak", l:"Koi leakage / gas ki smell to nahi hai?", need:"NG", ok:"no", o:{no:"✅ Nahi, sab theek", yes:"⚠️ Haan, leakage hai"}},
+  {k:"happy", l:"Aap kaam se santusht hain?", need:"ALL", ok:"yes", o:{yes:"😊 Haan, santusht", no:"😞 Nahi"}},
+];
+const PORTAL_PHOTO_NEED = {slpit:"SL", slfusion:"SL", slleak:"SL", sltf:"SL", slmat:"SL", meter:"GI", regvideo:"GI", warning:"GI", ivav:"GI", stove:"NG", pedestal:"REST"};
+const CFB_STATUS = {new:"Naya", forwarded:"Admin ko bheja", rejected:"Galat / band"};
+function portalUrl(){
+  const base = leadFormUrl(); if(!base) return "";
+  if(/[?&]f=new\b/.test(base)) return base.replace(/([?&])f=new\b/, "$1f=status");
+  return base + (base.includes("?") ? "&" : "?") + "f=status";
+}
+function isPortalUrl(){ try{ return /(^|[?&#])f=status\b/i.test(String(location.search||"") + String(location.hash||"")); }catch(e){ return false; } }
+function portalDone(c){ const s = stageLive(c); return {SL: s.SL || s.already, GI: s.GI, NG: s.NG || s.gasIn, REST: s.REST, ALL: c.status==="completed" || (s.GI && (s.NG || s.gasIn) && (s.SL || s.already) && s.REST)}; }
+function portalStages(c){
+  const s = stageLive(c), d = portalDone(c), dd = x=>x ? fpDate(x) : "", meterNo = c.meterSerialNumber || (c.wizMeter||{}).number || "";
+  return [
+    {n:"Registration", done: !!(c.bpNo || c.createdAt), info: c.bpNo ? "BP no. " + c.bpNo : "Form mil gaya"},
+    {n:"Survey", done: !!(c.surveyDoneAt || c.geotag), info: c.surveyDoneAt ? dd(String(c.surveyDoneAt).slice(0,10)) : ""},
+    {n:"Service line (SL)", done: d.SL, info: s.already ? "Pehle se line hai" : dd(s.dSL)},
+    {n:"GI pipe fitting", done: d.GI, info: dd(s.dGI)},
+    {n:"Meter", done: s.meterIn, info: meterNo ? "Meter no. " + meterNo : ""},
+    {n:"Gas chalu (NG)", done: d.NG, info: dd(s.dNG)},
+    {n:"Restoration (khudai ki marammat)", done: d.REST, info: dd(s.dRS)},
+    {n:"Kaam poora", done: d.ALL, info: d.ALL ? "Dhanyavaad!" : ""},
+  ];
+}
+// ----- staff: send the customer the status link + a PIN on WhatsApp -----
+function genPin(){ return String(Math.floor(1000 + Math.random()*9000)); }
+// after a telecaller has verified the customer: the login PIN is made automatically; the telecaller can send it on WhatsApp in one tap
+function portalOfferPin(c, pin){
+  if(!c || !pin || !portalUrl() || !/^\d{10}$/.test(phone10(c.phone))) return;
+  if(confirm(`${c.name}: customer login PIN ${pin} ban gaya.\nCustomer ko status link + PIN WhatsApp par bhejein?`)){ const wa = waLink(c.phone, portalPinMsg(c, pin)); if(wa){ try{ window.open(wa, "_blank"); }catch(e){} } }
+}
+// technician name + number the customer may see (kept apart from the login records)
+async function staffPublicSave(u){ if(!db || !u || !u.username) return; try{ await db.doc("staffPublic/" + u.username).set({name:u.name||u.username, phone:u.phone||"", role:u.role||""}); }catch(e){ console.error(e); } }
+async function empSetPhone(username){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const u = (allUsers.length ? allUsers : SEED_USERS).find(x=>x.username===username); if(!u) return;
+  const v = prompt(`${u.name}: mobile number (customer ko technician ka number dikhega)`, u.phone || ""); if(v===null) return;
+  const ph = phone10(v.trim());
+  if(ph && !/^\d{10}$/.test(ph)){ alert("Sahi 10 digit mobile number daaliye."); return; }
+  if(db){ try{ await db.collection("users").doc(username).update({phone:ph}); }catch(e){ console.error(e); alert("Save nahi hua."); return; } }
+  u.phone = ph; await staffPublicSave(u);
+  showToast(`${u.name}: number save ho gaya.`); renderMain();
+}
+function portalPinMsg(c, pin){ return `Namaste ${c.name||""} ji, aapke PNG gas connection ke kaam ka status yahan dekhein: ${portalUrl()}\nMobile: ${phone10(c.phone)}\nPIN: ${pin}\n— M/S TEJASAV (PNG connection, Sonipat)`; }
+async function portalSendPin(cid){
+  if(!currentUser || !["admin","telecaller"].includes(currentUser.role)) return;
+  const c = customers.find(x=>x.id===cid); if(!c) return;
+  if(!/^\d{10}$/.test(phone10(c.phone))){ alert("Is customer ka sahi mobile number nahi hai."); return; }
+  if(!portalUrl()){ alert("Status page ka link set nahi hai (admin: QR card mein website ka link)."); return; }
+  const pin = c.portalPin || genPin();
+  if(!c.portalPin && !(await saveJobField(cid, {portalPin:pin, portalPinAt:new Date().toISOString(), portalPinBy:currentUser.username}))) return;
+  const wa = waLink(c.phone, portalPinMsg(c, pin));
+  if(wa){ try{ window.open(wa, "_blank"); }catch(e){} }
+  showToast(`PIN ${pin} — WhatsApp khul raha hai.`);
+}
+function portalPinBtn(c){ return (currentUser && ["admin","telecaller"].includes(currentUser.role) && c.phone) ? `<button onclick="portalSendPin('${c.id}')" class="w-full bg-white border border-teal-600 text-teal-700 text-xs font-bold py-1.5 rounded mt-1">📱 Customer ko status link + PIN (WhatsApp)${c.portalPin ? " • PIN " + wzEsc(c.portalPin) : ""}</button>` : ""; }
+function renderPortalQrCard(){
+  const url = portalUrl();
+  const wa = `https://wa.me/?text=${encodeURIComponent("Apne PNG gas connection ke kaam ka status yahan dekhein: " + url)}`;
+  return `<div class="bg-white rounded-lg shadow p-3 mb-3">
+    <p class="font-bold text-sm text-gray-800 mb-1">📱 Customer status page — QR</p>
+    <p class="text-[11px] text-gray-500 mb-2">Customer QR scan karke mobile number + PIN daalega aur apne kaam ka status dekhega; kaam poora hone par photos verify karke final submission dega.</p>
+    ${url ? `<div class="flex justify-center mb-2">${qrSvg(url, 180)}</div><p class="text-[10px] text-gray-500 break-all text-center mb-2">${wzEsc(url)}</p>
+      <div class="grid grid-cols-2 gap-2"><a href="${wa}" target="_blank" class="text-center bg-green-600 text-white text-xs font-bold py-2 rounded">💬 Link WhatsApp karein</a>
+        <button onclick="portalQrPdf()" class="bg-[#1b365d] text-white text-xs font-bold py-2 rounded">⬇ QR poster (PDF)</button></div>` : `<p class="text-xs text-red-600">Link set nahi hai — admin "QR connection forms" mein website ka link save kare.</p>`}
+  </div>`;
+}
+async function portalQrPdf(){
+  const url = portalUrl(); if(!url) return;
+  const tt = showToast("QR poster ban raha hai...");
+  try{ await ensurePdfLibs(); }catch(e){ hideToast(tt); alert("PDF engine load nahi hua."); return; }
+  const pdf = new window.jspdf.jsPDF("p","mm","a4"), W = 210;
+  pdf.setFillColor(13,144,79); pdf.rect(0,0,W,38,"F");
+  pdf.setTextColor(255,255,255); pdf.setFont("helvetica","bold"); pdf.setFontSize(22); pdf.text("APNE PNG KAAM KA STATUS DEKHEIN", W/2, 18, {align:"center"});
+  pdf.setFontSize(11); pdf.setFont("helvetica","normal"); pdf.text("M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED  -  Sonipat", W/2, 28, {align:"center"});
+  pdf.setTextColor(30,41,59); pdf.setFont("helvetica","bold"); pdf.setFontSize(15); pdf.text("QR scan karein, mobile number aur PIN daaliye", W/2, 56, {align:"center"});
+  pdf.setFont("helvetica","normal"); pdf.setFontSize(11); pdf.text("Kaam ke stages dekhiye aur kaam poora hone par feedback dijiye", W/2, 64, {align:"center"});
+  const q = QRGEN(url, "M"), n = q.getModuleCount(), side = 110, cell = side/n, x0 = (W-side)/2, y0 = 76;
+  pdf.setDrawColor(13,144,79); pdf.setLineWidth(1.2); pdf.rect(x0-6, y0-6, side+12, side+12); pdf.setFillColor(0,0,0);
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++) if(q.isDark(r,c)) pdf.rect(x0 + c*cell, y0 + r*cell, cell + 0.05, cell + 0.05, "F");
+  pdf.setFontSize(9); pdf.setTextColor(71,85,105); pdf.text(pdf.splitTextToSize(url, 180), W/2, y0+side+16, {align:"center"});
+  pdf.setFontSize(11); pdf.setTextColor(30,41,59); pdf.text("PIN: telecaller verify karne ke baad WhatsApp par bhejta hai", W/2, y0+side+30, {align:"center"});
+  hideToast(tt);
+  await savePdfFile(pdf, "PNG_Customer_Status_QR.pdf");
+}
+// ----- the public page -----
+function openPortal(){
+  portal = {phone:"", list:[], cid:null, step:0, fb:null, tries:0};
+  try{ const s = JSON.parse(sessionStorage.getItem("png_portal")||"null"); if(s && s.phone && s.ids && Date.now() - (s.t||0) < 2*3600e3){ portal.phone = s.phone; portal.ids = s.ids; } }catch(e){}
+  let ov = document.getElementById("portalScreen");
+  if(!ov){ ov = document.createElement("div"); ov.id = "portalScreen"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:91;background:#f3f4f6;overflow-y:auto;padding:0 0 40px 0;";
+  if(portal.ids) portalLoad(portal.phone, portal.ids); else portalRender();
+}
+function closePortal(){
+  const ov = document.getElementById("portalScreen"); if(ov) ov.remove();
+  try{ if(isPortalUrl() && window.history && history.replaceState) history.replaceState(null, "", location.pathname); }catch(e){}
+  if(!currentUser){ try{ const saved = JSON.parse(localStorage.getItem("png_user")||"null"); if(saved){ currentUser = saved; showApp(); } }catch(e){} }
+}
+function portalHead(sub){ return `<div class="bg-[#0D904F] text-white p-4"><p class="font-bold text-lg">📱 Mera PNG connection</p><p class="text-xs text-green-100">${sub || "M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED • Sonipat"}</p></div>`; }
+function portalRender(){
+  const ov = document.getElementById("portalScreen"); if(!ov) return;
+  const c = portal.cid ? portal.list.find(x=>x.id===portal.cid) : null;
+  if(portal.fb && c){ ov.innerHTML = portalHead(wzEsc(c.name)) + `<div class="p-4 max-w-md mx-auto">${portalFbHtml(c)}</div>`; portalFbLoadMedia(c); return; }
+  if(c){ ov.innerHTML = portalHead(wzEsc(c.name)) + `<div class="p-4 max-w-md mx-auto">${portalHomeHtml(c)}</div>`; return; }
+  if(portal.list.length > 1 && portal.verified){ ov.innerHTML = portalHead() + `<div class="p-4 max-w-md mx-auto"><p class="text-sm text-gray-700 mb-2">Is number par ${portal.list.length} connection hain — chuniye:</p>
+    ${portal.list.map(x=>`<button onclick="portal.cid='${x.id}'; portalRender()" class="w-full text-left bg-white rounded-lg shadow p-3 mb-2"><p class="font-bold text-sm">${wzEsc(x.name)}</p><p class="text-[11px] text-gray-500">${wzEsc(x.address||x.area||"")}</p></button>`).join("")}
+    <button onclick="portalLogout()" class="w-full text-xs text-gray-400 mt-3">Dusra number</button></div>`; return; }
+  ov.innerHTML = portalHead() + `<div class="p-4 max-w-md mx-auto"><div class="bg-white rounded-lg shadow p-4">
+      <p class="text-sm text-gray-700 mb-3">Apna mobile number aur PIN daaliye — aapke connection ka kaam kahan tak pahuncha, wo dikhega.</p>
+      <label class="ff-label">Mobile number</label><input id="ptPhone" class="ff-input mb-3" inputmode="numeric" maxlength="13" placeholder="10 digit mobile" value="${wzEsc(portal.phone)}">
+      <label class="ff-label">PIN (4 ank)</label><input id="ptPin" class="ff-input mb-1" inputmode="numeric" maxlength="4" placeholder="4 ank ka PIN">
+      <p class="text-[11px] text-gray-500 mb-3">Hamari telecaller team aapse baat karke verify karti hai, tab PIN apne aap banta hai aur WhatsApp par aata hai.</p>
+      <p id="ptErr" class="text-xs text-red-600 mb-2 ${portal.err?"":"hidden"}">${wzEsc(portal.err||"")}</p>
+      <button onclick="portalVerify()" class="w-full bg-[#0D904F] text-white py-3 rounded-lg font-bold">Status dekhein</button>
+      <button onclick="portalAskPin()" class="w-full text-xs text-[#0D904F] font-bold mt-3">PIN nahi hai? — PIN mangwayein</button>
+    </div>
+    <button onclick="closePortal(); openPublicLeadForm(false)" class="w-full bg-white border border-[#0D904F] text-[#0D904F] font-bold py-2.5 rounded-lg mt-4 text-sm">📝 Naya PNG connection chahiye?</button>
+    <button onclick="closePortal()" class="w-full text-xs text-gray-400 mt-4">Staff login</button></div>`;
+}
+async function portalFind(ph){
+  if(!db){ try{ await dbConnect(); }catch(e){ console.error(e); } }
+  if(!db) return null;
+  const seen = {}, out = [];
+  for(const [f, v] of [["phone", ph], ["altPhone", ph], ["phone", "+91" + ph], ["phone", "91" + ph]]){
+    try{ const sn = await db.collection("customers").where(f, "==", v).get(); sn.docs.forEach(d=>{ if(!seen[d.id]){ seen[d.id] = 1; out.push({id:d.id, ...d.data()}); } }); }catch(e){ console.error(e); }
+  }
+  return out;
+}
+async function portalVerify(){
+  const ph = phone10(String((document.getElementById("ptPhone")||{}).value||"").trim()), pin = String((document.getElementById("ptPin")||{}).value||"").replace(/\D/g,"");
+  portal.phone = ph; portal.err = "";
+  if(!/^\d{10}$/.test(ph)){ portal.err = "Sahi 10 digit mobile number daaliye."; return portalRender(); }
+  if(!/^\d{4}$/.test(pin)){ portal.err = "4 ank ka PIN daaliye."; return portalRender(); }
+  let blockUntil = 0; try{ blockUntil = Number(localStorage.getItem("png_portal_block")||0); }catch(e){}
+  if(Date.now() < blockUntil){ portal.err = "Bahut baar galat PIN — 15 minute baad try karein."; return portalRender(); }
+  const found = await portalFind(ph);
+  if(found===null){ portal.err = "Server se connect nahi ho pa raha. Internet check karke dobara try karein."; return portalRender(); }
+  const ok = found.filter(c=>c.portalPin && String(c.portalPin)===pin);
+  if(!ok.length){
+    portal.tries++;
+    if(portal.tries >= 5){ try{ localStorage.setItem("png_portal_block", String(Date.now() + 15*60e3)); }catch(e){} portal.tries = 0; }
+    portal.err = !found.length ? "Is number par koi connection nahi mila." : found.some(c=>c.portalPin) ? "PIN sahi nahi hai — WhatsApp par aaya PIN daaliye." : "Aapka PIN abhi nahi bana — neeche 'PIN mangwayein' dabaiye, telecaller verify karke PIN bhejega.";
+    return portalRender();
+  }
+  portal.list = ok; portal.verified = true; portal.cid = ok.length===1 ? ok[0].id : null;
+  try{ sessionStorage.setItem("png_portal", JSON.stringify({phone:ph, ids:ok.map(c=>c.id), t:Date.now()})); }catch(e){}
+  portalRender();
+}
+async function portalLoad(ph, ids){
+  if(!db){ try{ await dbConnect(); }catch(e){} }
+  const list = [];
+  for(const id of ids||[]){ try{ const d = await db.doc("customers/" + id).get(); if(d.exists) list.push({id:d.id, ...d.data()}); }catch(e){ console.error(e); } }
+  portal.list = list.filter(c=>phone10(c.phone)===ph || phone10(c.altPhone)===ph); portal.verified = portal.list.length>0; portal.cid = portal.list.length===1 ? portal.list[0].id : null;
+  portalRender();
+}
+function portalLogout(){ try{ sessionStorage.removeItem("png_portal"); }catch(e){} portal = {phone:"", list:[], cid:null, step:0, fb:null, tries:0}; portalRender(); }
+async function portalAskPin(){
+  const ph = phone10(String((document.getElementById("ptPhone")||{}).value||"").trim());
+  if(!/^\d{10}$/.test(ph)){ portal.err = "Pehle sahi 10 digit mobile number daaliye."; portal.phone = ph; return portalRender(); }
+  if(!db){ try{ await dbConnect(); }catch(e){} }
+  if(!db){ alert("Server se connect nahi ho pa raha."); return; }
+  try{ await db.collection("portalRequests").add({phone:ph, at:new Date().toISOString(), status:"new"}); }catch(e){ console.error(e); alert("Request nahi gayi, dobara try karein."); return; }
+  portal.phone = ph; portal.err = "";
+  const ov = document.getElementById("portalScreen");
+  if(ov) ov.innerHTML = portalHead() + `<div class="p-4 max-w-md mx-auto"><div class="bg-white rounded-lg shadow p-6 text-center"><p class="text-4xl mb-2">📩</p>
+    <p class="font-bold text-gray-800 mb-1">PIN ki request mil gayi</p><p class="text-sm text-gray-600 mb-4">Hamari team aapko ${wzEsc(ph)} par WhatsApp se PIN bhejegi.</p>
+    <button onclick="portalRender()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Theek hai</button></div></div>`;
+}
+const PORTAL_ST = [["SL","SL (service line)"],["GI","GI pipe fitting"],["NG","NG — gas chalu"],["REST","Restoration"]];
+function portalTechList(c){
+  const al = c.allotted || {}, out = {};
+  WS_STAGES.forEach(st=>{ const u = al[st] || null; if(u) (out[u] = out[u] || []).push(st); });
+  if(!Object.keys(out).length && c.assignedTechnician) out[c.assignedTechnician] = ["ALL"];
+  return out;
+}
+async function portalLoadStaff(c){
+  const ul = Object.keys(portalTechList(c)); portal.staff = portal.staff || {};
+  for(const u of ul){ if(portal.staff[u]) continue; try{ const d = db ? await db.doc("staffPublic/" + u).get() : null; portal.staff[u] = d && d.exists ? d.data() : {name:u.charAt(0).toUpperCase() + u.slice(1), phone:""}; }catch(e){ portal.staff[u] = {name:u, phone:""}; } }
+  const box = document.getElementById("ptTech"); if(box) box.innerHTML = portalTechHtml(c);
+}
+function portalTechHtml(c){
+  const tl = portalTechList(c), us = Object.keys(tl);
+  if(!us.length) return `<p class="text-sm text-gray-500">⏳ Abhi kisi technician ko kaam allot nahi hua.</p>`;
+  return us.map(u=>{ const sp = (portal.staff||{})[u] || {name:u, phone:""}, call = sp.phone ? callLink(sp.phone) : "";
+    return `<div class="flex items-center justify-between gap-2 border-b border-gray-100 py-2"><div><p class="text-sm font-bold">👷 ${wzEsc(sp.name)}</p>
+      <p class="text-[11px] text-gray-500">${tl[u].includes("ALL") ? "Poora kaam" : tl[u].map(x=>x==="REST"?"Restoration":x).join(", ")}${sp.phone ? " • 📞 " + wzEsc(sp.phone) : ""}</p></div>
+      ${call ? `<a href="${call}" class="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded">📞 Call</a>` : `<span class="text-[10px] text-gray-400">number nahi</span>`}</div>`; }).join("");
+}
+function portalHomeHtml(c){
+  const s2 = stageLive(c), d = portalDone(c), mine = c.portalFb || [], dd = x=>x ? fpDate(x) : "";
+  const dates = {SL:s2.already ? "Pehle se line hai" : dd(s2.dSL), GI:dd(s2.dGI), NG:dd(s2.dNG), REST:dd(s2.dRS)};
+  const meterNo = c.meterSerialNumber || (c.wizMeter||{}).number || "";
+  setTimeout(()=>portalLoadStaff(c), 0);
+  if(d.ALL) setTimeout(()=>portalLoadThumbs(c), 0);
+  return `<div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-base">${wzEsc(c.name)}</p>
+      <p class="text-xs text-gray-500">${wzEsc(c.address||c.area||"")}</p><p class="text-[11px] text-gray-400">${c.bpNo ? "BP " + wzEsc(c.bpNo) + " • " : ""}${c.sn ? "S.No " + c.sn : ""}</p></div>
+    <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-1">Technician</p><div id="ptTech">${portalTechHtml(c)}</div></div>
+    <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-2">Kaam ka status</p>
+      ${PORTAL_ST.map(([k,l])=>`<div class="flex items-center justify-between border-b border-gray-100 py-2"><span class="text-sm">${l}</span>
+        <span class="text-xs font-bold px-2 py-1 rounded ${d[k] ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}">${d[k] ? "✅ Ho gaya" + (dates[k] ? " • " + wzEsc(dates[k]) : "") : "⏳ Baaki"}</span></div>`).join("")}
+      <div class="flex items-center justify-between py-2"><span class="text-sm">Meter</span><span class="text-xs font-bold px-2 py-1 rounded ${s2.meterIn ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}">${s2.meterIn ? "✅ Laga" + (meterNo ? " • " + wzEsc(meterNo) : "") : "⏳ Baaki"}</span></div>
+    </div>
+    ${d.ALL ? `<div class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 border-[#0D904F]"><p class="font-bold text-sm mb-1">✅ Kaam poora ho gaya</p>
+      <p class="text-[11px] text-gray-500 mb-2">Ye photos aapke ghar ke kaam ki hain — dekhkar verify kijiye aur apni location ke saath final submission dijiye.</p>
+      <div class="grid grid-cols-3 gap-1 mb-2">${MEDIA_KINDS.filter(x=>mediaMeta(c, x.k)).map(x=>`<div class="text-center"><div id="ptTh_${x.k}" class="bg-gray-100 rounded h-20 flex items-center justify-center text-xl">${x.icon}</div><p class="text-[9px] text-gray-500 leading-tight mt-0.5">${x.l}</p></div>`).join("") || `<p class="text-[11px] text-gray-400 col-span-3">Photos abhi nahi aayi.</p>`}</div>
+      <button onclick="portalFbStart()" class="w-full bg-[#EA8600] text-white font-bold py-3 rounded-lg">✍️ Verify karke final submission</button>
+      ${mine.length ? `<p class="text-[11px] text-green-700 mt-2">✓ Aapka final submission mil chuka hai (${fpDate(String(mine[mine.length-1]).slice(0,10))})</p>` : ""}
+    </div>` : `<p class="text-[11px] text-gray-500 text-center mb-3">Kaam poora hone par yahan photos aur final submission ka option aayega.</p>`}
+    ${portal.list.length>1 ? `<button onclick="portal.cid=null; portalRender()" class="w-full text-xs text-[#0D904F] font-bold mb-2">Dusra connection dekhein</button>` : ""}
+    <button onclick="portalLogout()" class="w-full text-xs text-gray-400">Bahar niklein</button>`;
+}
+async function portalLoadThumbs(c){
+  for(const x of MEDIA_KINDS){ if(!mediaMeta(c, x.k)) continue;
+    try{ const d = await mediaLoad(c, x.k), box = document.getElementById("ptTh_" + x.k); if(!box || !d) continue;
+      box.innerHTML = /^data:video/.test(d) ? `<video src="${d}" muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:4px"></video>` : `<img src="${d}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`; }catch(e){ console.error(e); } }
+}
+// feedback steps for this customer: the photos of work that is done, then the questions of work that is done, then a comment
+function portalFbSteps(c){
+  const d = portalDone(c), steps = [];
+  if(!d.ALL) return [{kind:"end"}];
+  MEDIA_KINDS.forEach(x=>{ if(d[PORTAL_PHOTO_NEED[x.k]] && mediaMeta(c, x.k)) steps.push({kind:"photo", k:x.k}); });
+  PORTAL_Q.forEach(q=>{ if(d[q.need]) steps.push({kind:"q", k:q.k}); });
+  steps.push({kind:"end"});
+  return steps;
+}
+function portalFbStart(){
+  const c = portal.list.find(x=>x.id===portal.cid); if(!c) return;
+  portal.fb = {photos:{}, ans:{}, rating:0, comment:""}; portal.step = 0; portalRender();
+}
+function portalFbHtml(c){
+  const steps = portalFbSteps(c), i = Math.min(portal.step, steps.length-1), st = steps[i], f = portal.fb, pct = Math.round(i/Math.max(1, steps.length-1)*100);
+  const btns = (cur, opts, fn)=>`<div class="grid grid-cols-1 gap-2 mt-3">${Object.keys(opts).map(k=>`<button onclick="${fn}('${k}')" class="py-3 rounded-lg font-bold text-sm ${cur===k ? "bg-[#0D904F] text-white" : "bg-gray-100 text-gray-800"}">${opts[k]}</button>`).join("")}</div>`;
+  let body = "";
+  if(st.kind==="photo"){
+    const x = mediaKind(st.k), m = mediaMeta(c, st.k);
+    body = `<p class="text-xs text-gray-500 mb-1">Photo ${steps.filter(s=>s.kind==="photo").indexOf(st)+1} / ${steps.filter(s=>s.kind==="photo").length}</p>
+      <p class="font-bold text-base mb-2">${x.icon} ${x.l}</p>
+      <div id="ptMedia" class="bg-gray-100 rounded-lg text-center text-xs text-gray-400 py-10">Photo load ho rahi hai…</div>
+      <p class="text-[11px] text-gray-500 mt-1">${m && m.at ? pgDate(new Date(m.at)) + " " + pgTime(new Date(m.at)) : ""}</p>
+      <p class="text-sm font-bold mt-3">Kya ye kaam aapke ghar sach mein hua hai?</p>${btns(f.photos[st.k], {yes:"✅ Haan, hua hai", no:"❌ Nahi hua"}, "portalFbPhoto")}`;
+  } else if(st.kind==="q"){
+    const q = PORTAL_Q.find(x=>x.k===st.k);
+    body = `<p class="text-xs text-gray-500 mb-1">Sawaal ${steps.filter(s=>s.kind==="q").indexOf(st)+1} / ${steps.filter(s=>s.kind==="q").length}</p><p class="font-bold text-lg">${q.l}</p>${btns(f.ans[q.k], q.o, "portalFbAns")}`;
+  } else {
+    body = `<p class="font-bold text-base mb-2">Aakhri step</p>
+      <p class="ff-label">Rating</p><div class="flex gap-1 mb-2">${[1,2,3,4,5].map(n=>`<button onclick="portal.fb.rating=${n}; portalRender()" class="text-4xl leading-none ${n<=(f.rating||0)?"text-yellow-500":"text-gray-300"}">★</button>`).join("")}</div>
+      <label class="ff-label">Kuch kehna hai? (shikayat / sujhav)</label><textarea id="ptComment" class="ff-input" rows="3" oninput="portal.fb.comment=this.value">${wzEsc(f.comment||"")}</textarea>
+      <div class="bg-gray-50 rounded p-2 mt-2 text-xs">${steps.filter(s=>s.kind!=="end").map(s=>{ const v = s.kind==="photo" ? f.photos[s.k] : f.ans[s.k], lab = s.kind==="photo" ? mediaKind(s.k).l : PORTAL_Q.find(q=>q.k===s.k).l, good = s.kind==="photo" ? v==="yes" : v===PORTAL_Q.find(q=>q.k===s.k).ok;
+        return `<p class="flex justify-between gap-2 border-b border-gray-100 py-0.5"><span>${lab}</span><b class="${!v ? "text-gray-400" : good ? "text-green-700" : "text-red-600"}">${!v ? "—" : v==="yes" ? "Haan" : "Nahi"}</b></p>`; }).join("") || "<p>Abhi koi kaam poora nahi hua — sirf apni baat likh sakte hain.</p>"}</div>
+      <p id="ptGeo" class="text-[11px] mt-2 ${portal.geo ? "text-green-700" : "text-gray-500"}">${portal.geo ? `📍 Aapki location: ${portal.geo.lat.toFixed(6)}, ${portal.geo.lng.toFixed(6)}` : "📍 Submit karte waqt aapki location (lat / long) li jayegi — browser puchhe to Allow dabaiye."}</p>
+      <button onclick="portalFbSubmit()" class="w-full bg-[#0D904F] text-white py-3 rounded-lg font-bold mt-2">✅ Final submission</button>`;
+  }
+  return `<div class="flex justify-between text-[11px] text-gray-500 mb-1"><span>Step ${i+1} / ${steps.length}</span><span>${pct}%</span></div>
+    <div class="h-2 bg-gray-200 rounded mb-3"><div class="h-2 bg-[#EA8600] rounded" style="width:${pct}%"></div></div>
+    <div class="bg-white rounded-lg shadow p-4 mb-3">${body}</div>
+    <div class="flex gap-2"><button onclick="portalFbBack()" class="px-4 py-3 rounded-lg bg-gray-200 font-bold text-sm">← ${i===0 ? "Wapas" : "Pichla"}</button>
+      ${st.kind!=="end" ? `<button onclick="portalFbNext()" class="flex-1 bg-white border border-gray-300 py-3 rounded-lg font-bold text-sm">Aage →</button>` : ""}</div>`;
+}
+async function portalFbLoadMedia(c){
+  const steps = portalFbSteps(c), st = steps[Math.min(portal.step, steps.length-1)];
+  if(!st || st.kind!=="photo") return;
+  let d = null; try{ d = await mediaLoad(c, st.k); }catch(e){ console.error(e); }
+  const box = document.getElementById("ptMedia"); if(!box) return;
+  if(!d){ box.textContent = "Photo load nahi hui (internet check karein)."; return; }
+  box.className = "rounded-lg overflow-hidden";
+  box.innerHTML = /^data:video/.test(d) ? `<video src="${d}" controls playsinline muted style="width:100%;max-height:50vh"></video>` : `<img src="${d}" style="width:100%;max-height:55vh;object-fit:contain">`;
+}
+function portalFbPhoto(v){ const c = portal.list.find(x=>x.id===portal.cid), st = portalFbSteps(c)[portal.step]; if(st && st.kind==="photo"){ portal.fb.photos[st.k] = v; portal.step++; portalRender(); } }
+function portalFbAns(v){ const c = portal.list.find(x=>x.id===portal.cid), st = portalFbSteps(c)[portal.step]; if(st && st.kind==="q"){ portal.fb.ans[st.k] = v; portal.step++; portalRender(); } }
+function portalFbNext(){ portal.step++; portalRender(); }
+function portalFbBack(){ if(portal.step===0){ portal.fb = null; } else portal.step--; portalRender(); }
+async function portalFbSubmit(){
+  const c = portal.list.find(x=>x.id===portal.cid), f = portal.fb; if(!c || !f) return;
+  const el = document.getElementById("ptComment"); if(el) f.comment = el.value;
+  const answered = Object.keys(f.photos).length + Object.keys(f.ans).length;
+  if(!answered && !String(f.comment||"").trim() && !f.rating){ alert("Kam se kam ek sawaal ka jawab dijiye ya apni baat likhiye."); return; }
+  const g = document.getElementById("ptGeo"); if(g) g.textContent = "📍 Location li ja rahi hai…";
+  const geo = await getGeoTag(); portal.geo = geo;
+  if(!geo && !confirm("Location nahi mili. Bina location ke submit karna hai?")){ portalRender(); return; }
+  const d = portalDone(c), bad = Object.values(f.photos).includes("no") || PORTAL_Q.some(q=>f.ans[q.k] && f.ans[q.k]!==q.ok);
+  const rec = {cid:c.id, sn:c.sn||"", name:c.name||"", phone:phone10(c.phone), bp:c.bpNo||"", area:c.area||"", at:new Date().toISOString(),
+    photos:{...f.photos}, ans:{...f.ans}, rating:Number(f.rating)||0, comment:String(f.comment||"").trim(), stages:{...d}, geo: geo || null,
+    urgent: f.ans.leak==="yes", issue: bad, status:"new"};
+  if(!db){ try{ await dbConnect(); }catch(e){} }
+  if(!db){ alert("Server se connect nahi ho pa raha. Dobara try karein."); return; }
+  try{ await db.collection("custFeedback").add(rec); }catch(e){ console.error(e); alert("Feedback nahi gaya — dobara bhejiye."); return; }
+  try{ await db.doc("customers/" + c.id).update({portalFb:[...(c.portalFb||[]), rec.at].slice(-20)}); c.portalFb = [...(c.portalFb||[]), rec.at]; }catch(e){ console.error(e); }
+  portal.fb = null; portal.step = 0;
+  const ov = document.getElementById("portalScreen");
+  if(ov) ov.innerHTML = portalHead(wzEsc(c.name)) + `<div class="p-4 max-w-md mx-auto"><div class="bg-white rounded-lg shadow p-6 text-center"><p class="text-4xl mb-2">🙏</p>
+    <p class="font-bold text-lg text-gray-800 mb-1">Dhanyavaad!</p><p class="text-sm text-gray-600 mb-4">${rec.urgent ? "Leakage ki baat hamari team tak turant pahunch gayi hai — jaldi aapse sampark karenge. Tab tak gas valve band rakhiye." : "Aapka feedback hamari team ko mil gaya."}</p>
+    <button onclick="portalRender()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Status par wapas</button></div></div>`;
+}
+// ----- telecaller: verify + forward; PIN requests -----
+let cfbTab = "new";
+function cfbNewCount(){ return custFeedbacks.filter(f=>(f.status||"new")==="new").length + portalRequests.filter(r=>(r.status||"new")==="new").length; }
+function cfbFwdCount(){ return custFeedbacks.filter(f=>f.status==="forwarded" && !f.adminAt).length; }
+function cfbLines(f){
+  const out = [];
+  MEDIA_KINDS.forEach(x=>{ const v = (f.photos||{})[x.k]; if(v) out.push([`Photo: ${x.l}`, v==="yes" ? "Haan, hua" : "Nahi hua", v==="yes"]); });
+  PORTAL_Q.forEach(q=>{ const v = (f.ans||{})[q.k]; if(v) out.push([q.l, q.o[v].replace(/^\S+\s/,""), v===q.ok]); });
+  return out;
+}
+function cfbCardHtml(f, who){
+  const c = customers.find(x=>x.id===f.cid) || {}, lines = cfbLines(f), call = callLink(f.phone);
+  const wa = waLink(f.phone, `Namaste ${f.name||""} ji, aapka PNG kaam ka feedback mila. Main ${currentUser.name} — M/S TEJASAV (Sonipat) se baat kar raha/rahi hoon.`);
+  return `<div class="bg-white rounded-lg shadow p-3 ${f.urgent ? "border-l-4 border-red-600" : f.issue ? "border-l-4 border-[#EA8600]" : "border-l-4 border-[#0D904F]"}">
+    <div class="flex justify-between items-start gap-2"><div><p class="font-bold text-sm">${wzEsc(f.name)} <span class="text-[11px] text-gray-400">S.No ${f.sn||"—"} ${f.bp?"• BP "+wzEsc(f.bp):""}</span></p>
+      <p class="text-[11px] text-gray-500">📞 ${wzEsc(f.phone)} • ${new Date(f.at).toLocaleString("en-IN")}</p></div>
+      <span class="text-[10px] font-bold px-2 py-1 rounded ${f.urgent?"bg-red-600 text-white":"bg-gray-100"}">${f.urgent ? "⚠ LEAKAGE" : CFB_STATUS[f.status||"new"]}</span></div>
+    ${f.rating ? `<p class="text-yellow-500 text-lg leading-none mt-1">${svyStars(f.rating)}</p>` : ""}
+    <p class="text-[11px] mt-1">${f.geo && f.geo.lat ? `<a href="https://maps.google.com/?q=${f.geo.lat},${f.geo.lng}" target="_blank" class="text-[#1a73e8] font-bold">📍 ${Number(f.geo.lat).toFixed(6)}, ${Number(f.geo.lng).toFixed(6)}</a>` : `<span class="text-gray-400">📍 location nahi di</span>`}</p>
+    <div class="mt-1">${lines.map(([l,v,good])=>`<p class="flex justify-between gap-2 text-[11px] border-b border-gray-100 py-0.5 ${good?"":"text-red-600 font-bold"}"><span>${wzEsc(l)}</span><span>${wzEsc(v)}</span></p>`).join("") || `<p class="text-[11px] text-gray-400">Sirf comment</p>`}</div>
+    ${f.comment ? `<p class="text-xs bg-gray-50 rounded p-1 mt-1">"${wzEsc(f.comment)}"</p>` : ""}
+    ${f.tcBy ? `<p class="text-[11px] text-blue-700 mt-1">Telecaller ${wzEsc(techName(f.tcBy))}: ${wzEsc(f.tcNote||"verify kiya")} • ${fpDate(String(f.tcAt).slice(0,10))}</p>` : ""}
+    ${f.adminAt ? `<p class="text-[11px] text-green-700 mt-1">✓ Admin ne dekha ${fpDate(String(f.adminAt).slice(0,10))}${f.adminNote?": "+wzEsc(f.adminNote):""}</p>` : ""}
+    ${who==="tc" && (f.status||"new")==="new" ? `<div class="flex gap-2 mt-2">${call?`<a href="${call}" class="flex-1 text-center bg-blue-600 text-white text-xs font-bold py-1.5 rounded">📞 Call</a>`:""}${wa?`<a href="${wa}" target="_blank" class="flex-1 text-center bg-green-600 text-white text-xs font-bold py-1.5 rounded">💬 WhatsApp</a>`:""}</div>
+      <textarea id="cfbNote_${f.id}" class="ff-input text-xs mt-2" rows="2" placeholder="Customer se baat karke kya pata chala (verify note)"></textarea>
+      <div class="flex gap-2 mt-1"><button onclick="cfbForward('${f.id}')" class="flex-1 bg-[#0D904F] text-white text-xs font-bold py-2 rounded">✅ Verify — admin ko bhejein</button><button onclick="cfbReject('${f.id}')" class="px-3 bg-white border border-red-300 text-red-600 text-xs font-bold py-2 rounded">❌ Galat</button></div>` : ""}
+    ${who==="admin" ? `<div class="flex gap-2 mt-2"><button onclick="cfbPdf('${f.id}')" class="flex-1 bg-[#1b365d] text-white text-xs font-bold py-1.5 rounded">⬇ Feedback form (PDF)</button>${f.status==="forwarded" && !f.adminAt ? `<button onclick="cfbSeen('${f.id}')" class="flex-1 bg-[#0D904F] text-white text-xs font-bold py-1.5 rounded">✓ Dekh liya</button>` : ""}</div>` : ""}
+    ${c.id && who==="tc" ? portalPinBtn(c) : ""}
+  </div>`;
+}
+function renderCfbInbox(){
+  const sorted = [...custFeedbacks].sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")));
+  const by = k=>sorted.filter(f=>(f.status||"new")===k), list = cfbTab==="all" ? sorted : by(cfbTab);
+  const reqs = portalRequests.filter(r=>(r.status||"new")==="new");
+  const tab = (k, l)=>`<button onclick="cfbTab='${k}'; renderMain()" class="flex-1 text-[11px] font-bold py-2 rounded ${cfbTab===k?"bg-[#EA8600] text-white":"bg-white border text-gray-600"}">${l} (${k==="all"?sorted.length:by(k).length})</button>`;
+  return `<h2 class="font-bold text-gray-800 mb-2">⭐ Customer feedback</h2>
+    ${renderPortalQrCard()}
+    ${reqs.length ? `<div class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 border-teal-600"><p class="font-bold text-sm mb-1">🔑 PIN ki requests (${reqs.length})</p>
+      ${reqs.map(r=>{ const cs2 = customers.filter(c=>phone10(c.phone)===r.phone || phone10(c.altPhone)===r.phone); return `<div class="border-b border-gray-100 py-2"><p class="text-xs"><b>${wzEsc(r.phone)}</b> • ${new Date(r.at).toLocaleString("en-IN")}</p>
+        ${cs2.length ? cs2.map(c=>`<button onclick="portalSendPin('${c.id}'); cfbReqDone('${r.id}')" class="w-full text-left text-xs bg-teal-50 text-teal-800 font-bold px-2 py-1.5 rounded mt-1">🔑 ${wzEsc(c.name)} (S.No ${c.sn||"—"}) ko PIN bhejein</button>`).join("") : `<p class="text-[11px] text-red-600">Is number ka koi customer nahi mila.</p>`}
+        <button onclick="cfbReqDone('${r.id}')" class="text-[11px] text-gray-400 mt-1">Hatao</button></div>`; }).join("")}</div>` : ""}
+    <div class="flex gap-1 mb-3">${tab("new","Naye")}${tab("forwarded","Bheje")}${tab("rejected","Galat")}${tab("all","Sab")}</div>
+    ${list.length ? `<div class="space-y-2">${list.map(f=>cfbCardHtml(f, "tc")).join("")}</div>` : `<p class="text-gray-400 text-center mt-6 text-sm">Koi feedback nahi.</p>`}`;
+}
+async function cfbUpdate(id, patch){
+  if(db){ try{ await db.doc("custFeedback/" + id).update(patch); }catch(e){ console.error(e); alert("Save nahi hua, dobara try karein."); return false; } }
+  const f = custFeedbacks.find(x=>x.id===id); if(f) Object.assign(f, patch); return true;
+}
+async function cfbForward(id){
+  if(!currentUser || currentUser.role!=="telecaller") return;
+  const note = String((document.getElementById("cfbNote_" + id)||{}).value||"").trim();
+  const f = custFeedbacks.find(x=>x.id===id); if(!f) return;
+  if((f.issue || f.urgent) && !note){ alert("Is feedback mein problem hai — customer se baat karke note likhiye, phir bhejiye."); return; }
+  if(await cfbUpdate(id, {status:"forwarded", tcBy:currentUser.username, tcAt:new Date().toISOString(), tcNote:note})){ showToast("Feedback verify karke admin ko bhej diya."); renderMain(); }
+}
+async function cfbReject(id){
+  if(!currentUser || currentUser.role!=="telecaller") return;
+  const note = prompt("Kyon galat hai? (jaise galat customer / test)", ""); if(note===null) return;
+  if(await cfbUpdate(id, {status:"rejected", tcBy:currentUser.username, tcAt:new Date().toISOString(), tcNote:note})){ showToast("Feedback 'Galat' mein gaya."); renderMain(); }
+}
+async function cfbReqDone(id){
+  if(db){ try{ await db.doc("portalRequests/" + id).update({status:"done", doneBy:currentUser.username, doneAt:new Date().toISOString()}); }catch(e){ console.error(e); } }
+  const r = portalRequests.find(x=>x.id===id); if(r) r.status = "done"; renderMain();
+}
+// ----- admin: forwarded feedback, Excel, PDF form -----
+let cfbAdminTab = "forwarded";
+function renderCfbAdmin(){
+  const sorted = [...custFeedbacks].sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")));
+  const list = cfbAdminTab==="all" ? sorted : sorted.filter(f=>f.status==="forwarded");
+  const tab = (k, l, n)=>`<button onclick="cfbAdminTab='${k}'; renderMain()" class="flex-1 text-[11px] font-bold py-2 rounded ${cfbAdminTab===k?"bg-[#EA8600] text-white":"bg-white border text-gray-600"}">${l} (${n})</button>`;
+  return `<button onclick="setView('overview')" class="text-sm text-[#0D904F] font-bold mb-2">← Back</button>
+    <h2 class="font-bold text-gray-800 mb-1">⭐ Customer feedback</h2>
+    <p class="text-[11px] text-gray-500 mb-2">Customer status page se feedback deta hai → telecaller verify karke yahan bhejta hai. ${cfbFwdCount()} naye.</p>
+    <button onclick="cfbExcel()" class="w-full bg-[#0D904F] text-white text-xs font-bold py-2.5 rounded mb-2">⬇ Saara customer feedback (Excel)</button>
+    ${renderPortalQrCard()}
+    <div class="flex gap-1 mb-3">${tab("forwarded","Telecaller ne bheje", sorted.filter(f=>f.status==="forwarded").length)}${tab("all","Sab", sorted.length)}</div>
+    ${list.length ? `<div class="space-y-2">${list.map(f=>cfbCardHtml(f, "admin")).join("")}</div>` : `<p class="text-gray-400 text-center mt-6 text-sm">Koi feedback nahi.</p>`}`;
+}
+async function cfbSeen(id){ if(!currentUser || currentUser.role!=="admin") return; if(await cfbUpdate(id, {adminAt:new Date().toISOString(), adminBy:currentUser.username})){ showToast("Dekh liya."); renderMain(); } }
+function cfbRow(f){
+  const row = {"Date": f.at ? new Date(f.at).toLocaleString() : "", "S.No":f.sn||"", Customer:f.name||"", Mobile:f.phone||"", "BP No":f.bp||"", Area:f.area||""};
+  MEDIA_KINDS.forEach(x=>{ const v = (f.photos||{})[x.k]; row["Photo: " + x.l] = v ? (v==="yes" ? "Haan" : "Nahi") : ""; });
+  PORTAL_Q.forEach(q=>{ const v = (f.ans||{})[q.k]; row[q.l] = v ? (v==="yes" ? "Haan" : "Nahi") : ""; });
+  Object.assign(row, {Rating: f.rating ? `${f.rating}/5` : "", Comment: f.comment||"", Lat: f.geo && f.geo.lat ? f.geo.lat : "", Long: f.geo && f.geo.lng ? f.geo.lng : "", Leakage: f.urgent ? "HAAN - turant dekhein" : "", Problem: f.issue ? "Haan" : "",
+    Status: CFB_STATUS[f.status||"new"] || f.status, Telecaller: f.tcBy ? techName(f.tcBy) : "", "Telecaller note": f.tcNote||"", "Verified at": f.tcAt ? new Date(f.tcAt).toLocaleString() : "",
+    "Admin seen": f.adminAt ? new Date(f.adminAt).toLocaleString() : ""});
+  return row;
+}
+async function cfbExcel(){
+  if(!custFeedbacks.length){ alert("Abhi koi feedback nahi."); return; }
+  const tt = showToast("Feedback Excel ban rahi hai...");
+  try{ await ensureXlsxLib(); }catch(e){ hideToast(tt); alert("Could not load Excel engine."); return; }
+  const wb = XLSX.utils.book_new(), all = [...custFeedbacks].sort((a,b)=>String(a.at||"").localeCompare(String(b.at||"")));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(all.filter(f=>f.status==="forwarded").map(cfbRow)), "Verified Feedback");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(all.map(cfbRow)), "All Feedback");
+  hideToast(tt);
+  await saveXlsxFile(wb, `Customer_Feedback_${localISODate()}.xlsx`);
+}
+async function cfbPdf(id){
+  const f = custFeedbacks.find(x=>x.id===id); if(!f) return;
+  const tt = showToast("Feedback form PDF ban rahi hai...");
+  try{ await ensurePdfLibs(); }catch(e){ hideToast(tt); alert("PDF engine load nahi hua."); return; }
+  const pdf = new window.jspdf.jsPDF("p","mm","a4"), L = 14, R = 196, W = R - L;
+  const t = (s, x, y, size, bold, color, opt)=>{ pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); pdf.setTextColor(...(color||[30,41,59])); pdf.text(String(s===undefined||s===null?"":s).replace(/[^\x20-\x7E]/g,""), x, y, opt||{}); };
+  pdf.setFillColor(13,144,79); pdf.rect(0,0,210,22,"F");
+  t("CUSTOMER FEEDBACK FORM", L, 10, 14, true, [255,255,255]); t("M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED  |  PNG connection, Sonipat", L, 17, 8.5, false, [220,252,231]);
+  let y = 32;
+  [["Customer", f.name], ["Mobile", f.phone], ["BP No.", f.bp], ["S.No", f.sn], ["Area", f.area], ["Feedback date", f.at ? pgDate(new Date(f.at)) + " " + pgTime(new Date(f.at)) : ""], ["Rating", f.rating ? `${f.rating} / 5` : "-"], ["Location (lat / long)", f.geo && f.geo.lat ? `${Number(f.geo.lat).toFixed(6)}, ${Number(f.geo.lng).toFixed(6)}` : "-"]]
+    .forEach(([l,v])=>{ pdf.setDrawColor(203,213,225); pdf.setLineWidth(0.3); pdf.rect(L, y, W, 7); t(l, L + 2, y + 4.8, 8.5, true, [100,116,139]); t(v || "-", L + 45, y + 4.8, 9); y += 7; });
+  y += 6; t("FEEDBACK", L, y, 10, true, [13,144,79]); y += 3;
+  const lines = cfbLines(f);
+  (lines.length ? lines : [["(sirf comment)", "", true]]).forEach(([l,v,good])=>{ pdf.rect(L, y, W, 7); t(l, L + 2, y + 4.8, 8.5); t(v, R - 2, y + 4.8, 9, true, good ? [21,128,61] : [220,38,38], {align:"right"}); y += 7; });
+  y += 6; t("CUSTOMER COMMENT", L, y, 10, true, [13,144,79]); y += 5;
+  pdf.setFontSize(9); const cl = pdf.splitTextToSize(String(f.comment||"-").replace(/[^\x20-\x7E]/g,""), W); cl.slice(0,12).forEach((ln,i)=>t(ln, L, y + i*4.6, 9)); y += Math.min(12, cl.length)*4.6 + 6;
+  t("VERIFICATION", L, y, 10, true, [13,144,79]); y += 3;
+  [["Status", CFB_STATUS[f.status||"new"]], ["Telecaller", f.tcBy ? techName(f.tcBy) : "-"], ["Telecaller note", f.tcNote || "-"], ["Verified on", f.tcAt ? pgDate(new Date(f.tcAt)) : "-"], ["Admin seen", f.adminAt ? pgDate(new Date(f.adminAt)) : "-"]]
+    .forEach(([l,v])=>{ pdf.rect(L, y, W, 7); t(l, L + 2, y + 4.8, 8.5, true, [100,116,139]); t(pdf.splitTextToSize(String(v||"-").replace(/[^\x20-\x7E]/g,""), W - 48)[0], L + 45, y + 4.8, 9); y += 7; });
+  if(f.urgent){ y += 6; t("LEAKAGE REPORTED BY CUSTOMER - CHECK IMMEDIATELY", L, y, 10, true, [220,38,38]); }
+  t(`PNG Enterprise  |  generated ${pgDate(new Date())} ${pgTime(new Date())}`, L, 290, 7, false, [100,116,139]);
+  hideToast(tt);
+  await savePdfFile(pdf, `Feedback_${String(f.name||"").replace(/[^\w]+/g,"_").slice(0,24)}_${String(f.at||"").slice(0,10)}.pdf`);
 }
 
 
