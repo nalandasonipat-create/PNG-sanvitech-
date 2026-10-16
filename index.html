@@ -876,6 +876,7 @@ function setView(view){
     telecallerPayoutFilter.start = localISODate(first);
     telecallerPayoutFilter.end = localISODate(now);
   }
+  if(view==="addCustomer" && currentView!=="addCustomer") svyDrafts.add = svyNewDraft(null);
   currentView = view; highlightNav(); renderMain();
   if(view==="addCustomer" && currentUser && currentUser.role==="surveyor"){
     surveyGeotag = null;
@@ -898,9 +899,28 @@ function highlightNav(){
 function updateNavBadges(){
   const set = (id, n)=>{ const el = document.getElementById(id); if(!el || !el.classList) return; el.textContent = n > 99 ? "99+" : String(n||""); el.classList.toggle("hidden", !n); };
   if(currentUser.role==="telecaller"){ set("navBadge_leads", leadNewCount()); set("navBadge_tcwork", tcMine().filter(tcNeedsReply).length); }
-  if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount());
+  if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount() + svyNewCount());
+}
+const FORM_KEEP_VIEWS = ["addCustomer", "trackA"];
+let lastMainView = null;
+function formSnap(root){
+  const out = {vals:{}, focus:null};
+  root.querySelectorAll("input[id],textarea[id],select[id]").forEach(x=>{ if(x.type==="file") return; out.vals[x.id] = (x.type==="checkbox" || x.type==="radio") ? {c:x.checked} : {v:x.value}; });
+  const a = document.activeElement; if(a && a.id && root.contains && root.contains(a)) out.focus = {id:a.id, s:a.selectionStart, e:a.selectionEnd};
+  return out;
+}
+function formRestore(snap){
+  Object.keys(snap.vals).forEach(id=>{ const x = document.getElementById(id); if(!x) return; const v = snap.vals[id]; if("c" in v) x.checked = v.c; else if(x.value !== v.v) x.value = v.v; });
+  if(snap.focus){ const x = document.getElementById(snap.focus.id); if(x && x.focus){ try{ x.focus(); if(snap.focus.s!=null && x.setSelectionRange) x.setSelectionRange(snap.focus.s, snap.focus.e); }catch(e){} } }
 }
 function renderMain(){
+  const root = document.getElementById("mainContent");
+  const keep = (currentUser && root && root.querySelectorAll && FORM_KEEP_VIEWS.includes(currentView) && lastMainView===currentView) ? formSnap(root) : null;
+  renderMainInner();
+  lastMainView = currentUser ? currentView : null;
+  if(keep) formRestore(keep);
+}
+function renderMainInner(){
   if(!currentUser) return;
   try{ updateNavBadges(); }catch(e){ console.error(e); }
   const el = document.getElementById("mainContent");
@@ -937,6 +957,7 @@ function renderMain(){
     else if(currentView==="billing") el.innerHTML = renderBilling();
     else if(currentView==="rabill") el.innerHTML = renderRaBill();
     else if(currentView==="tcupdates") el.innerHTML = renderTcUpdates();
+    else if(currentView==="surveys") el.innerHTML = renderSurveyReports();
     else if(currentView==="leads") el.innerHTML = renderLeads();
   } else if(currentUser.role === "telecaller"){
     if(currentView==="newCall") el.innerHTML = renderTelecallerNewCall();
@@ -3856,7 +3877,7 @@ function renderSurveyorAddCustomer(){
       <label class="ff-label mt-2">Connection Type</label>
       ${renderCheckboxGroup("survCT", CONNECTION_TYPE_OPTIONS)}
 
-      <p id="surveyGeoStatus" class="text-xs text-gray-500 mt-3 mb-3">📍 Capturing your current location...</p>
+      <p id="surveyGeoStatus" class="text-xs text-gray-500 mt-3 mb-3">${surveyGeotag ? `📍 Location captured: ${surveyGeotag.lat.toFixed(5)}, ${surveyGeotag.lng.toFixed(5)} (±${Math.round(surveyGeotag.accuracy||0)}m)` : "📍 Capturing your current location..."}</p>
       <label class="ff-label">Customer Name *</label>
       <input id="survName" class="ff-input mb-3" placeholder="Full name">
       <label class="ff-label">Father/Husband Name</label>
@@ -3887,6 +3908,7 @@ function renderSurveyorAddCustomer(){
       </div>
       <label class="ff-label">B.P No (if known)</label>
       <input id="survBpNo" class="ff-input mb-3" placeholder="Business Partner No (optional)">
+      <div id="svySection_add">${(svyDrafts.add || (svyDrafts.add = svyNewDraft(null))) && svySectionHtml("add")}</div>
       <label class="ff-label">Notes</label>
       <textarea id="survNotes" class="ff-input mb-4" rows="2" placeholder="Any additional notes for admin"></textarea>
       <button onclick="submitSurveyCustomer()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Submit to Admin</button>
@@ -3934,12 +3956,26 @@ async function submitSurveyCustomer(){
     geotag: geo,
     createdAt: new Date().toISOString()
   };
+  const sd = svyDrafts.add;
+  if(sd && svyHasContent(sd)){                        // the survey's own type goes into the connection type too
+    const ct = new Set((record.connectionType||[]).filter(x=>x!=="New" && x!=="Old")); ct.add(sd.type==="old" ? "Old" : "New"); record.connectionType = [...ct];
+  }
+  let newId = null;
   if(db){
-    try{ await db.collection("customers").add(record); showToast("Customer admin ko bhej diya gaya!"); }
+    try{ const ref = await db.collection("customers").add(record); newId = ref && ref.id; showToast("Customer admin ko bhej diya gaya!"); }
     catch(e){ console.error(e); alert("Save failed, try again."); return; }
   } else {
-    customers.push({id:"local_"+Date.now(), ...record});
+    newId = "local_"+Date.now(); customers.push({id:newId, ...record});
   }
+  if(newId && sd && svyHasContent(sd)){             // survey answers + remark photos -> the survey PDF for the admin
+    sd.pw = [...pendingWork];
+    const built = await svyBuildRecord("add", newId, {...record, id:newId}, geo);
+    if(built){
+      const patch = {survey:built.survey, media:built.media, surveyDoneAt:built.survey.at, surveyDoneBy:currentUser.username};
+      if(await saveJobField(newId, patch)) showToast("Customer + survey (photos ke saath) admin ko bhej diya.");
+    }
+  }
+  svyDrafts.add = null;
   setView("mySurveys");
 }
 
@@ -3961,6 +3997,8 @@ function renderSurveyorMySurveys(){
           <p class="text-xs text-gray-400">📞 ${c.phone||"—"} ${c.geotag ? `• 📍 ${c.geotag.lat.toFixed(5)}, ${c.geotag.lng.toFixed(5)}` : ""}</p>
           ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-xs mt-1"><span class="font-bold">Pending:</span> ${c.pendingWork.join(", ")}</p>` : ""}
           ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
+          ${svyStatusChip(c)}
+          ${c.survey ? `<button onclick="svyReport('${c.id}')" class="w-full text-xs bg-white border border-[#EA8600] text-[#EA8600] font-bold py-1.5 rounded mt-1">🧭 Survey report dekhein</button>` : ""}
           <div class="flex items-center justify-between mt-2">
             ${badge}
             <button onclick="openCustomerDetail('${c.id}')" class="text-xs bg-[#0D904F] text-white px-3 py-1 rounded font-bold">Fill Forms</button>
@@ -4477,6 +4515,7 @@ function renderAdminOverview(){
     </div>
     <button onclick="setView('master')" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-2">🗂 Master Sheet (live) + Forms status</button>
     <button onclick="setView('tcupdates')" class="w-full bg-[#1a73e8] text-white font-bold py-2.5 rounded-lg mb-2">📞 Telecaller updates ${tcUnreadCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${tcUnreadCount()} naye</span>` : ""}</button>
+    <button onclick="setView('surveys')" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">🧭 Survey reports (preview / PDF) ${svyNewCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${svyNewCount()} naye</span>` : ""}</button>
     <button onclick="setView('leads')" class="w-full bg-teal-600 text-white font-bold py-2.5 rounded-lg mb-2">📥 QR connection forms + QR code ${leadNewCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${leadNewCount()} naye</span>` : ""}</button>
     <button onclick="if(confirm('Saare ' + customers.filter(c=>c.status!=='completed').length + ' chal rahe/pending customers ka bacha hua kaam technicians mein baant diya jayega. Pakka?')) autoAllotAll()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">⚡ Pending kaam technicians ko auto-allot karein</button>
     <button onclick="formDefaultsOpen()" class="w-full bg-white border border-[#0D904F] text-[#0D904F] font-bold py-2.5 rounded-lg mb-2">📝 Forms ki fixed details (gauge certificate, testing) ${FD_FIELDS.every(f=>formDefaults[f.k]) ? "✓" : "— bharni hain"}</button>
@@ -7548,7 +7587,7 @@ async function exportTejasavMasterWorkbook(){
   const masterRows = list.map(c=>{ const L = LV.get(c.id), fb = c.tcFeedback || [], last = fb[fb.length-1];
     return [...common(c), tejOurStatus(c), L.slWork, L.giWork, L.ngWork, L.restWork, L.jmr, c.assignedTechnician?techName(c.assignedTechnician):"", c.status||"", ...WS_STAGES.map(st=>(c.allotted && c.allotted[st]) ? techName(c.allotted[st]) : ""), L.o.pct,
       L.workStatus, L.meterNo, c.tcAssigned ? techName(c.tcAssigned) : "", last ? callTxt({at:last.at, by:last.by, txt:[TC_RESULT[last.result]||last.result, last.note].filter(Boolean).join(" - ")}) : "",
-      c.surveyDoneAt ? "DONE" : (c.surveyAssigned ? "ALLOTTED" : ""), `${mediaCount(c)}/${MEDIA_KINDS.length}`, c.source==="qr" ? "QR FORM" : ""]; });
+      c.survey && c.survey.status==="sentback" ? "SENT BACK" : c.surveyDoneAt ? (c.survey && c.survey.status==="accepted" ? "DONE (OK)" : "DONE") : (c.surveyAssigned ? "ALLOTTED" : ""), `${mediaCount(c)}/${MEDIA_KINDS.length}`, c.source==="qr" ? "QR FORM" : ""]; });
   addSheet("MASTER SHEET", [["TEJASAV"],[],[], masterHdr, ...masterRows], [6,22,20,18,13,14,13,9,12,9,9,9,13,9,18,12,12,12,12,12,12,16,14,14,30,10,8,9]);
   addSheet("Capitalisation", capSheetAoa(), [6,34,8,22,16,14,16,14,16,14]);
 
@@ -7650,7 +7689,10 @@ async function exportAllToExcel(){
     "Survey": c.surveyDoneAt ? "Done" : (c.surveyAssigned ? "Allotted: " + techName(c.surveyAssigned) : ""),
     "Telecaller": c.tcAssigned ? techName(c.tcAssigned) : (c.telecallerId ? techName(c.telecallerId) : ""),
     "Last Feedback": last ? `${fpDate(String(last.at).slice(0,10))} ${TC_RESULT[last.result]||last.result||""}${last.note ? " - "+last.note : ""}` : "",
-    "Checklist": c.chkList ? `${chkCount(c.chkList)}/${CHK_TOTAL}` : ""};
+    "Checklist": c.chkList ? `${chkCount(c.chkList)}/${CHK_TOTAL}` : "",
+    "Survey type": c.survey ? (c.survey.type==="old" ? "Old" : "New") : "", "Survey status": c.survey ? (SVY_STATUS[c.survey.status]||c.survey.status).replace(/\s*✓/,"") : "",
+    "Survey problems": c.survey ? svyProblemCount(c.survey) : "", "Survey remarks": c.survey ? (c.survey.remarks||[]).map((r,i)=>`${i+1}. ${r.text||"(photo)"}`).join(" | ") : "",
+    "Customer rating": c.survey && c.survey.rating ? `${c.survey.rating}/5` : "", "Survey material": c.survey ? (c.survey.mat||[]).map(m=>`${m.name}: ${m.qty} ${m.unit||""}`).join(" | ") : ""};
     MEDIA_KINDS.forEach(x=>{ const m = mediaMeta(c, x.k); row["Photo: " + x.l] = m ? (m.at ? `${pgDate(new Date(m.at))} ${pgTime(new Date(m.at))}` : "Yes") : ""; });
     return row; });
   if(custRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(custRows), "Customers");
@@ -9324,9 +9366,10 @@ async function svyAssign(cid){
   showToast(`${c.name}: survey ke liye ${techName(u)} ko diya`); renderMain();
 }
 function svyChip(c){
-  if(c.surveyDoneAt) return `<p class="text-[11px] mt-1 bg-green-50 text-green-800 rounded px-2 py-1">✅ Survey ho gaya — ${wzEsc(techName(c.surveyDoneBy))}, ${fpDate(String(c.surveyDoneAt).slice(0,10))}${c.geotag?" • 📍 location":""}</p>`;
-  if(c.surveyAssigned) return `<p class="text-[11px] mt-1 bg-orange-50 text-orange-800 rounded px-2 py-1">🧭 Survey: ${wzEsc(techName(c.surveyAssigned))} ko diya (${fpDate(String(c.surveyAssignedAt||"").slice(0,10))})</p>`;
-  return "";
+  const rep = c.survey ? svyStatusChip(c) + `<button onclick="svyReport('${c.id}')" class="w-full bg-[#EA8600] text-white text-xs font-bold py-1.5 rounded mt-1">🧭 Survey report — preview / PDF</button>` : "";
+  if(c.surveyDoneAt) return `<p class="text-[11px] mt-1 bg-green-50 text-green-800 rounded px-2 py-1">✅ Survey ho gaya — ${wzEsc(techName(c.surveyDoneBy))}, ${fpDate(String(c.surveyDoneAt).slice(0,10))}${c.geotag?" • 📍 location":""}</p>` + rep;
+  if(c.surveyAssigned) return `<p class="text-[11px] mt-1 bg-orange-50 text-orange-800 rounded px-2 py-1">🧭 Survey: ${wzEsc(techName(c.surveyAssigned))} ko diya (${fpDate(String(c.surveyAssignedAt||"").slice(0,10))})</p>` + rep;
+  return rep;
 }
 function svyAssignRow(c){
   return `<div class="flex gap-1 mt-2"><select id="svySel_${c.id}" class="ff-input text-xs flex-1"><option value="">🧭 surveyor…</option>${userOpts("surveyor", c.surveyAssigned||"")}</select>
@@ -9343,49 +9386,9 @@ function renderSurveyAllotted(){
     <div class="space-y-2">${mine.map(c=>{ const call = callLink(c.phone); return `<div class="bg-gray-50 rounded p-2">
       <p class="font-bold text-sm">${wzEsc(c.name)}</p><p class="text-[11px] text-gray-500">${wzEsc(c.address||c.area||"")}</p>
       <p class="text-[11px] text-gray-400">📞 ${wzEsc(c.phone||"—")}</p>
+      ${c.survey && c.survey.status==="sentback" && c.survey.sendBack ? `<p class="text-[11px] bg-red-50 text-red-700 rounded p-1 mt-1">↩ Admin ne wapas bheja: ${wzEsc(c.survey.sendBack.note||"")}</p>` : ""}
       <div class="flex gap-2 mt-1">${call?`<a href="${call}" class="flex-1 text-center bg-blue-600 text-white text-xs font-bold py-1.5 rounded">📞 Call</a>`:""}<button onclick="svyOpen('${c.id}')" class="flex-1 bg-[#0D904F] text-white text-xs font-bold py-1.5 rounded">🧭 Survey karein</button></div></div>`; }).join("")}</div>
   </div>`;
-}
-let svyGeo = null;
-function svyOpen(cid){
-  const c = customers.find(x=>x.id===cid); if(!c) return;
-  svyGeo = null;
-  let ov = document.getElementById("svyOverlay");
-  if(!ov){ ov = document.createElement("div"); ov.id = "svyOverlay"; document.body.appendChild(ov); }
-  ov.style.cssText = "position:fixed;inset:0;z-index:70;background:#f3f4f6;overflow-y:auto;padding:0 0 90px 0;";
-  const v = k=>wzEsc(c[k]||""), inp = (id, k, ph)=>`<input id="${id}" class="ff-input" placeholder="${ph}" value="${v(k)}">`;
-  const pw = new Set(c.pendingWork||[]), ct = new Set(c.connectionType||[]);
-  const cb = (pre, opts, set)=>`<div class="grid grid-cols-2 gap-2 text-sm mb-1">${opts.map(o=>`<label class="flex items-center gap-2 bg-gray-50 rounded px-2 py-2"><input type="checkbox" id="${pre}_${o.key}" class="w-4 h-4 accent-[#0D904F]" ${set.has(o.label)?"checked":""}> ${o.label}</label>`).join("")}</div>`;
-  ov.innerHTML = `<div class="bg-[#0D904F] text-white p-3 flex items-center gap-3 sticky top-0 z-10"><button onclick="svyClose()" class="text-2xl font-bold">←</button>
-      <div><p class="font-bold text-sm">🧭 Survey — ${wzEsc(c.name)}</p><p class="text-[11px] text-green-100">${wzEsc(c.phone||"")}</p></div></div>
-    <div class="p-3"><div class="bg-white rounded-lg shadow p-3">
-      <p id="svyGeoStatus" class="text-xs text-gray-500 mb-2">📍 Location li ja rahi hai…</p>
-      <label class="ff-label">Pending work</label>${cb("svyPW", PENDING_WORK_OPTIONS, pw)}
-      <label class="ff-label mt-2">Connection type</label>${cb("svyCT", CONNECTION_TYPE_OPTIONS, ct)}
-      <label class="ff-label mt-2">Naam</label>${inp("svyName","name","Naam")}
-      <label class="ff-label">Father / Husband</label>${inp("svyFather","fatherHusbandName","Father / Husband")}
-      <div class="grid grid-cols-2 gap-2 my-2">${inp("svyHouse","houseNo","House No")}${inp("svyPin","pinCode","Pin Code")}${inp("svySociety","society","Society / Colony")}${inp("svyStreet","street","Street")}${inp("svyArea","area","Area")}${inp("svyLandmark","landmark","Landmark")}</div>
-      <label class="ff-label">Poora address</label><textarea id="svyAddr" class="ff-input mb-2" rows="2">${v("address")}</textarea>
-      <label class="ff-label">Survey notes (TF, meter jagah, route, problem…)</label><textarea id="svyNotes" class="ff-input mb-3" rows="2">${wzEsc(c.surveyNotes||"")}</textarea>
-      <button onclick="svySubmit('${c.id}')" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg">✅ Survey complete — admin ko bhejein</button>
-    </div></div>`;
-  getGeoTag().then(g=>{ svyGeo = g; const s = document.getElementById("svyGeoStatus"); if(s) s.textContent = g ? `📍 Location: ${g.lat.toFixed(5)}, ${g.lng.toFixed(5)} (±${Math.round(g.accuracy||0)}m)` : "⚠️ Location nahi mili (GPS on karein) — bina location ke bhi bhej sakte hain."; });
-}
-function svyClose(){ const ov = document.getElementById("svyOverlay"); if(ov) ov.remove(); }
-async function svySubmit(cid){
-  const c = customers.find(x=>x.id===cid); if(!c) return;
-  const g = id=>{ const el = document.getElementById(id); return el ? String(el.value||"").trim() : ""; };
-  const name = g("svyName");
-  if(!name){ alert("Naam khali nahi ho sakta."); return; }
-  const pin = g("svyPin"); if(pin && !/^\d{6}$/.test(pin)){ alert("Pin code 6 digit ka hona chahiye."); return; }
-  const patch = {name, fatherHusbandName:g("svyFather"), houseNo:g("svyHouse"), pinCode:pin, society:g("svySociety"), street:g("svyStreet"), area:g("svyArea"), landmark:g("svyLandmark"),
-    pendingWork:collectCheckboxGroup("svyPW", PENDING_WORK_OPTIONS), connectionType:collectCheckboxGroup("svyCT", CONNECTION_TYPE_OPTIONS),
-    surveyNotes:g("svyNotes"), surveyDoneAt:new Date().toISOString(), surveyDoneBy:currentUser.username};
-  patch.address = g("svyAddr") || [patch.houseNo, patch.street, patch.society, patch.area, "Sonipat", patch.pinCode].filter(Boolean).join(", ");
-  // the customer's own application-form location stays as it is; the surveyor's GPS is kept next to it
-  if(svyGeo){ if(c.appGeo || c.geotag) patch.surveyGeo = svyGeo; else patch.geotag = svyGeo; }
-  if(!(await saveJobField(cid, patch))) return;
-  svyClose(); showToast("Survey admin ko bhej diya."); renderMain();
 }
 
 
@@ -9904,7 +9907,7 @@ const MEDIA_KINDS = [
 const MEDIA_CHUNK = 200000, MEDIA_VIDEO_SEC = 10;
 const mediaCache = {};
 let mediaCtx = {where:"main", cid:null};
-const mediaKind = k=>MEDIA_KINDS.find(x=>x.k===k);
+const mediaKind = k=>MEDIA_KINDS.find(x=>x.k===k) || (String(k||"").startsWith("svy_") ? {k, st:"SVY", l:"Survey photo", icon:"🧭", type:"photo"} : undefined);
 function mediaMeta(c, k){
   const m = ((c||{}).media||{})[k];
   if(m && m.n) return m;
@@ -9958,21 +9961,27 @@ function mediaRefresh(cid){
   else renderMain();
 }
 // ---- storage ----
-async function mediaStore(cid, k, dataUrl, meta){
-  const c = customers.find(x=>x.id===cid); if(!c || !currentUser) return false;
-  const ver = Date.now().toString(36), parts = [];
+let mediaSeq = 0;
+// writes the picture in parts and returns its record (the caller keeps the record on the customer)
+async function mediaPutParts(cid, k, dataUrl, meta){
+  const ver = Date.now().toString(36) + (mediaSeq++).toString(36), parts = [];
   for(let i=0;i<dataUrl.length;i+=MEDIA_CHUNK) parts.push(dataUrl.slice(i, i+MEDIA_CHUNK));
-  const old = (c.media||{})[k];
   if(db){
     try{ for(let i=0;i<parts.length;i++) await db.doc(`media/${cid}__${k}__${ver}__${i}`).set({cid, k, ver, i, n:parts.length, d:parts[i], at:new Date().toISOString()}); }
-    catch(e){ console.error(e); alert("Photo / video save nahi hui — internet check karke dobara try karein."); return false; }
+    catch(e){ console.error(e); alert("Photo / video save nahi hui — internet check karke dobara try karein."); return null; }
   }
   mediaCache[`${cid}|${k}|${ver}`] = dataUrl;
-  const rec = {ver, n:parts.length, type:meta.type, at:new Date().toISOString(), by:currentUser.username, geo:meta.geo || null, size:dataUrl.length, ...(meta.dur ? {dur:meta.dur} : {})};
+  return {ver, n:parts.length, type:meta.type, at:meta.at || new Date().toISOString(), by:(currentUser||{}).username || "", geo:meta.geo || null, size:dataUrl.length, ...(meta.dur ? {dur:meta.dur} : {})};
+}
+async function mediaDropParts(cid, k, old){ if(db && old && old.ver && old.n){ for(let i=0;i<old.n;i++){ try{ await db.doc(`media/${cid}__${k}__${old.ver}__${i}`).delete(); }catch(e){ console.error(e); } } } }
+async function mediaStore(cid, k, dataUrl, meta){
+  const c = customers.find(x=>x.id===cid); if(!c || !currentUser) return false;
+  const old = (c.media||{})[k];
+  const rec = await mediaPutParts(cid, k, dataUrl, meta); if(!rec) return false;
   const media = {...(c.media||{}), [k]:rec};
   if(!(await saveJobField(cid, {media}))) return false;
   Object.assign(customers.find(x=>x.id===cid) || {}, {media});
-  if(db && old && old.ver && old.n){ for(let i=0;i<old.n;i++){ try{ await db.doc(`media/${cid}__${k}__${old.ver}__${i}`).delete(); }catch(e){ console.error(e); } } }
+  await mediaDropParts(cid, k, old);
   return true;
 }
 async function mediaLoad(c, k){
@@ -10026,20 +10035,25 @@ function mediaTake(cid, k){
 function mediaReadImage(file){
   return new Promise((resolve, reject)=>{ const r = new FileReader(); r.onload = e=>{ const img = new Image(); img.onload = ()=>resolve(img); img.onerror = ()=>reject(new Error("image")); img.src = e.target.result; }; r.onerror = ()=>reject(new Error("file")); r.readAsDataURL(file); });
 }
+// one photo -> small JPEG with the stamp (name, what, time, lat / long); returns {out, geo}
+async function mediaMakePhoto(file, c, x){
+  const [img, geo] = await Promise.all([mediaReadImage(file), getGeoTag()]);
+  let out = "";
+  for(const [maxDim, q] of [[1280, 0.72], [1024, 0.62], [800, 0.55]]){
+    let w = img.width, h = img.height;
+    if(w >= h && w > maxDim){ h = Math.round(h*maxDim/w); w = maxDim; } else if(h > maxDim){ w = Math.round(w*maxDim/h); h = maxDim; }
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    const ctx = cv.getContext("2d"); ctx.drawImage(img, 0, 0, w, h); mediaStamp(ctx, w, h, mediaLines(c, x, geo));
+    out = cv.toDataURL("image/jpeg", q);
+    if(out.length <= 420000) break;
+  }
+  return {out, geo};
+}
 async function mediaPhotoSave(cid, k, file){
   const c = customers.find(x=>x.id===cid), x = mediaKind(k); if(!c || !x) return;
   const tt = showToast("Photo aur location li ja rahi hai...");
   try{
-    const [img, geo] = await Promise.all([mediaReadImage(file), getGeoTag()]);
-    let out = "";
-    for(const [maxDim, q] of [[1280, 0.72], [1024, 0.62], [800, 0.55]]){
-      let w = img.width, h = img.height;
-      if(w >= h && w > maxDim){ h = Math.round(h*maxDim/w); w = maxDim; } else if(h > maxDim){ w = Math.round(w*maxDim/h); h = maxDim; }
-      const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
-      const ctx = cv.getContext("2d"); ctx.drawImage(img, 0, 0, w, h); mediaStamp(ctx, w, h, mediaLines(c, x, geo));
-      out = cv.toDataURL("image/jpeg", q);
-      if(out.length <= 420000) break;
-    }
+    const {out, geo} = await mediaMakePhoto(file, c, x);
     hideToast(tt);
     if(await mediaStore(cid, k, out, {type:"image/jpeg", geo})){ showToast(`${x.l}: photo save ho gayi${geo?" (location ke saath)":""}.`); mediaRefresh(cid); }
   }catch(e){ console.error(e); hideToast(tt); alert("Photo process nahi ho payi, dobara try karein."); }
@@ -10129,6 +10143,419 @@ async function mediaVideoSave(cid, k, out, geo){
   const x = mediaKind(k), dataUrl = await mediaBlobToDataUrl(out.blob);
   if(dataUrl.length > 2400000){ alert("Video bahut badi ban gayi — dobara chhoti video lein."); return; }
   if(await mediaStore(cid, k, dataUrl, {type: out.blob.type || "video/webm", geo, dur: out.dur})){ showToast(`${x.l}: video save ho gayi.`); mediaRefresh(cid); }
+}
+
+
+/* ---------- field survey (v49): new / old connection checks, remarks with photos, one survey PDF;
+   admin previews / downloads it, accepts it or sends it back to the surveyor for reverify ---------- */
+const SVY_NEW_Q = [
+  {k:"mainDist", l:"Main line se ghar ki doori", t:"number", unit:" m"},
+  {k:"mainSide", l:"Main line kis taraf hai", t:"choice", o:{same:"Ghar ki side", opposite:"Ghar ke opposite side"}},
+  {k:"giEst", l:"Kitna GI pipe lag sakta hai (andaza)", t:"number", unit:" m"},
+  {k:"nearby", l:"Aas-paas kitne aur connection ki opportunity", t:"number", unit:" ghar"},
+  {k:"nearbyNote", l:"Opportunity note (kaun si gali / ghar)", t:"text"},
+];
+const SVY_OLD_Q = [
+  {k:"giLeak", l:"GI mein leakage", t:"choice", o:{no:"Nahi", yes:"Haan"}},
+  {k:"pipeQ", l:"GI pipe quality", t:"choice", o:{ok:"Theek", bad:"Kharab"}},
+  {k:"giMissing", l:"GI ka koi item missing", t:"choice", o:{no:"Nahi", yes:"Haan"}, more:"giMissingWhat", moreL:"Kaun sa item missing hai"},
+  {k:"paint", l:"GI paint", t:"choice", o:{yes:"Hai", no:"Nahi hai"}},
+  {k:"fitIssue", l:"Fitting ka issue", t:"choice", o:{no:"Nahi", yes:"Haan"}, more:"fitIssueWhat", moreL:"Kya issue hai"},
+  {k:"meterClamp", l:"Meter clamp", t:"choice", o:{fitted:"Laga hai", missing:"Gayab"}},
+  {k:"regulator", l:"Regulator", t:"choice", o:{fitted:"Laga hai", missing:"Gayab"}},
+  {k:"mainCharged", l:"Main line charge hai", t:"choice", o:{yes:"Haan", no:"Nahi"}},
+  {k:"refit", l:"Customer refitting chahta hai", t:"choice", o:{no:"Nahi", yes:"Haan"}},
+];
+const SVY_BAD = {giLeak:"yes", pipeQ:"bad", giMissing:"yes", paint:"no", fitIssue:"yes", meterClamp:"missing", regulator:"missing", mainCharged:"no", refit:"yes"};
+const SVY_STATUS = {submitted:"Admin ke paas", sentback:"Wapas bheja (reverify)", accepted:"Theek hai ✓"};
+const SVY_TYPE = {new:"NEW CONNECTION", old:"OLD CONNECTION"};
+const SVY_RATE = {1:"Bahut mushkil customer", 2:"Mushkil — baar baar samjhana padega", 3:"Theek", 4:"Accha — sahyog karega", 5:"Bahut accha — turant kaam chahta hai"};
+const SVY_MAT_LIST = [["MDPE Pipe 20mm","Mtrs"],["MDPE Pipe 32mm","Mtrs"],['GI Pipe 1/2"',"Mtrs"],['GI Pipe 3/4"',"Mtrs"],['Elbow 1/2"',"Nos"],['Elbow 3/4"',"Nos"],['Tee 1/2"',"Nos"],
+  ['Socket 1/2"',"Nos"],['Union 1/2"',"Nos"],['Isolation Valve (IV) 1/2"',"Nos"],['Appliance Valve (AV) 1/2"',"Nos"],["Regulator","Nos"],["Gas Meter","Nos"],["Meter Clamp","Nos"],
+  ["Pipe Clamp","Nos"],["Suraksha Hose","Nos"],["Transition Fitting 20mm","Nos"],["Tapping Saddle 63x20","Nos"],["Warning Plate","Nos"],["PVC Sleeve","Nos"],["GI Sleeve","Nos"]];
+const svyMatUnit = n=>{ const k = invKey(n), hit = SVY_MAT_LIST.find(x=>invKey(x[0])===k) || (inventory||[]).map(i=>[i.itemName, i.unit]).find(x=>invKey(x[0])===k); return hit ? hit[1] : "Nos"; };
+let svyDrafts = {add:null, allot:null};
+let svyGeo = null;
+function svyQs(type){ return type==="old" ? SVY_OLD_Q : SVY_NEW_Q; }
+function svyNewDraft(c){
+  const sv = (c && c.survey) || null;
+  const type = sv ? sv.type : ((c && (c.connectionType||[]).includes("Old")) ? "old" : "new");
+  return {cid: c ? c.id : null, type, a:{...((sv||{}).a||{})}, pw: c ? [...(c.pendingWork||[])] : [],
+    remarks:((sv||{}).remarks||[]).map(r=>({...r, photo:null, changed:false})),
+    rating: Number((sv||{}).rating)||0, ratingNote:(sv||{}).ratingNote || "", mat:((sv||{}).mat||[]).map(m=>({...m}))};
+}
+function svyAns(q, a){ const v = (a||{})[q.k]; if(v===undefined || v===null || v==="") return ""; return q.t==="choice" ? (q.o[v] || v) : String(v) + (q.unit||""); }
+function svyIsBad(q, a){ return SVY_BAD[q.k] !== undefined && (a||{})[q.k] === SVY_BAD[q.k]; }
+function svyProblemCount(sv){ return sv ? svyQs(sv.type).filter(q=>svyIsBad(q, sv.a)).length : 0; }
+function svyHasContent(d){ return !!(d && (Object.values(d.a||{}).some(v=>v!=="" && v!==undefined && v!==null) || (d.remarks||[]).some(r=>(r.text||"").trim() || r.photo || r.mk) || d.rating || (d.mat||[]).some(m=>m.name && Number(m.qty)>0))); }
+function svyMatClean(list){ return (list||[]).filter(m=>String(m.name||"").trim() && Number(m.qty)>0).map(m=>({name:String(m.name).trim(), unit:m.unit || svyMatUnit(m.name), qty:Math.round(Number(m.qty)*100)/100})); }
+const svyStars = n=>"★".repeat(Math.max(0, Math.min(5, n||0))) + "☆".repeat(5 - Math.max(0, Math.min(5, n||0)));
+function svySectionHtml(ctx){
+  const d = svyDrafts[ctx]; if(!d) return "";
+  const qs = svyQs(d.type);
+  const qHtml = qs.map(q=>{
+    const v = d.a[q.k];
+    if(q.t==="choice") return `<div class="mb-2"><p class="ff-label">${q.l}</p><div class="flex flex-wrap gap-1">${Object.keys(q.o).map(k=>`<button type="button" onclick="svySet('${ctx}','${q.k}','${k}')" class="px-3 py-1.5 rounded text-xs font-bold ${v===k ? (SVY_BAD[q.k]===k ? "bg-red-600 text-white" : "bg-[#0D904F] text-white") : "bg-gray-100 text-gray-700"}">${q.o[k]}</button>`).join("")}</div>
+        ${q.more && v==="yes" ? `<input id="svyA_${ctx}_${q.more}" class="ff-input text-xs mt-1" placeholder="${q.moreL}" value="${wzEsc(d.a[q.more]||"")}" oninput="svyDrafts['${ctx}'].a['${q.more}']=this.value">` : ""}</div>`;
+    return `<div class="mb-2"><label class="ff-label">${q.l}${q.unit ? ` (${q.unit.trim()})` : ""}</label><input id="svyA_${ctx}_${q.k}" class="ff-input text-xs" ${q.t==="number" ? 'type="number" step="any" inputmode="decimal"' : ""} value="${wzEsc(v===undefined ? "" : v)}" oninput="svyDrafts['${ctx}'].a['${q.k}']=this.value"></div>`;
+  }).join("");
+  const pwHtml = ctx==="allot" ? `<p class="ff-label mt-1">${d.type==="old" ? "Pending konsa kaam hai" : "Pending work"}</p><div class="grid grid-cols-2 gap-1 text-xs mb-2">${PENDING_WORK_OPTIONS.map(o=>`<label class="flex items-center gap-2 bg-gray-50 rounded px-2 py-1.5"><input type="checkbox" id="svyPW_${o.key}" ${d.pw.includes(o.label)?"checked":""} onchange="svyPw('${ctx}','${o.label}', this.checked)" class="w-4 h-4 accent-[#0D904F]"> ${o.label}</label>`).join("")}</div>`
+    : (d.type==="old" ? `<p class="text-[11px] text-gray-500 mb-2">Pending konsa kaam hai — upar "Pending Work" mein tick karein.</p>` : "");
+  const rHtml = d.remarks.map((r,i)=>`<div class="border rounded p-2 mb-2 bg-gray-50">
+      <div class="flex justify-between items-center mb-1"><b class="text-xs">Remark ${i+1}</b><button type="button" onclick="svyDelRemark('${ctx}','${r.id}')" class="text-[11px] text-red-600 font-bold">🗑 Hatao</button></div>
+      <textarea id="svyR_${ctx}_${r.id}" class="ff-input text-xs" rows="2" placeholder="Kya dekha / kya problem hai" oninput="svyRemarkText('${ctx}','${r.id}', this.value)">${wzEsc(r.text||"")}</textarea>
+      ${r.photo ? `<img src="${r.photo}" class="w-full rounded mt-1 border" style="max-height:170px;object-fit:cover">` : (r.mk ? `<p class="text-[11px] text-green-700 mt-1">📷 Photo save hai ${d.cid ? `<button type="button" onclick="mediaView('${d.cid}','${r.mk}')" class="underline font-bold">dekhein</button>` : ""}</p>` : "")}
+      ${r.geo && r.geo.lat ? `<p class="text-[10px] text-gray-500">📍 ${Number(r.geo.lat).toFixed(6)}, ${Number(r.geo.lng).toFixed(6)}</p>` : ""}
+      <button type="button" onclick="svyRemarkPhoto('${ctx}','${r.id}')" class="w-full mt-1 bg-[#8430CE] text-white text-xs font-bold py-1.5 rounded">${r.photo || r.mk ? "🔄 Photo badlein" : "📷 Photo lein"}</button>
+    </div>`).join("");
+  return `<div class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 border-[#EA8600]">
+    <p class="font-bold text-sm text-gray-800 mb-1">🧭 Survey details</p>
+    <div class="grid grid-cols-2 gap-2 mb-2">${[["new","🆕 New connection"],["old","🏠 Old connection"]].map(([k,l])=>`<button type="button" onclick="svyType('${ctx}','${k}')" class="py-2 rounded text-xs font-bold ${d.type===k?"bg-[#EA8600] text-white":"bg-gray-100 text-gray-700"}">${l}</button>`).join("")}</div>
+    ${qHtml}${pwHtml}
+    <p class="ff-label mt-2">⭐ Customer rating — kis type ka customer hai</p>
+    <div class="flex items-center gap-1">${[1,2,3,4,5].map(n=>`<button type="button" onclick="svyRate('${ctx}',${n})" class="text-3xl leading-none ${n<=(d.rating||0)?"text-yellow-500":"text-gray-300"}">★</button>`).join("")}</div>
+    <p class="text-[11px] ${d.rating?"text-gray-700 font-bold":"text-gray-400"} mb-1">${d.rating ? `${d.rating}/5 — ${SVY_RATE[d.rating]}` : "Star dabakar rating dein"}</p>
+    <input id="svyRateNote_${ctx}" class="ff-input text-xs mb-2" placeholder="Rating ka reason (optional)" value="${wzEsc(d.ratingNote||"")}" oninput="svyDrafts['${ctx}'].ratingNote=this.value">
+    <p class="ff-label mt-2">🧰 Material requirement (andaza)</p>
+    <p class="text-[10px] text-gray-500 mb-1">Is ghar ke kaam ke liye kaun sa material kitna lagega. Ye admin ko survey PDF aur Excel mein milega.</p>
+    ${(d.mat||[]).map((m,i)=>`<div class="flex gap-1 mb-1 items-center">
+      <input id="svyMatN_${ctx}_${i}" class="ff-input text-xs flex-1" list="svyMatList" placeholder="Material" value="${wzEsc(m.name||"")}" oninput="svyMatSet('${ctx}',${i},'name',this.value)">
+      <input id="svyMatQ_${ctx}_${i}" class="ff-input text-xs" style="width:64px" type="number" step="any" inputmode="decimal" placeholder="Qty" value="${wzEsc(m.qty===undefined?"":m.qty)}" oninput="svyMatSet('${ctx}',${i},'qty',this.value)">
+      <span class="text-[10px] text-gray-500 w-8">${wzEsc(m.unit || svyMatUnit(m.name))}</span>
+      <button type="button" onclick="svyMatDel('${ctx}',${i})" class="text-red-600 text-xs font-bold px-1">✕</button></div>`).join("")}
+    <datalist id="svyMatList">${[...new Set([...SVY_MAT_LIST.map(x=>x[0]), ...(inventory||[]).map(i=>i.itemName)])].map(n=>`<option value="${wzEsc(n)}">`).join("")}</datalist>
+    <div class="grid grid-cols-2 gap-2 mb-2"><button type="button" onclick="svyMatAdd('${ctx}')" class="bg-white border border-[#0D904F] text-[#0D904F] text-xs font-bold py-1.5 rounded">+ Material jodein</button>
+      <button type="button" onclick="svyMatGuess('${ctx}')" class="bg-[#0D904F] text-white text-xs font-bold py-1.5 rounded">⚡ Survey se andaza bharein</button></div>
+    <p class="ff-label mt-2">Remarks + photos</p>
+    <p class="text-[10px] text-gray-500 mb-1">Har remark ke saath photo le sakte hain — photo par naam, time aur lat / long chhap jata hai. Saari photos ek survey PDF mein admin ke paas jaati hain.</p>
+    ${rHtml}
+    <button type="button" onclick="svyAddRemark('${ctx}')" class="w-full bg-white border border-[#8430CE] text-[#8430CE] text-xs font-bold py-2 rounded">+ Remark / photo jodein</button>
+  </div>`;
+}
+function svyRate(ctx, n){ const d = svyDrafts[ctx]; if(!d) return; d.rating = d.rating===n ? 0 : n; svyRenderSection(ctx); }
+function svyMatAdd(ctx){ const d = svyDrafts[ctx]; if(!d) return; d.mat = d.mat || []; d.mat.push({name:"", qty:"", unit:""}); svyRenderSection(ctx); }
+function svyMatDel(ctx, i){ const d = svyDrafts[ctx]; if(!d) return; d.mat.splice(i, 1); svyRenderSection(ctx); }
+function svyMatSet(ctx, i, k, v){ const d = svyDrafts[ctx]; if(!d || !d.mat[i]) return; d.mat[i][k] = v; if(k==="name") d.mat[i].unit = svyMatUnit(v); }
+// fills an estimate from the survey answers — only items not already listed; the surveyor can change every number
+function svyMatGuess(ctx){
+  const d = svyDrafts[ctx]; if(!d) return; d.mat = d.mat || [];
+  const a = d.a || {}, n = v=>Number(v)||0, add = (name, qty)=>{ if(!(qty>0)) return; if(d.mat.some(m=>invKey(m.name)===invKey(name))) return; d.mat.push({name, qty:Math.round(qty*100)/100, unit:svyMatUnit(name)}); };
+  if(d.type==="new"){
+    add("MDPE Pipe 20mm", n(a.mainDist)); add('GI Pipe 1/2"', n(a.giEst));
+    ["Transition Fitting 20mm","Tapping Saddle 63x20","Gas Meter","Regulator","Meter Clamp",'Isolation Valve (IV) 1/2"','Appliance Valve (AV) 1/2"',"Warning Plate"].forEach(x=>add(x, 1));
+    if(n(a.giEst)) add("Pipe Clamp", Math.ceil(n(a.giEst)));
+  } else {
+    if(a.regulator==="missing") add("Regulator", 1);
+    if(a.meterClamp==="missing") add("Meter Clamp", 1);
+    if(a.giMissing==="yes" && String(a.giMissingWhat||"").trim()) add(String(a.giMissingWhat).trim(), 1);
+  }
+  svyRenderSection(ctx);
+  showToast(d.mat.length ? "Andaza bhar diya — quantity check karke badal sakte hain." : "Pehle upar ke sawal bhariye (doori, GI pipe…).");
+}
+function svyRenderSection(ctx){ const el = document.getElementById("svySection_" + ctx); if(el && svyDrafts[ctx]) el.innerHTML = svySectionHtml(ctx); }
+function svyType(ctx, t){ const d = svyDrafts[ctx]; if(!d) return; d.type = t; svyRenderSection(ctx); }
+function svySet(ctx, k, v){ const d = svyDrafts[ctx]; if(!d) return; d.a[k] = d.a[k]===v ? "" : v; svyRenderSection(ctx); }
+function svyPw(ctx, label, on){ const d = svyDrafts[ctx]; if(!d) return; const s = new Set(d.pw); if(on) s.add(label); else s.delete(label); d.pw = [...s]; }
+function svyAddRemark(ctx){ const d = svyDrafts[ctx]; if(!d) return; d.remarks.push({id:"r" + Date.now().toString(36) + d.remarks.length, text:"", photo:null, mk:null, geo:null, at:null, changed:false}); svyRenderSection(ctx); }
+function svyDelRemark(ctx, id){ const d = svyDrafts[ctx]; if(!d) return; const r = d.remarks.find(x=>x.id===id); if(r && (r.text || r.photo || r.mk) && !confirm("Ye remark (aur uski photo) hatana hai?")) return; d.remarks = d.remarks.filter(x=>x.id!==id); svyRenderSection(ctx); }
+function svyRemarkText(ctx, id, v){ const d = svyDrafts[ctx], r = d && d.remarks.find(x=>x.id===id); if(r) r.text = v; }
+function svyStampCust(ctx){
+  const d = svyDrafts[ctx];
+  if(d && d.cid){ const c = customers.find(x=>x.id===d.cid); if(c) return c; }
+  const g = id=>{ const el = document.getElementById(id); return el ? String(el.value||"").trim() : ""; };
+  return {name: g("survName") || "Naya customer", bpNo: g("survBpNo"), sn: "new"};
+}
+function svyRemarkPhoto(ctx, id){
+  const d = svyDrafts[ctx], r = d && d.remarks.find(x=>x.id===id); if(!r) return;
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture", "environment"); inp.style.display = "none";
+  inp.onchange = async ()=>{
+    const f = inp.files && inp.files[0]; inp.remove(); if(!f) return;
+    const tt = showToast("Photo aur location li ja rahi hai...");
+    try{
+      const {out, geo} = await mediaMakePhoto(f, svyStampCust(ctx), {l: "Survey" + (r.text ? ": " + String(r.text).slice(0,40) : "")});
+      r.photo = out; r.geo = geo; r.at = new Date().toISOString(); r.changed = true;
+      hideToast(tt); svyRenderSection(ctx);
+    }catch(e){ console.error(e); hideToast(tt); alert("Photo process nahi ho payi, dobara try karein."); }
+  };
+  document.body.appendChild(inp); inp.click();
+}
+// uploads the new photos; returns the survey record, the customer's media map and the old photo parts to delete
+async function svyBuildRecord(ctx, cid, c, geo){
+  const d = svyDrafts[ctx], prev = (c && c.survey) || null, media = {...((c && c.media)||{})}, drop = [], remarks = [];
+  let n = 0; const total = d.remarks.filter(r=>r.photo && r.changed).length;
+  for(const r of d.remarks){
+    if(!(r.text||"").trim() && !r.photo && !r.mk) continue;
+    let mk = r.mk || null;
+    if(r.photo && r.changed){
+      const t = showToast(`Survey photos upload ho rahi hain (${++n}/${total})...`);
+      mk = mk || ("svy_" + r.id);
+      const old = media[mk], rec = await mediaPutParts(cid, mk, r.photo, {type:"image/jpeg", geo:r.geo, at:r.at});
+      hideToast(t);
+      if(!rec) return null;
+      media[mk] = rec; if(old) drop.push([mk, old]);
+    }
+    remarks.push({id:r.id, text:(r.text||"").trim(), mk, geo:r.geo || null, at:r.at || null});
+  }
+  ((prev && prev.remarks)||[]).forEach(r=>{ if(r.mk && !remarks.some(x=>x.mk===r.mk) && media[r.mk]){ drop.push([r.mk, media[r.mk]]); delete media[r.mk]; } });
+  const now = new Date().toISOString(), a = {};
+  svyQs(d.type).forEach(q=>{ const v = d.a[q.k]; if(v!==undefined && v!==null && v!==""){ a[q.k] = q.t==="number" && !isNaN(Number(v)) ? Number(v) : v; }
+    if(q.more && d.a[q.k]==="yes" && String(d.a[q.more]||"").trim()) a[q.more] = String(d.a[q.more]).trim(); });
+  const survey = {type:d.type, a, pw:[...d.pw], remarks, rating:Number(d.rating)||0, ratingNote:String(d.ratingNote||"").trim(), mat:svyMatClean(d.mat),
+    geo: geo || (prev && prev.geo) || null, at:now, by:currentUser.username, status:"submitted",
+    round:((prev && prev.round) || 0) + 1, sendBack:(prev && prev.sendBack) || null,
+    history:[...((prev && prev.history)||[]), {at:now, by:currentUser.username, act:"submitted"}].slice(-20)};
+  return {survey, media, drop};
+}
+// ---- surveyor: an allotted (or sent back) survey ----
+function svyOpen(cid){
+  const c = customers.find(x=>x.id===cid); if(!c) return;
+  svyGeo = null; svyDrafts.allot = svyNewDraft(c);
+  let ov = document.getElementById("svyOverlay");
+  if(!ov){ ov = document.createElement("div"); ov.id = "svyOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:70;background:#f3f4f6;overflow-y:auto;padding:0 0 90px 0;";
+  const v = k=>wzEsc(c[k]||""), inp = (id, k, ph)=>`<input id="${id}" class="ff-input" placeholder="${ph}" value="${v(k)}">`, sb = c.survey && c.survey.status==="sentback" ? c.survey.sendBack : null;
+  ov.innerHTML = `<div class="bg-[#0D904F] text-white p-3 flex items-center gap-3 sticky top-0 z-10"><button onclick="svyClose()" class="text-2xl font-bold">←</button>
+      <div><p class="font-bold text-sm">🧭 Survey — ${wzEsc(c.name)}</p><p class="text-[11px] text-green-100">${wzEsc(c.phone||"")} ${c.sn?"• S.No "+c.sn:""}</p></div></div>
+    <div class="p-3">
+      ${sb ? `<div class="bg-red-50 border border-red-200 text-red-800 rounded-lg p-2 mb-3 text-xs"><b>↩ Admin ne wapas bheja (reverify):</b> ${wzEsc(sb.note||"")}<br><span class="text-[10px]">${wzEsc(techName(sb.by))} • ${fpDate(String(sb.at).slice(0,10))}</span></div>` : ""}
+      <p id="svyGeoStatus" class="text-xs text-gray-500 mb-2">📍 Location li ja rahi hai…</p>
+      <div id="svySection_allot">${svySectionHtml("allot")}</div>
+      <div class="bg-white rounded-lg shadow p-3">
+        <p class="font-bold text-sm text-gray-800 mb-2">👤 Customer details</p>
+        <label class="ff-label">Naam</label>${inp("svyName","name","Naam")}
+        <label class="ff-label">Father / Husband</label>${inp("svyFather","fatherHusbandName","Father / Husband")}
+        <div class="grid grid-cols-2 gap-2 my-2">${inp("svyHouse","houseNo","House No")}${inp("svyPin","pinCode","Pin Code")}${inp("svySociety","society","Society / Colony")}${inp("svyStreet","street","Street")}${inp("svyArea","area","Area")}${inp("svyLandmark","landmark","Landmark")}</div>
+        <label class="ff-label">Poora address</label><textarea id="svyAddr" class="ff-input mb-2" rows="2">${v("address")}</textarea>
+        <label class="ff-label">Survey notes (TF, meter jagah, route…)</label><textarea id="svyNotes" class="ff-input mb-3" rows="2">${wzEsc(c.surveyNotes||"")}</textarea>
+        <button onclick="svySubmit('${c.id}')" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg">✅ Survey complete — admin ko bhejein</button>
+      </div></div>`;
+  getGeoTag().then(g=>{ svyGeo = g; const s = document.getElementById("svyGeoStatus"); if(s) s.textContent = g ? `📍 Location: ${g.lat.toFixed(5)}, ${g.lng.toFixed(5)} (±${Math.round(g.accuracy||0)}m)` : "⚠️ Location nahi mili (GPS on karein) — bina location ke bhi bhej sakte hain."; });
+}
+function svyClose(){ const ov = document.getElementById("svyOverlay"); if(ov) ov.remove(); svyDrafts.allot = null; }
+async function svySubmit(cid){
+  const c = customers.find(x=>x.id===cid), d = svyDrafts.allot; if(!c || !d) return;
+  const g = id=>{ const el = document.getElementById(id); return el ? String(el.value||"").trim() : ""; };
+  const name = g("svyName");
+  if(!name){ alert("Naam khali nahi ho sakta."); return; }
+  const pin = g("svyPin"); if(pin && !/^\d{6}$/.test(pin)){ alert("Pin code 6 digit ka hona chahiye."); return; }
+  if(!svyHasContent(d) && !confirm("Survey ka koi sawal / remark nahi bhara. Phir bhi bhejna hai?")) return;
+  const built = await svyBuildRecord("allot", cid, c, svyGeo); if(!built) return;
+  const ct = new Set((c.connectionType||[]).filter(x=>x!=="New" && x!=="Old")); ct.add(d.type==="old" ? "Old" : "New");
+  const patch = {name, fatherHusbandName:g("svyFather"), houseNo:g("svyHouse"), pinCode:pin, society:g("svySociety"), street:g("svyStreet"), area:g("svyArea"), landmark:g("svyLandmark"),
+    pendingWork:[...d.pw], connectionType:[...ct], surveyNotes:g("svyNotes"), surveyDoneAt:built.survey.at, surveyDoneBy:currentUser.username, survey:built.survey, media:built.media};
+  patch.address = g("svyAddr") || [patch.houseNo, patch.street, patch.society, patch.area, "Sonipat", patch.pinCode].filter(Boolean).join(", ");
+  // the customer's own application-form location stays as it is; the surveyor's GPS is kept next to it
+  if(svyGeo){ if(c.appGeo || c.geotag) patch.surveyGeo = svyGeo; else patch.geotag = svyGeo; }
+  if(!(await saveJobField(cid, patch))) return;
+  for(const [k, old] of built.drop) await mediaDropParts(cid, k, old);
+  svyClose(); showToast("Survey admin ko bhej diya — survey PDF admin ke paas taiyaar hai."); renderMain();
+}
+function svyStatusChip(c){
+  const sv = c && c.survey; if(!sv) return "";
+  const cls = sv.status==="accepted" ? "bg-green-100 text-green-800" : sv.status==="sentback" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-800";
+  return `<p class="text-[11px] mt-1"><span class="${cls} px-1.5 py-0.5 rounded font-bold">📄 Survey: ${SVY_STATUS[sv.status]||sv.status}</span> ${sv.rating ? `<span class="text-yellow-500">${svyStars(sv.rating)}</span> ` : ""}${sv.type==="old"?"Old":"New"} • ${(sv.mat||[]).length} material • ${(sv.remarks||[]).length} remark • ${(sv.remarks||[]).filter(r=>r.mk).length} photo${svyProblemCount(sv) ? ` • <b class="text-red-600">${svyProblemCount(sv)} problem</b>` : ""}</p>`;
+}
+// ---- admin: survey reports ----
+let svyRepTab = "submitted";
+function svyNewCount(){ return customers.filter(c=>c.survey && c.survey.status==="submitted").length; }
+function renderSurveyReports(){
+  const all = customers.filter(c=>c.survey).sort((a,b)=>String(b.survey.at||"").localeCompare(String(a.survey.at||"")));
+  const by = k=>all.filter(c=>c.survey.status===k), list = svyRepTab==="all" ? all : by(svyRepTab);
+  const tab = (k, l)=>`<button onclick="svyRepTab='${k}'; renderMain()" class="flex-1 text-[11px] font-bold py-2 rounded ${svyRepTab===k?"bg-[#EA8600] text-white":"bg-white border text-gray-600"}">${l} (${k==="all"?all.length:by(k).length})</button>`;
+  return `<button onclick="setView('overview')" class="text-sm text-[#0D904F] font-bold mb-2">← Back</button>
+    <h2 class="font-bold text-gray-800 mb-1">🧭 Survey reports</h2>
+    <p class="text-[11px] text-gray-500 mb-2">Surveyor submit karte hi report yahan aati hai — dekhiye, PDF download kijiye, theek ho to ✅, problem ho to surveyor ko wapas bhejiye.</p>
+    <div class="flex gap-1 mb-2">${tab("submitted","Naye")}${tab("sentback","Wapas")}${tab("accepted","Theek")}${tab("all","Sab")}</div>
+    ${list.some(c=>(c.survey.mat||[]).length) ? `<button onclick="svyMatExcel(${JSON.stringify(list.filter(c=>(c.survey.mat||[]).length).map(c=>c.id)).replace(/"/g,"&quot;")})" class="w-full bg-[#0D904F] text-white text-xs font-bold py-2 rounded mb-3">⬇ Is list ke saare surveys ka material requirement (Excel) — total + store stock</button>` : ""}
+    ${list.length ? `<div class="space-y-2">${list.map(c=>`<div class="bg-white rounded-lg shadow p-3">
+      <p class="font-bold text-sm">${wzEsc(c.name)} <span class="text-[11px] text-gray-400">S.No ${c.sn||"—"} ${c.bpNo?"• BP "+wzEsc(c.bpNo):""}</span></p>
+      <p class="text-[11px] text-gray-500">${wzEsc(c.address||c.area||"")}</p>
+      <p class="text-[11px] text-gray-500">Surveyor: ${wzEsc(techName(c.survey.by))} • ${new Date(c.survey.at).toLocaleString("en-IN")}${c.survey.round>1 ? ` • round ${c.survey.round}` : ""}</p>
+      ${svyStatusChip(c)}
+      <div class="flex gap-2 mt-2"><button onclick="svyReport('${c.id}')" class="flex-1 bg-[#EA8600] text-white text-xs font-bold py-2 rounded">👁 Preview</button><button onclick="svyPdfDownload('${c.id}')" class="flex-1 bg-[#1b365d] text-white text-xs font-bold py-2 rounded">⬇ PDF</button></div>
+    </div>`).join("")}</div>` : `<p class="text-gray-400 text-center mt-8 text-sm">Is list mein koi survey nahi.</p>`}`;
+}
+function svyDetailRows(c){
+  const sv = c.survey || {}, g = custGeo(c), sg = sv.geo;
+  return [["Customer", c.name||""], ["Father / Husband", c.fatherHusbandName||""], ["Mobile", c.phone||""], ["BP No.", c.bpNo||""], ["S.No", c.sn||""],
+    ["Address", c.address || [c.houseNo, c.street, c.society, c.area].filter(Boolean).join(", ")], ["Area", c.area||""],
+    ["Customer location", g && g.lat ? `${Number(g.lat).toFixed(6)}, ${Number(g.lng).toFixed(6)}` : ""], ["Survey GPS", sg && sg.lat ? `${Number(sg.lat).toFixed(6)}, ${Number(sg.lng).toFixed(6)}` : ""],
+    ["Surveyor", techName(sv.by||"")], ["Survey date", sv.at ? `${pgDate(new Date(sv.at))} ${pgTime(new Date(sv.at))}` : ""], ["Connection", SVY_TYPE[sv.type]||""]];
+}
+async function svyReport(cid){
+  const c = customers.find(x=>x.id===cid), sv = c && c.survey; if(!sv) return;
+  let ov = document.getElementById("svyRepOverlay");
+  if(!ov){ ov = document.createElement("div"); ov.id = "svyRepOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:74;background:#f3f4f6;overflow-y:auto;padding:0 0 90px 0;";
+  const isAdmin = currentUser && currentUser.role==="admin";
+  const row = (l, v, bad)=>`<div class="flex justify-between gap-2 text-xs border-b border-gray-100 py-1"><span class="text-gray-500">${l}</span><b class="text-right ${bad?"text-red-600":""}">${wzEsc(v||"—")}</b></div>`;
+  ov.innerHTML = `<div class="bg-[#EA8600] text-white p-3 flex items-center gap-3 sticky top-0 z-10"><button onclick="svyRepClose()" class="text-2xl font-bold">←</button>
+      <div class="flex-1"><p class="font-bold text-sm">🧭 Survey report — ${SVY_TYPE[sv.type]||""}</p><p class="text-[11px] text-orange-100">${wzEsc(c.name)} • ${SVY_STATUS[sv.status]||sv.status}${sv.round>1?" • round "+sv.round:""}</p></div></div>
+    <div class="p-3">
+      <div class="bg-white rounded-lg shadow p-3 mb-3">${svyDetailRows(c).map(([l,v])=>row(l, String(v))).join("")}</div>
+      <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-1">Survey details</p>${svyQs(sv.type).map(q=>row(q.l, svyAns(q, sv.a) + (q.more && sv.a[q.more] ? " — " + sv.a[q.more] : ""), svyIsBad(q, sv.a))).join("")}
+        ${(sv.pw||[]).length ? row("Pending kaam", sv.pw.join(", ")) : ""}${c.surveyNotes ? row("Notes", c.surveyNotes) : ""}</div>
+      <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-1">⭐ Customer rating</p>
+        <p class="text-2xl text-yellow-500 leading-none">${svyStars(sv.rating)}</p><p class="text-xs text-gray-700">${sv.rating ? `${sv.rating}/5 — ${SVY_RATE[sv.rating]}` : "Rating nahi di"}${sv.ratingNote ? " • " + wzEsc(sv.ratingNote) : ""}</p></div>
+      <div class="bg-white rounded-lg shadow p-3 mb-3"><div class="flex justify-between items-center mb-1"><p class="font-bold text-sm">🧰 Material requirement (${(sv.mat||[]).length})</p>${(sv.mat||[]).length ? `<button onclick="svyMatExcel(['${c.id}'])" class="text-[11px] bg-[#0D904F] text-white font-bold px-2 py-1 rounded">⬇ Excel</button>` : ""}</div>
+        ${(sv.mat||[]).length ? `<table class="w-full text-xs"><tr class="text-gray-500"><td>Material</td><td class="text-right">Qty</td><td class="text-right">Store mein</td></tr>${sv.mat.map(m=>{ const st = svyStock(m.name); return `<tr class="border-t border-gray-100"><td class="py-1">${wzEsc(m.name)}</td><td class="text-right font-bold">${m.qty} ${wzEsc(m.unit||"")}</td><td class="text-right ${st!==null && st < m.qty ? "text-red-600 font-bold" : "text-gray-500"}">${st===null ? "—" : st}</td></tr>`; }).join("")}</table>` : `<p class="text-xs text-gray-400">Material nahi bhara.</p>`}</div>
+      <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-1">Remarks + photos (${(sv.remarks||[]).length})</p>
+        ${(sv.remarks||[]).map((r,i)=>`<div class="border-b border-gray-100 py-2"><p class="text-xs"><b>${i+1}.</b> ${wzEsc(r.text||"(sirf photo)")}</p>
+          ${r.mk ? `<img id="svyImg_${r.mk}" class="w-full rounded mt-1 border bg-gray-100" style="min-height:60px;max-height:260px;object-fit:contain" alt="photo load ho rahi hai">` : ""}
+          <p class="text-[10px] text-gray-500">${r.geo && r.geo.lat ? `📍 ${Number(r.geo.lat).toFixed(6)}, ${Number(r.geo.lng).toFixed(6)}` : "📍 —"}${r.at ? ` • ${pgDate(new Date(r.at))} ${pgTime(new Date(r.at))}` : ""}</p></div>`).join("") || `<p class="text-xs text-gray-400">Koi remark nahi.</p>`}</div>
+      ${(sv.history||[]).length > 1 || sv.sendBack ? `<div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-1">History</p>${(sv.history||[]).map(h=>`<p class="text-[11px] text-gray-600">${fpDate(String(h.at).slice(0,10))} ${pgTime(new Date(h.at))} • ${wzEsc(techName(h.by))} • ${h.act==="submitted"?"submit kiya":h.act==="sentback"?"wapas bheja":h.act==="accepted"?"theek kiya":wzEsc(h.act)}${h.note?" — "+wzEsc(h.note):""}</p>`).join("")}</div>` : ""}
+      ${isAdmin ? `<div class="bg-white rounded-lg shadow p-3 mb-3">
+        ${sv.status!=="accepted" ? `<button onclick="svyAccept('${c.id}')" class="w-full bg-[#0D904F] text-white text-xs font-bold py-2 rounded mb-2">✅ Survey theek hai</button>` : `<p class="text-xs text-green-700 font-bold mb-2">✅ Theek kiya — ${wzEsc(techName(sv.acceptedBy||""))} ${sv.acceptedAt?fpDate(String(sv.acceptedAt).slice(0,10)):""}</p>`}
+        <p class="ff-label">↩ Reverify — surveyor ko wapas bhejein</p>
+        <select id="svyBackTo" class="ff-input text-xs mb-1">${userOpts("surveyor", sv.by)}</select>
+        <textarea id="svyBackNote" class="ff-input text-xs mb-1" rows="2" placeholder="Kya problem hai / kya dobara dekhna hai"></textarea>
+        <button onclick="svySendBack('${c.id}')" class="w-full bg-red-600 text-white text-xs font-bold py-2 rounded">↩ Sent back to surveyor</button>
+      </div>` : ""}
+      <div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #e5e7eb;padding:10px;display:flex;gap:8px;z-index:75">
+        <button onclick="svyPdfDownload('${c.id}')" class="flex-1 bg-[#1b365d] text-white font-bold py-3 rounded-lg">⬇ Survey PDF download</button></div>
+    </div>`;
+  for(const r of (sv.remarks||[])){ if(!r.mk) continue; try{ const d = await mediaLoad(c, r.mk); const im = document.getElementById("svyImg_" + r.mk); if(im && d) im.src = d; }catch(e){ console.error(e); } }
+}
+function svyRepClose(){ const ov = document.getElementById("svyRepOverlay"); if(ov) ov.remove(); }
+async function svyAccept(cid){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const c = customers.find(x=>x.id===cid), sv = c && c.survey; if(!sv) return;
+  const now = new Date().toISOString();
+  const survey = {...sv, status:"accepted", acceptedAt:now, acceptedBy:currentUser.username, history:[...(sv.history||[]), {at:now, by:currentUser.username, act:"accepted"}].slice(-20)};
+  if(!(await saveJobField(cid, {survey}))) return;
+  Object.assign(customers.find(x=>x.id===cid) || {}, {survey});
+  showToast("Survey theek mark ho gaya."); svyRepClose(); renderMain();
+}
+async function svySendBack(cid){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const c = customers.find(x=>x.id===cid), sv = c && c.survey; if(!sv) return;
+  const to = String((document.getElementById("svyBackTo")||{}).value || sv.by || ""), note = String((document.getElementById("svyBackNote")||{}).value || "").trim();
+  if(!note){ alert("Surveyor ko kya dobara dekhna hai — wo likhiye."); return; }
+  if(!to){ alert("Surveyor chuniye."); return; }
+  const now = new Date().toISOString();
+  const survey = {...sv, status:"sentback", sendBack:{note, at:now, by:currentUser.username, to}, history:[...(sv.history||[]), {at:now, by:currentUser.username, act:"sentback", note}].slice(-20)};
+  if(!(await saveJobField(cid, {survey, surveyDoneAt:null, surveyAssigned:to, surveyAssignedAt:now, surveyAssignedBy:currentUser.username}))) return;
+  Object.assign(customers.find(x=>x.id===cid) || {}, {survey, surveyDoneAt:null, surveyAssigned:to});
+  showToast(`Survey ${techName(to)} ko reverify ke liye wapas bheja.`); svyRepClose(); renderMain();
+}
+function svyStock(name){ const it = (inventory||[]).find(i=>invKey(i.itemName)===invKey(name)); return it ? (Number(it.stockQty)||0) : null; }
+async function svyMatExcel(ids){
+  const list = (ids||[]).map(id=>customers.find(c=>c.id===id)).filter(c=>c && c.survey && (c.survey.mat||[]).length);
+  if(!list.length){ alert("Kisi survey mein material nahi bhara."); return; }
+  const tt = showToast("Material requirement Excel ban rahi hai...");
+  try{ await ensureXlsxLib(); }catch(e){ hideToast(tt); alert("Could not load Excel engine."); return; }
+  const rows = [], tot = {};
+  list.forEach(c=>(c.survey.mat||[]).forEach(m=>{
+    rows.push({"S.No":c.sn||"", Customer:c.name||"", "BP No":c.bpNo||"", Area:c.area||"", Mobile:c.phone||"", Connection:c.survey.type==="old" ? "Old" : "New", Surveyor:techName(c.survey.by||""),
+      "Survey date":c.survey.at ? pgDate(new Date(c.survey.at)) : "", "Survey status":String(SVY_STATUS[c.survey.status]||c.survey.status).replace(/\s*✓/,""), Rating:c.survey.rating ? `${c.survey.rating}/5` : "",
+      Material:m.name, Qty:m.qty, Unit:m.unit||""});
+    const k = invKey(m.name); tot[k] = tot[k] || {Material:m.name, Unit:m.unit||"", "Total required":0, Customers:0}; tot[k]["Total required"] = Math.round((tot[k]["Total required"] + (Number(m.qty)||0))*100)/100; tot[k].Customers++;
+  }));
+  const totals = Object.values(tot).sort((a,b)=>a.Material.localeCompare(b.Material)).map(t=>{ const st = svyStock(t.Material); return {...t, "Store stock": st===null ? "" : st, "Kami (order karna)": st===null ? "" : Math.max(0, Math.round((t["Total required"] - st)*100)/100)}; });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totals), "Material Total");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Material by Customer");
+  hideToast(tt);
+  await saveXlsxFile(wb, list.length===1 ? `Material_Requirement_${String(list[0].name||"").replace(/[^\w]+/g,"_").slice(0,24)}.xlsx` : `Material_Requirement_${list.length}_surveys_${localISODate()}.xlsx`);
+}
+// ---- the survey PDF: customer details, survey answers, every remark with its photo, lat / long and time ----
+function svyImgSize(dataUrl){ return new Promise(res=>{ try{ const im = new Image(); im.onload = ()=>res({w:im.width||4, h:im.height||3}); im.onerror = ()=>res({w:4, h:3}); im.src = dataUrl; }catch(e){ res({w:4, h:3}); } }); }
+async function svyPdfDownload(cid){
+  const c = customers.find(x=>x.id===cid), sv = c && c.survey; if(!sv) return;
+  const tt = showToast("Survey PDF ban rahi hai...");
+  try{ await ensurePdfLibs(); }catch(e){ hideToast(tt); alert("PDF engine load nahi hua."); return; }
+  const photos = {};
+  for(const r of (sv.remarks||[])){ if(!r.mk) continue; try{ const d = await mediaLoad(c, r.mk); if(d) photos[r.mk] = {d, ...(await svyImgSize(d))}; }catch(e){ console.error(e); } }
+  let pdf;
+  try{ pdf = svyPdfBuild(c, photos); }catch(e){ console.error(e); hideToast(tt); alert("PDF nahi ban payi: " + (e && e.message || e)); return; }
+  hideToast(tt);
+  await savePdfFile(pdf, `Survey_${String(c.name||"").replace(/[^\w]+/g,"_").slice(0,24)}_${String(sv.at||"").slice(0,10)}.pdf`);
+}
+function svyPdfBuild(c, photos){
+  const sv = c.survey || {}, pdf = new window.jspdf.jsPDF("p","mm","a4"), L = 12, R = 198, W = R - L, B = 282;
+  const GREEN = [13,144,79], INK = [30,41,59], GREY = [100,116,139], LINE = [203,213,225], RED = [220,38,38];
+  const col = (a, f)=>pdf[f](a[0], a[1], a[2]);
+  const txt = (s, x, y, size, bold, color, opt)=>{ pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); col(color||INK, "setTextColor"); pdf.text(String(s===undefined||s===null?"":s), x, y, opt||{}); };
+  const wrap = (s, w, size, bold)=>{ pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); return pdf.splitTextToSize(String(s||""), w); };
+  let y = 0;
+  const head = ()=>{ col(GREEN, "setFillColor"); pdf.rect(0, 0, 210, 22, "F");
+    txt("SURVEY REPORT - " + (SVY_TYPE[sv.type]||""), L, 10, 14, true, [255,255,255]);
+    txt("M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED  |  PNG connection, Sonipat", L, 17, 8.5, false, [220,252,231]);
+    txt(`${SVY_STATUS[sv.status]||""}${sv.round>1 ? "  |  round " + sv.round : ""}`.replace(/[^\x20-\x7E]/g,"").trim(), R, 10, 8, false, [220,252,231], {align:"right"}); y = 30; };
+  const need = h=>{ if(y + h > B){ pdf.addPage(); head(); } };
+  head();
+  // customer details (2 columns)
+  const det = svyDetailRows(c), half = Math.ceil(det.length/2);
+  txt("CUSTOMER DETAILS", L, y, 9.5, true, GREEN); y += 2;
+  col(LINE, "setDrawColor"); pdf.setLineWidth(0.3);
+  const rowsY = y; let ly = y, ry = y;
+  det.forEach(([l, v], i)=>{ const left = i < half, x = left ? L : L + W/2 + 2, w = W/2 - 2, lines = wrap(v, w - 33, 8.5).slice(0,3), h = Math.max(6.4, lines.length*3.6 + 2.8);
+    const yy = left ? ly : ry;
+    pdf.rect(x, yy, w, h); txt(l, x + 1.8, yy + 4.3, 7.8, true, GREY); lines.forEach((ln,k)=>txt(ln, x + 33, yy + 4.3 + k*3.6, 8.5, false));
+    if(left) ly += h; else ry += h; });
+  y = Math.max(ly, ry) + 6;
+  // survey answers
+  need(16); txt("SURVEY DETAILS", L, y, 9.5, true, GREEN); y += 2;
+  const qs = svyQs(sv.type).map(q=>[q.l, svyAns(q, sv.a) + (q.more && (sv.a||{})[q.more] ? " - " + sv.a[q.more] : ""), svyIsBad(q, sv.a)]);
+  if((sv.pw||[]).length) qs.push(["Pending kaam", sv.pw.join(", "), false]);
+  if(c.surveyNotes) qs.push(["Survey notes", c.surveyNotes, false]);
+  qs.forEach(([l, v, bad])=>{ const lines = wrap(v || "-", W - 82, 8.5, bad).slice(0,4), h = Math.max(6.6, lines.length*3.6 + 3);
+    need(h); col(LINE, "setDrawColor"); pdf.setLineWidth(0.3); pdf.rect(L, y, W, h); pdf.line(L + 78, y, L + 78, y + h);
+    txt(l, L + 2, y + 4.4, 8.3, false, INK); lines.forEach((ln,k)=>txt(ln, L + 80, y + 4.4 + k*3.6, 8.5, bad, bad ? RED : INK)); y += h; });
+  if(svyProblemCount(sv)){ y += 4; need(6); txt(`Problems: ${svyProblemCount(sv)}`, L, y, 8.5, true, RED); y += 2; }
+  y += 6;
+  // customer rating
+  need(14); txt("CUSTOMER RATING", L, y, 9.5, true, GREEN); y += 5;
+  if(sv.rating){
+    if(typeof pdf.lines === "function"){ col([234,179,8], "setFillColor"); col([202,138,4], "setDrawColor"); pdf.setLineWidth(0.2);
+      for(let k=0;k<5;k++){ const cx = L + 3 + k*7, cy = y - 1.2, pts = [];
+        for(let j=0;j<10;j++){ const ang = -Math.PI/2 + j*Math.PI/5, rr = j%2 ? 1.25 : 3; pts.push([cx + rr*Math.cos(ang), cy + rr*Math.sin(ang)]); }
+        const seg = pts.slice(1).map((pt,j)=>[pt[0]-pts[j][0], pt[1]-pts[j][1]]);
+        if(k < sv.rating) pdf.lines(seg, pts[0][0], pts[0][1], [1,1], "FD", true); else pdf.lines(seg, pts[0][0], pts[0][1], [1,1], "S", true); }
+      txt(`${sv.rating}/5 - ${SVY_RATE[sv.rating]}`.replace(/[^\x20-\x7E]/g,"-"), L + 40, y, 9, true, INK);
+    } else txt(`Rating: ${sv.rating}/5 - ${SVY_RATE[sv.rating]}`.replace(/[^\x20-\x7E]/g,"-"), L, y, 9, true, INK);
+    if(sv.ratingNote){ y += 4.5; txt(wrap(sv.ratingNote, W, 8.3)[0], L, y, 8.3, false, GREY); }
+  } else txt("Rating nahi di", L, y, 8.5, false, GREY);
+  y += 8;
+  // material requirement
+  const mat = sv.mat || [];
+  need(14); txt(`MATERIAL REQUIREMENT (${mat.length})`, L, y, 9.5, true, GREEN); y += 2;
+  if(mat.length){
+    const hdrH = 6.4; col([238,242,246], "setFillColor"); pdf.rect(L, y, W, hdrH, "F"); col(LINE, "setDrawColor"); pdf.setLineWidth(0.3); pdf.rect(L, y, W, hdrH);
+    txt("S.N.", L + 2, y + 4.3, 8, true); txt("Material", L + 14, y + 4.3, 8, true); txt("Qty", L + 140, y + 4.3, 8, true); txt("Unit", L + 160, y + 4.3, 8, true); y += hdrH;
+    mat.forEach((m, i)=>{ need(6.2); pdf.rect(L, y, W, 6.2); txt(String(i+1), L + 2, y + 4.2, 8.3); txt(wrap(m.name, 120, 8.3)[0], L + 14, y + 4.2, 8.3); txt(String(m.qty), L + 140, y + 4.2, 8.3, true); txt(m.unit||"", L + 160, y + 4.2, 8.3); y += 6.2; });
+  } else { y += 4; txt("Material nahi bhara.", L, y, 8.5, false, GREY); }
+  y += 8;
+  // remarks with photos: 2 per row
+  const rem = sv.remarks || [];
+  need(rem.some(r=>r.mk && photos[r.mk]) ? 12 + 64 + 20 : 12);           // the heading never sits alone at a page end
+  txt(`REMARKS + PHOTOS (${rem.length})`, L, y, 9.5, true, GREEN); y += 4;
+  const cw = (W - 6)/2, ph = 64;
+  for(let i=0;i<rem.length;i+=2){
+    const pair = rem.slice(i, i+2);
+    const capLines = pair.map(r=>wrap(`${rem.indexOf(r)+1}. ${r.text || "(sirf photo)"}`, cw - 2, 8.3).slice(0,3));
+    const hasImg = pair.some(r=>r.mk && photos[r.mk]);
+    const h = (hasImg ? ph + 2 : 0) + Math.max(...capLines.map(x=>x.length))*3.6 + 8;
+    need(h);
+    pair.forEach((r, k)=>{
+      const x = L + k*(cw + 6); let yy = y;
+      const p = r.mk && photos[r.mk];
+      if(p){ const sc = Math.min(cw/p.w, ph/p.h), w = p.w*sc, hh = p.h*sc;
+        col(LINE, "setDrawColor"); pdf.setLineWidth(0.3); pdf.rect(x, yy, cw, ph);
+        try{ pdf.addImage(p.d, "JPEG", x + (cw - w)/2, yy + (ph - hh)/2, w, hh); }catch(e){ console.error(e); txt("(photo nahi lag payi)", x + 3, yy + 10, 8, false, GREY); }
+        yy += ph + 4; }
+      else if(hasImg){ yy += ph + 4; }
+      else yy += 2;
+      capLines[k].forEach((ln, j)=>txt(ln, x, yy + j*3.6, 8.3, j===0, INK));
+      yy += capLines[k].length*3.6;
+      txt(`${r.geo && r.geo.lat ? `Lat ${Number(r.geo.lat).toFixed(6)}  Long ${Number(r.geo.lng).toFixed(6)}` : "Lat / Long: -"}${r.at ? "  |  " + pgDate(new Date(r.at)) + " " + pgTime(new Date(r.at)) : ""}`, x, yy + 0.6, 7.2, false, GREY);
+    });
+    y += h;
+  }
+  if(!rem.length){ txt("Koi remark nahi.", L, y + 2, 8.5, false, GREY); y += 8; }
+  const pages = typeof pdf.getNumberOfPages === "function" ? pdf.getNumberOfPages() : (pdf.internal && typeof pdf.internal.getNumberOfPages === "function" ? pdf.internal.getNumberOfPages() : 1);
+  for(let p=1;p<=pages;p++){ if(typeof pdf.setPage === "function") pdf.setPage(p); txt(`PNG Enterprise  |  survey of ${c.name||""}  |  generated ${pgDate(new Date())} ${pgTime(new Date())}`, L, 290, 7, false, GREY); txt(`Page ${p} of ${pages}`, R, 290, 7, false, GREY, {align:"right"}); }
+  return pdf;
 }
 
 
