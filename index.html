@@ -373,13 +373,14 @@ function setLang(l){
 function toggleLang(){ setLang(LANG==="en" ? "hi" : "en"); }
 
 /* ============ SEED DATA ============ */
+// the first team (names only — logins and passwords are kept in the database, readable by the admin alone)
 const SEED_USERS = [
-  {username:"naveen", password:"Nave@7328", role:"admin", name:"Naveen", active:true},
-  {username:"kalki", password:"Kalk%2992", role:"store", name:"Kalki Avtar", active:true},
-  {username:"ronak", password:"Rona!6580", role:"technician", name:"Ronak", active:true},
-  {username:"akash", password:"Akas#1858", role:"technician", name:"Akash", active:true},
-  {username:"ajay", password:"Ajay!3152", role:"surveyor", name:"Ajay", active:true},
-  {username:"sanya", password:"Sany@4410", role:"telecaller", name:"Sanya", active:true},
+  {username:"naveen", role:"admin", name:"Naveen", active:true},
+  {username:"kalki", role:"store", name:"Kalki Avtar", active:true},
+  {username:"ronak", role:"technician", name:"Ronak", active:true},
+  {username:"akash", role:"technician", name:"Akash", active:true},
+  {username:"ajay", role:"surveyor", name:"Ajay", active:true},
+  {username:"sanya", role:"telecaller", name:"Sanya", active:true},
 ];
 const SEED_INVENTORY = [
   {itemName:"GI Pipe 1/2\"", unit:"Mtrs", stockQty:800},
@@ -391,7 +392,7 @@ const SEED_INVENTORY = [
   {itemName:"MDPE Pipe 20mm", unit:"Mtrs", stockQty:2000},
   {itemName:"Regulator", unit:"Nos", stockQty:150},
 ];
-// Demo material already issued to technicians, so "My Stock" isn't empty on first login
+// (demo material from the first trial — no longer written into a new database)
 const SEED_ISSUES = [
   {technicianUsername:"ronak", itemName:"GI Pipe 1/2\"", unit:"Mtrs", qty:50, issuedAt:new Date().toISOString(), issuedBy:"kalki"},
   {technicianUsername:"ronak", itemName:"Gas Meter", unit:"Nos", qty:5, issuedAt:new Date().toISOString(), issuedBy:"kalki"},
@@ -532,56 +533,65 @@ let telecallerHasSearched = false;
 let telecallerLastQuery = "";
 let telecallerSelectedCustomerId = null;
 
-/* TEMPORARY preview mode: while true, LOGIN needs no password (just pick the role and press LOGIN).
-   Set to false to bring back the normal ID + password check. */
-const LOGIN_NO_PASSWORD = true;
+/* the temporary password-free preview is over: every login needs its username + password */
+const LOGIN_NO_PASSWORD = false;
 async function doLogin(){
-  const user = document.getElementById("loginUser").value.trim();
-  const pass = document.getElementById("loginPass").value.trim();
-  const errorEl = document.getElementById("loginError");
+  const user = String(document.getElementById("loginUser").value||"").trim().toLowerCase();
+  const pass = String(document.getElementById("loginPass").value||"").trim();
+  const errorEl = document.getElementById("loginError"), btn = document.getElementById("loginBtn");
+  const fail = msg=>{ errorEl.textContent = msg; errorEl.classList.remove("hidden"); if(btn) btn.disabled = false; };
   errorEl.classList.add("hidden");
-
-  if(!dbReady){ await initDb(); }
-
-  let found = null;
-  if(LOGIN_NO_PASSWORD){
-    let pool = SEED_USERS;
-    if(db){ try{ const sn = await db.collection("users").get(); pool = sn.docs.map(d=>({id:d.id, ...d.data()})); }catch(e){ console.error(e); } }
-    found = pool.find(u=>u.role===loginRole && u.active!==false && user && u.username===user)
-         || pool.find(u=>u.role===loginRole && u.active!==false);
-  } else if(db){
+  if(!user || !pass){ fail(t("login_error")); return; }
+  if(btn) btn.disabled = true;
+  await dbConnect();
+  if(!db){ fail("Server se connect nahi ho pa raha — internet check karke dobara try karein."); return; }
+  let found = null, secure = false;
+  if(AUTH_KIND==="firebase"){
     try{
-      const snap = await db.collection("users").where("username","==",user).get();
-      found = snap.docs.map(d=>({id:d.id, ...d.data()})).find(u=>u.password===pass && u.role===loginRole);
-    }catch(e){ console.error(e); }
-  } else {
-    found = SEED_USERS.find(u=>u.username===user && u.password===pass && u.role===loginRole);
+      const cred = await firebase.auth().signInWithEmailAndPassword(staffEmail(user), pass);
+      const sd = await rawDb.doc("staff/" + cred.user.uid).get();
+      if(sd && sd.exists){ const s = sd.data()||{}; found = {username:s.username, role:s.role, name:s.name||s.username, active:s.active}; secure = true; }
+    }catch(e){ /* no secure account yet (or wrong password): the older check below decides */ }
+    if(!secure){ try{ if(authSecure()) await firebase.auth().signOut(); }catch(e){} await authEnsureAnon(); }
   }
-
   if(!found){
-    errorEl.textContent = t("login_error");
-    errorEl.classList.remove("hidden");
-    return;
+    try{
+      const snap = await rawDb.collection("users").where("username","==",user).get();
+      found = docsOf(snap).find(u=>String(u.password||"")===pass) || null;
+      if(!found && snap.empty) found = await bootstrapFirstAdmin(user, pass);
+    }catch(e){ if(!e || e.code!=="permission-denied") console.error(e); }   // refused = the secure login is on and this account is not in it
+  }
+  if(!found || found.role!==loginRole){
+    if(secure){ try{ await firebase.auth().signOut(); }catch(e){} await authEnsureAnon(); }
+    fail(t("login_error")); return;
   }
   if(found.active === false){
-    errorEl.textContent = "Ye login access remove kar diya gaya hai. Admin se sampark karein.";
-    errorEl.classList.remove("hidden");
-    return;
+    if(secure){ try{ await firebase.auth().signOut(); }catch(e){} await authEnsureAnon(); }
+    fail("Ye login access remove kar diya gaya hai. Admin se sampark karein."); return;
   }
-  currentUser = {username: found.username, role: found.role, name: found.name};
-  try{ localStorage.setItem("png_user", JSON.stringify(currentUser)); }catch(e){}
+  currentUser = {username: found.username, role: found.role, name: found.name || found.username};
+  try{ localStorage.setItem("png_user", JSON.stringify({...currentUser, secure})); }catch(e){}
+  if(btn) btn.disabled = false;
+  document.getElementById("loginPass").value = "";
   showApp();
 }
 
-function doLogout(){
+function doLogout(msg){
+  try{ if(typeof mediaVideoClose === "function") mediaVideoClose(); }catch(e){}
+  dataStop(); dataReset();
   try{ localStorage.removeItem("png_user"); }catch(e){}
   if(typeof clearGaugeReminderTimer === "function") clearGaugeReminderTimer();
-  currentUser = null;
+  currentUser = null; currentView = null; lastMainView = null;
+  ["mediaAllOverlay","mediaViewOverlay","mediaRecOverlay","formsPdfOverlay","wizardOverlay","workSheetOverlay","chkOverlay","custEditOverlay","loaChkOverlay","raPreviewOverlay","svyOverlay","svyRepOverlay"].forEach(id=>{ const el = document.getElementById(id); if(el && el.remove) el.remove(); });
   document.getElementById("appScreen").classList.add("hidden");
   document.getElementById("appScreen").classList.remove("flex");
   document.getElementById("loginScreen").classList.remove("hidden");
   document.getElementById("loginUser").value = "";
   document.getElementById("loginPass").value = "";
+  const el = document.getElementById("mainContent"); if(el) el.innerHTML = "";
+  const err = document.getElementById("loginError");
+  if(err){ if(typeof msg === "string" && msg){ err.textContent = msg; err.classList.remove("hidden"); } else err.classList.add("hidden"); }
+  if(AUTH_KIND==="firebase" && authSecure()){ firebase.auth().signOut().then(()=>authEnsureAnon()).catch(e=>console.error(e)); }
 }
 
 /* ============ FIREBASE CONFIG ============
@@ -600,45 +610,17 @@ const firebaseConfig = {
 };
 
 /* ============ DATABASE INIT (Firebase Firestore, independent of claude.ai) ============ */
-async function dbConnect(){
-  if(db) return db;
-  try{
-    if(firebaseConfig.apiKey === "PASTE_YOUR_API_KEY_HERE"){
-      throw new Error("Firebase config not filled in yet");
-    }
-    if(!window.firebase){
-      await loadScriptOnce("https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js");
-      await loadScriptOnce("https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js");
-      await loadScriptOnce("https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js");
-    }
-    if(!firebase.apps.length){ firebase.initializeApp(firebaseConfig); }
-    await firebase.auth().signInAnonymously(); // silent — lets Firestore Security Rules require "signed in", no UI shown
-    db = firebase.firestore();
-  }catch(e){ console.error("Firebase init error", e); db = null; }
-  return db;
-}
-async function initDb(){
-  await dbConnect();
-  if(!db){ updateDbBadge(false); return; }
-  updateDbBadge(true);
-
-  try{
-    // Per-user check (not "collection empty") — so a seed user added later (e.g. a new role)
-    // still gets created even though the database was already seeded earlier, and existing
-    // users' current data (e.g. an admin-changed password) is never touched/overwritten.
-    for(const u of SEED_USERS){
-      const uSnap = await db.collection("users").doc(u.username).get();
-      if(!uSnap.exists){ await db.collection("users").doc(u.username).set(u); }
-    }
-  }catch(e){ console.error("seed users error", e); }
+/* (dbConnect: now in the v52 block) */
+// one-time imports and seeds (guarded by their flag documents) — run by the admin's app only
+async function adminMigrations(){
+  if(!db) return;
   try{
     const snap = await db.collection("inventory").get();
     if(snap.empty){ for(const it of SEED_INVENTORY){ await db.collection("inventory").add(it); } }
   }catch(e){ console.error("seed inventory error", e); }
-  try{
-    const snap = await db.collection("issues").get();
-    if(snap.empty){ for(const it of SEED_ISSUES){ await db.collection("issues").add(it); } }
-  }catch(e){ console.error("seed issues error", e); }
+  let fresh = true;
+  try{ const fl = await Promise.all(["tejasavImport","tejasavImport2","tejasavImport3","tejasavImport4","tejasavImport5","tejasavImport6"].map(k=>db.doc("settings/" + k).get())); fresh = fl.some(x=>!x || !x.exists); }catch(e){ console.error(e); }
+  if(fresh){
   try{
     // One-time import of the real M/S TEJASAV customer list (flag doc stops it from re-running,
     // so customers an admin later deletes/edits are never re-created or overwritten).
@@ -753,32 +735,20 @@ async function initDb(){
     let mx = all.reduce((m,c)=>Math.max(m, Number(c.sn)||0), 0);
     for(const c of noSn){ await db.doc("customers/"+c.id).update({sn: ++mx}); }
   }catch(e){ console.error("sn backfill error", e); }
-  try{ const iv = await db.doc("settings/invoiceCfg").get(); if(iv.exists) invCfg = Object.assign({}, invCfg, iv.data()||{}); }catch(e){ console.error("invoice cfg load error", e); }
-  try{ const rd = await db.doc("settings/raDraft").get(); if(rd.exists) raCfg = Object.assign({final:false, invoiceDate:"", periodFrom:"", chk:{}, hold:[]}, rd.data()||{}); }catch(e){ console.error("ra draft load error", e); }
-  try{ const fdS = await db.doc("settings/formDefaults").get(); if(fdS.exists) formDefaults = fdS.data() || {}; }catch(e){ console.error("form defaults load error", e); }
-  try{ const bs = await db.doc("settings/billingCfg").get(); if(bs.exists){ const o = bs.data()||{}; BILL_SAVED_KEYS.forEach(k=>{ if(o[k]!==undefined) billCfg[k] = o[k]; }); } if(LOA_OLD_NOS.includes(String(billCfg.loaNo))) billCfg.loaNo = LOA_NO_DEFAULT; }catch(e){ console.error("billing cfg load error", e); }
+  }
   try{
     const snap = await db.doc("settings/payoutRates").get();
     if(!snap.exists){ await db.doc("settings/payoutRates").set(payoutRates); }
   }catch(e){ console.error("seed payout rates error", e); }
-
-  db.collection("users").onSnapshot(snap=>{ allUsers = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.collection("inventory").onSnapshot(snap=>{ inventory = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.collection("issues").onSnapshot(snap=>{ issues = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.collection("consumption").onSnapshot(snap=>{ consumption = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.collection("submissions").onSnapshot(snap=>{ submissions = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.collection("customers").onSnapshot(snap=>{ customers = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.collection("attendance").onSnapshot(snap=>{ attendance = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.collection("bills").onSnapshot(snap=>{ raBills = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=>(Number(a.seq)||0)-(Number(b.seq)||0)); renderMain(); }, e=>console.error(e));
-  db.collection("safety_checks").onSnapshot(snap=>{ safetyChecks = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.doc("settings/capitalisation").onSnapshot(snap=>{ if(snap && snap.exists) capConfig = snap.data(); renderMain(); }, e=>console.error(e));
-  db.doc("settings/payoutRates").onSnapshot(snap=>{ if(snap && snap.exists) payoutRates = {crmRate:50, formRate:100, ...snap.data()}; renderMain(); }, e=>console.error(e));
-  db.collection("leads").onSnapshot(snap=>{ leads = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.collection("custFeedback").onSnapshot(snap=>{ custFeedbacks = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.collection("portalRequests").onSnapshot(snap=>{ portalRequests = snap.docs.map(d=>({id:d.id, ...d.data()})); renderMain(); }, e=>console.error(e));
-  db.doc("settings/leadForm").onSnapshot(snap=>{ leadCfg = (snap && snap.exists) ? (snap.data()||{}) : {}; renderMain(); }, e=>console.error(e));
+}
+async function initDb(){   // connect; the one-time imports / seeds run only for the admin (or a fresh test boot)
+  await dbConnect();
+  if(!db){ updateDbBadge(false); return; }
+  updateDbBadge(true);
+  if(!currentUser || currentUser.role==="admin") await adminMigrations();
   dbReady = true;
 }
+
 function updateDbBadge(connected, errored){
   const el = document.getElementById("dbStatus");
   if(!el) return;
@@ -788,35 +758,39 @@ function updateDbBadge(connected, errored){
 }
 
 async function showApp(){
+  if(!currentUser) return;
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("appScreen").classList.remove("hidden");
   document.getElementById("appScreen").classList.add("flex");
   document.getElementById("userBadge").textContent = `${currentUser.name} (${currentUser.role})`;
-  if(!dbReady){ await initDb(); }
-  // Re-check the account hasn't been deactivated since the last saved session
-  if(db){
-    try{
-      const snap = await db.doc("users/"+currentUser.username).get();
-      if(snap && snap.exists && snap.data().active === false){
-        alert("Aapka login access remove kar diya gaya hai. Admin se sampark karein.");
-        doLogout();
-        return;
-      }
-    }catch(e){ console.error(e); }
-  }
-  applyHeaderLang();
-  setupBottomNav();
-  renderMain();
-  markAttendanceIfNeeded();
+  const main = document.getElementById("mainContent");
+  if(main) main.innerHTML = `<p class="text-gray-400 text-center mt-10 text-sm">Data load ho raha hai…</p>`;
+  if(showAppBusy) return;
+  showAppBusy = true;
+  try{
+    await dbConnect();
+    updateDbBadge(!!db);
+    if(!(await sessionCheck())) return;
+    document.getElementById("userBadge").textContent = `${currentUser.name} (${currentUser.role})`;
+    if(currentUser.role==="admin" && !migrationsDone){ migrationsDone = true; await adminMigrations(); }
+    dbReady = true;
+    applyHeaderLang();
+    setupBottomNav();
+    await dataStart();
+    renderMain();
+    markAttendanceIfNeeded();
+  } finally { showAppBusy = false; }
 }
 
 /* Restore session on reload - runs at very end of script (after everything is defined) */
-function restoreSession(){
+async function restoreSession(){
   if(isPortalUrl()){ openPortal(); return; }                       // QR link: the customer's status page, no login
   if(isPublicFormUrl()){ openPublicLeadForm(false); return; }      // QR link: the customer's form, no login
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem("png_user")||"null"); }catch(e){}
-  if(saved){ currentUser = saved; showApp(); }
+  if(!saved || !saved.username || !STAFF_ROLES.includes(saved.role)) return;
+  currentUser = {username:saved.username, role:saved.role, name:saved.name||saved.username, ...(saved.secure ? {secure:true} : {})};
+  showApp();
 }
 
 /* ============ BOTTOM NAV (role-specific) ============ */
@@ -905,7 +879,7 @@ function updateNavBadges(){
   if(currentUser.role==="telecaller"){ set("navBadge_leads", leadNewCount()); set("navBadge_tcwork", tcMine().filter(tcNeedsReply).length); set("navBadge_newcall", cfbNewCount()); }
   if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount() + svyNewCount() + cfbFwdCount());
 }
-const FORM_KEEP_VIEWS = ["addCustomer", "trackA"];
+const FORM_KEEP_VIEWS = ["addCustomer", "trackA", "storereport", "employees", "security", "inventory", "issue"];
 let lastMainView = null;
 function formSnap(root){
   const out = {vals:{}, focus:null};
@@ -923,6 +897,7 @@ function renderMain(){
   renderMainInner();
   lastMainView = currentUser ? currentView : null;
   if(keep) formRestore(keep);
+  if(currentUser && dataNote && root && root.insertAdjacentHTML) root.insertAdjacentHTML("afterbegin", `<p class="text-[11px] bg-red-50 text-red-700 rounded p-2 mb-2">⚠️ ${wzEsc(dataNote)}</p>`);
 }
 function renderMainInner(){
   if(!currentUser) return;
@@ -964,6 +939,7 @@ function renderMainInner(){
     else if(currentView==="surveys") el.innerHTML = renderSurveyReports();
     else if(currentView==="cfbAdmin") el.innerHTML = renderCfbAdmin();
     else if(currentView==="leads") el.innerHTML = renderLeads();
+    else if(currentView==="security") el.innerHTML = renderSecuritySetup();
   } else if(currentUser.role === "telecaller"){
     if(currentView==="newCall") el.innerHTML = renderTelecallerNewCall();
     else if(currentView==="trackA") el.innerHTML = renderTelecallerTrackA();
@@ -1352,7 +1328,7 @@ async function submitSafetyCheck(){
     confirmedKit: true, submittedAt: new Date().toISOString()
   };
   if(db){
-    try{ await db.collection("safety_checks").add(record); }
+    try{ const ref = await db.collection("safety_checks").add(record); safetyChecks = [...safetyChecks.filter(s=>!(s.username===record.username && s.date===record.date)), {id:(ref && ref.id) || "local_"+Date.now(), ...record}]; }
     catch(e){ console.error(e); errEl.textContent = "Save nahi ho paya, dobara try karein."; errEl.classList.remove("hidden"); return; }
   } else {
     safetyChecks.push({id:"local_"+Date.now(), ...record});
@@ -1371,17 +1347,18 @@ function generateUsername(name){
   return uname;
 }
 function generatePassword(name){
-  const raw = (name||"User").trim().slice(0,4) || "User";
+  const raw = String(name||"User").trim().replace(/[^A-Za-z]/g,"").slice(0,4) || "User";
   const cap = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
   const symbols = ["@","#","$","!","%"];
   const sym = symbols[Math.floor(Math.random()*symbols.length)];
-  const digits = Math.floor(1000 + Math.random()*9000);
+  const digits = String(Math.floor(100000 + Math.random()*900000));
   return `${cap}${sym}${digits}`;
 }
 
 /* ============ STORE MODULE ============ */
 function renderStoreInventory(){
-  const rows = inventory.length ? inventory : SEED_INVENTORY.map((it,i)=>({id:"seed"+i, ...it}));
+  const rows = inventory;
+  if(!rows.length) return renderStoreAddItem() + `<p class="text-gray-400 text-center mt-6 text-sm">Store mein abhi koi item nahi — upar se naya item jodiye.</p>`;
   return `
     ${renderStoreAddItem()}
     <h2 class="font-bold text-gray-800 mb-2">📦 Current Inventory</h2>
@@ -1440,7 +1417,8 @@ let storeIssueSel = {tech:"", item:"", job:""};
 function renderStoreIssue(){
   const techs = activeTechnicianList();
   const jobs = customers.filter(c=>c.status!=="completed" && c.assignedTechnician).sort((a,b)=>(Number(a.sn)||9999)-(Number(b.sn)||9999));
-  const rows = inventory.length ? inventory : SEED_INVENTORY.map((it,i)=>({id:"seed"+i, ...it}));
+  const rows = inventory;
+  if(!rows.length) return `<p class="text-gray-400 text-center mt-10 text-sm">Store mein abhi koi item nahi — Inventory mein item jodiye.</p>`;
   return `
     <div class="bg-white rounded-lg shadow p-4">
       <h2 class="font-bold text-gray-800 mb-3">🚚 Issue Material to Technician</h2>
@@ -1460,7 +1438,8 @@ async function issueMaterial(){
   const itemId = document.getElementById("issueItem").value;
   const qty = parseFloat(document.getElementById("issueQty").value);
   if(!techUsername || !itemId || !qty || qty<=0){ alert("Fill all fields correctly"); return; }
-  const item = inventory.find(i=>i.id===itemId) || SEED_INVENTORY[0];
+  const item = inventory.find(i=>i.id===itemId);
+  if(!item){ alert("Ye item store mein nahi mila — list dobara kholiye."); return; }
   if(/^nos/i.test(item.unit||"") && qty !== Math.floor(qty)){ alert("Nos wali cheez poori ginti mein hi issue hoti hai."); return; }
   const jobEl = document.getElementById("issueJob"), jobId = jobEl ? jobEl.value : "", job = jobId ? customers.find(c=>c.id===jobId) : null;
   storeIssueSel = {tech: techUsername, item: itemId, job: jobId};
@@ -1649,7 +1628,8 @@ async function onWizPhotoSelected(inputEl, wrapId){
 function renderWizContact(c){
   const msg = fillWaTemplate(getWaTemplate(), c);
   const call = callLink(c.phone);
-  const wc = c.wizContact || {};
+  const wc = c.wizContact || {}, saved = mediaMeta(c, "x_contact");
+  if(saved && !wc.imageDataUrl) setTimeout(()=>wizThumb(c, "x_contact", "wizContactImgWrap", 180), 0);
   return `<div class="bg-white rounded-lg shadow p-4">
     <h3 class="ff-section-heading">${t("wiz_step1_title")}</h3>
     <p class="text-xs text-gray-500 mb-3">${t("wiz_step1_desc")}</p>
@@ -1660,9 +1640,9 @@ function renderWizContact(c){
         <button onclick="openWaFromBox('${c.phone}','wizContactMsg')" class="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-bold">💬 WhatsApp</button>
       </div>` : `<p class="text-xs text-red-500 mb-3">${t("wiz_step1_no_phone")}</p>`}
     <label class="ff-label">${t("wiz_remark_label")}</label>
-    <textarea id="wizContactRemark" class="ff-input mb-2" rows="2">${wc.remark||""}</textarea>
+    <textarea id="wizContactRemark" class="ff-input mb-2" rows="2">${wzEsc(wc.remark||"")}</textarea>
     <label class="ff-label">${t("wiz_image_label")}</label>
-    <div id="wizContactImgWrap" class="mb-2">${wc.imageDataUrl?`<img src="${wc.imageDataUrl}" class="w-full rounded-lg border" style="max-height:180px;object-fit:cover;">`:""}</div>
+    <div id="wizContactImgWrap" class="mb-2">${wc.imageDataUrl ? `<img src="${wc.imageDataUrl}" class="w-full rounded-lg border" style="max-height:180px;object-fit:cover;">` : (saved ? `<p class="text-xs text-gray-400">Photo load ho rahi hai…</p>` : "")}</div>
     <input type="file" id="wizContactImgInput" accept="image/*" capture="environment" class="hidden" onchange="onWizPhotoSelected(this,'wizContactImgWrap')">
     <button type="button" onclick="document.getElementById('wizContactImgInput').click()" class="w-full bg-gray-100 text-gray-700 py-2 rounded-lg font-bold text-sm mb-3">${t("wiz_image_btn")}</button>
     <button onclick="completeWizContact('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_continue_btn")}</button>
@@ -1671,9 +1651,13 @@ function renderWizContact(c){
 async function completeWizContact(customerId){
   const remark = document.getElementById("wizContactRemark").value.trim();
   const imgInput = document.getElementById("wizContactImgInput");
-  const existing = customers.find(c=>c.id===customerId);
-  const imageDataUrl = (imgInput && imgInput.dataset.captured) || (existing && existing.wizContact && existing.wizContact.imageDataUrl) || null;
-  await saveJobField(customerId, {wizContact: {remark, imageDataUrl, contactedAt: new Date().toISOString()}});
+  const existing = customers.find(c=>c.id===customerId) || {};
+  const shot = imgInput && imgInput.dataset.captured;
+  const wc = {remark, contactedAt: new Date().toISOString()};
+  if(shot){ if(!(await mediaStore(customerId, "x_contact", shot, {type:"image/jpeg"}))) return; wc.photoKey = "x_contact"; }
+  else if(existing.wizContact && existing.wizContact.imageDataUrl) wc.imageDataUrl = existing.wizContact.imageDataUrl;
+  else if(mediaMeta(existing, "x_contact")) wc.photoKey = "x_contact";
+  await saveJobField(customerId, {wizContact: wc});
   await advanceJobStage(customerId, "contact");
 }
 
@@ -1697,11 +1681,12 @@ async function checkWizArrival(customerId){
     if(statusEl) statusEl.innerHTML = `<span class="text-red-600">⚠️ Location nahi mil payi. GPS/permission check karein aur dobara try karein.</span>`;
     return;
   }
-  if(c && c.geotag){
-    const dist = distanceMeters(geo.lat, geo.lng, c.geotag.lat, c.geotag.lng);
+  const ref0 = c && (c.appGeo || c.geotag);
+  if(ref0 && ref0.lat && ref0.lng){
+    const dist = distanceMeters(geo.lat, geo.lng, Number(ref0.lat), Number(ref0.lng));
     geo.distanceM = Math.round(dist);
     if(dist > GEOFENCE_RADIUS_M){
-      if(statusEl) statusEl.innerHTML = `<span class="text-red-600 font-bold">❌ Aap survey location se ${Math.round(dist)}m dur hain. ${GEOFENCE_RADIUS_M}m ke andar aakar dobara check karein.</span>`;
+      if(statusEl) statusEl.innerHTML = `<span class="text-red-600 font-bold">❌ Aap customer ki location se ${Math.round(dist)}m dur hain. ${GEOFENCE_RADIUS_M}m ke andar aakar dobara check karein.</span>`;
       return;
     }
     if(statusEl) statusEl.innerHTML = `<span class="text-green-600 font-bold">✅ Location match ho gayi (${Math.round(dist)}m). Aage badh rahe hain...</span>`;
@@ -1859,43 +1844,43 @@ async function completeWizVerify(customerId){
 
 /* ---- Stage 4: Meter photo (with geotag) ---- */
 function renderWizMeterPhoto(c){
-  const mp = c.wizMeterPhoto;
+  const m = mediaMeta(c, "meter");
+  const when = m && m.at ? `${pgDate(new Date(m.at))} ${pgTime(new Date(m.at))}` : "";
+  const geo = m && m.geo && m.geo.lat ? `📍 ${Number(m.geo.lat).toFixed(5)}, ${Number(m.geo.lng).toFixed(5)}` : "";
+  if(m) setTimeout(()=>wizThumb(c, "meter", "wizMeterPhotoWrap", 220), 0);
   return `<div class="bg-white rounded-lg shadow p-4">
     <h3 class="ff-section-heading">${t("wiz_step4_title")}</h3>
     <p class="text-xs text-gray-500 mb-3">${t("wiz_step4_desc")}</p>
-    <div id="wizMeterPhotoWrap" class="mb-2">${mp?`<img src="${mp.dataUrl}" class="w-full rounded-lg border" style="max-height:220px;object-fit:cover;">`:""}</div>
-    <input type="file" id="wizMeterPhotoInput" accept="image/*" capture="environment" class="hidden" onchange="onWizMeterPhotoSelected(this)">
-    <button type="button" onclick="document.getElementById('wizMeterPhotoInput').click()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold mb-2">${t("wiz_meter_photo_btn")}</button>
-    <p id="wizMeterPhotoGeoStatus" class="text-xs text-gray-400 mb-2">${mp&&mp.geotag?`📍 ${mp.geotag.lat.toFixed(5)}, ${mp.geotag.lng.toFixed(5)}`:""}</p>
+    <div id="wizMeterPhotoWrap" class="mb-2">${m ? `<p class="text-xs text-gray-400">Photo load ho rahi hai…</p>` : ""}</div>
+    <input type="file" id="wizMeterPhotoInput" accept="image/*" capture="environment" class="hidden" onchange="onWizMeterPhotoSelected(this, '${c.id}')">
+    <button type="button" onclick="document.getElementById('wizMeterPhotoInput').click()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold mb-2">${m ? "🔄 Meter photo dobara lein" : t("wiz_meter_photo_btn")}</button>
+    <p id="wizMeterPhotoGeoStatus" class="text-xs text-gray-400 mb-2">${m ? `✅ ${when} ${geo}` : ""}</p>
     <button onclick="completeWizMeterPhoto('${c.id}')" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">${t("wiz_confirm_continue_btn")}</button>
   </div>`;
 }
-async function onWizMeterPhotoSelected(inputEl){
+async function onWizMeterPhotoSelected(inputEl, cid){
   const file = inputEl.files && inputEl.files[0];
-  if(!file) return;
-  const wrap = document.getElementById("wizMeterPhotoWrap");
-  if(wrap) wrap.innerHTML = `<p class="text-xs text-gray-400">Processing...</p>`;
-  try{
-    const dataUrl = await captureCompressedPhoto(file);
-    const geo = await getGeoTag();
-    inputEl.dataset.captured = dataUrl;
-    if(geo) inputEl.dataset.geo = JSON.stringify(geo);
-    if(wrap) wrap.innerHTML = `<img src="${dataUrl}" class="w-full rounded-lg border" style="max-height:220px;object-fit:cover;">`;
-    const gs = document.getElementById("wizMeterPhotoGeoStatus");
-    if(gs) gs.textContent = geo ? `📍 ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}` : "⚠️ Location capture nahi ho payi";
-  }catch(e){
-    console.error(e);
-    if(wrap) wrap.innerHTML = `<p class="text-xs text-red-500">Photo process nahi ho payi.</p>`;
-  }
   inputEl.value = "";
+  if(!file) return;
+  cid = cid || activeCustomerId;
+  const c = customers.find(x=>x.id===cid), x = mediaKind("meter"); if(!c || !x) return;
+  const wrap = document.getElementById("wizMeterPhotoWrap");
+  if(wrap) wrap.innerHTML = `<p class="text-xs text-gray-400">Photo aur location li ja rahi hai...</p>`;
+  try{
+    const {out, geo} = await mediaMakePhoto(file, c, x);
+    if(await mediaStore(cid, "meter", out, {type:"image/jpeg", geo})){ showToast(`Meter photo save ho gayi${geo ? " (location ke saath)" : ""}.`); renderMain(); }
+    else if(wrap) wrap.innerHTML = `<p class="text-xs text-red-500">Photo save nahi hui, dobara try karein.</p>`;
+  }catch(e){ console.error(e); if(wrap) wrap.innerHTML = `<p class="text-xs text-red-500">Photo process nahi ho payi.</p>`; }
 }
 async function completeWizMeterPhoto(customerId){
+  let c = customers.find(x=>x.id===customerId);
   const input = document.getElementById("wizMeterPhotoInput");
-  const existing = customers.find(c=>c.id===customerId);
-  const dataUrl = (input && input.dataset.captured) || (existing && existing.wizMeterPhoto && existing.wizMeterPhoto.dataUrl);
-  if(!dataUrl){ alert("Meter ka photo lena zaroori hai."); return; }
-  const geo = (input && input.dataset.geo) ? JSON.parse(input.dataset.geo) : ((existing && existing.wizMeterPhoto && existing.wizMeterPhoto.geotag) || null);
-  await saveJobField(customerId, {wizMeterPhoto: {dataUrl, geotag: geo, capturedAt: new Date().toISOString()}});
+  if(c && input && input.dataset && input.dataset.captured && !mediaMeta(c, "meter")){     // a photo picked the older way: into the photo store too
+    let geo = null; try{ geo = input.dataset.geo ? JSON.parse(input.dataset.geo) : null; }catch(e){}
+    if(!(await mediaStore(customerId, "meter", input.dataset.captured, {type:"image/jpeg", geo}))) return;
+    c = customers.find(x=>x.id===customerId);
+  }
+  if(!c || !mediaMeta(c, "meter")){ alert("Meter ka photo lena zaroori hai."); return; }
   await advanceJobStage(customerId, "meterphoto");
 }
 
@@ -1934,16 +1919,17 @@ function renderWizTesting(c){
     </div>`;
   }
   const readings = testing.readings || [];
+  if(readings.some(r=>r.photoKey)) setTimeout(()=>readings.forEach((r,i)=>{ if(r.photoKey) wizGaugeThumb(c, r.photoKey, "wizGph_" + i); }), 0);
   return `<div class="bg-white rounded-lg shadow p-4">
     <h3 class="ff-section-heading">${t("wiz_step6_title")}</h3>
     <p class="text-xs text-gray-500 mb-2">${t("wiz_started_label")} ${new Date(testing.startedAt).toLocaleString()}</p>
     <p class="text-xs text-orange-500 mb-3">${t("wiz_test_reminder")}</p>
     <div class="space-y-2 mb-3">
       ${readings.map((r,i)=>`<div class="border rounded-lg p-2 flex items-center gap-2">
-        ${r.photo?`<img src="${r.photo}" class="w-12 h-12 rounded object-cover border">`:""}
+        ${r.photo ? `<img src="${r.photo}" class="w-12 h-12 rounded object-cover border">` : (r.photoKey ? `<img id="wizGph_${i}" class="w-12 h-12 rounded object-cover border bg-gray-100" alt="">` : "")}
         <div class="flex-1 text-xs">
           <p class="font-bold">${t("wiz_reading_label")} ${i+1} — ${new Date(r.time).toLocaleTimeString()}</p>
-          <p class="text-gray-500">PG-1: ${r.pg1||"—"} • PG-2: ${r.pg2||"—"}</p>
+          <p class="text-gray-500">PG-1: ${wzEsc(r.pg1||"—")} • PG-2: ${wzEsc(r.pg2||"—")}</p>
         </div>
       </div>`).join("") || `<p class="text-xs text-gray-400">${t("wiz_no_readings")}</p>`}
     </div>
@@ -1973,10 +1959,18 @@ async function addWizGaugeReading(customerId){
   const pg2El = document.getElementById("wizPg2");
   const pg1 = pg1El ? pg1El.value.trim() : "";
   const pg2 = pg2El ? pg2El.value.trim() : "";
+  if(!pg1 && !pg2 && !photo){ alert("Reading (PG-1 / PG-2) bhariye ya gauge ki photo lijiye."); return; }
   const c = customers.find(c=>c.id===customerId);
   const testing = (c && c.wizTesting) || {startedAt: new Date().toISOString(), readings:[]};
-  const readings = (testing.readings||[]).concat([{time: new Date().toISOString(), pg1: pg1, pg2: pg2, photo: photo}]);
-  await saveJobField(customerId, {wizTesting: {startedAt: testing.startedAt, readings: readings}});
+  const reading = {time: new Date().toISOString(), pg1, pg2};
+  if(photo){
+    const k = "gauge_" + Date.now().toString(36);
+    if(!(await mediaStore(customerId, k, photo, {type:"image/jpeg"}))) return;
+    reading.photoKey = k;
+  }
+  const cur = customers.find(x=>x.id===customerId), t0 = (cur && cur.wizTesting) || testing;
+  const readings = (t0.readings||[]).concat([reading]);
+  await saveJobField(customerId, {wizTesting: {startedAt: t0.startedAt || testing.startedAt, readings}});
   renderMain();
 }
 async function completeWizTesting(customerId){
@@ -2132,7 +2126,7 @@ function renderTechCustomerDetail(customerId){
       ${c.email ? `<p class="text-sm"><span class="font-bold">Email:</span> ${c.email}</p>` : ""}
       ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-sm"><span class="font-bold">Pending Work:</span> ${c.pendingWork.join(", ")}</p>` : ""}
       ${(c.connectionType&&c.connectionType.length) ? `<p class="text-sm"><span class="font-bold">Connection Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
-      <p class="text-xs text-gray-400 mt-1">${c.geotag ? `📍 Survey location: ${c.geotag.lat.toFixed(5)}, ${c.geotag.lng.toFixed(5)}` : "📍 No geotag on file"}</p>
+      <p class="text-xs text-gray-400 mt-1">${(()=>{ const g = custGeo(c); return g && g.lat ? `📍 Location: ${Number(g.lat).toFixed(5)}, ${Number(g.lng).toFixed(5)}` : "📍 No geotag on file"; })()}</p>
     </div>
 
     ${(currentUser.role==="technician" && c.assignedTechnician && c.assignedTechnician!==currentUser.username) ? `<p class="text-xs text-gray-500 bg-white rounded-lg shadow p-3 mb-3">Main kaam <b>${techName(c.assignedTechnician)}</b> ke paas hai. Aap sirf apna allot kiya hua Work Sheet bhar sakte hain.</p>` : `${renderJobWizardStepper(c)}
@@ -3306,9 +3300,11 @@ function drawIsoGrid(ctx,w,h,size){
   ctx.restore();
 }
 
+let sketchCtx = null, sketchBase = null, sketchTool = "pen", sketchColor = "#111111", sketching = false, sketchStart = null;
 function initSketchCanvas(){
   const canvas = document.getElementById("sketchCanvas");
   if(!canvas) return;
+  sketchTool = "pen"; sketchColor = "#111111"; sketching = false; sketchStart = null;
   sketchCtx = canvas.getContext("2d");
   drawIsoGrid(sketchCtx, canvas.width, canvas.height, 20);
   sketchBase = sketchCtx.getImageData(0,0,canvas.width,canvas.height);
@@ -3574,7 +3570,9 @@ function collectCurrentFormData(){
   });
   if(form.hasSketch){
     const canvas = document.getElementById("sketchCanvas");
-    data.sketch = canvas ? canvas.toDataURL("image/png") : null;
+    let s = canvas ? canvas.toDataURL("image/png") : null;
+    if(s && s.length > 150000){ try{ const j = canvas.toDataURL("image/jpeg", 0.85); if(j && j.length < s.length) s = j; }catch(e){} }
+    data.sketch = s;
   }
   return data;
 }
@@ -3947,7 +3945,7 @@ async function submitSurveyCustomer(){
 
   const geo = surveyGeotag || await getGeoTag();
   const record = {
-    sn: nextSn(),
+    sn: await snNext(),
     name, fatherHusbandName, startAt, formNumber, phone, email, address, houseNo, pinCode, society, street, area, landmark, bpNo, notes,
     pendingWork, connectionType,
     workStatus: "Pending", meterCompany:"", meterSerialNumber:"", switchOnDate:"",
@@ -4088,10 +4086,10 @@ async function submitTelecallerTrackA(){
   const moveChecked = document.getElementById("tcaMoveRunning").checked;
   if(!name || !phone || !address){ alert(t("tc_a_validation")); return; }
   if(!moveChecked){ alert(t("tc_a_check_validation")); return; }
-  const pd = phone.replace(/\D/g,"").slice(-10), dupC = pd.length===10 ? customers.find(c=>String(c.phone||"").replace(/\D/g,"").slice(-10)===pd) : null;
+  const pd = phone.replace(/\D/g,"").slice(-10), dupC = pd.length===10 ? ((await phoneLookupNow(pd))[0] || null) : null;
   if(dupC && !confirm(`Is phone number ka customer pehle se hai: ${dupC.name} (${dupC.address||""}). Phir bhi naya customer banayein?`)) return;
   const record = {
-    sn: nextSn(),
+    sn: await snNext(),
     name, phone, address, fatherHusbandName:"", startAt:"", formNumber:"", email:"",
     houseNo:"", pinCode:"", society:"", street:"", area:"", landmark:"", bpNo:"", notes,
     pendingWork: [], connectionType: ["New"],
@@ -4138,19 +4136,18 @@ function renderTelecallerTrackB(){
     </div>
     ${selected ? renderTelecallerTrackBForm(selected) : ""}`;
 }
-function searchTelecallerCRM(){
+async function searchTelecallerCRM(){
   const q = (document.getElementById("tcbSearchInput").value||"").trim();
   if(!q){ telecallerSearchResults = []; telecallerHasSearched = false; renderMain(); return; }
+  telecallerLastQuery = q; telecallerHasSearched = true; telecallerSelectedCustomerId = null;
   const qDigits = q.replace(/\D/g,"");
-  telecallerSearchResults = customers.filter(c=>{
-    if(c.bpNo && c.bpNo.trim() === q) return true;
-    if(qDigits.length>=6 && (c.phone||"").replace(/\D/g,"").includes(qDigits)) return true;
-    if(!qDigits && q.length>=3 && String(c.name||"").toLowerCase().includes(q.toLowerCase())) return true;
+  if(currentUser && currentUser.role!=="admin" && /\d/.test(q) && qDigits.length < 10 && !/^\d{6,}$/.test(q)){ showToast("Poora 10 digit mobile ya BP number daaliye."); }
+  telecallerSearchResults = (await custLookup(q)).filter(c=>{
+    if(c.bpNo && String(c.bpNo).trim() === q) return true;
+    if(qDigits.length>=6 && [c.phone, c.altPhone].some(p=>String(p||"").replace(/\D/g,"").includes(qDigits))) return true;
+    if(!qDigits && q.length>=2 && String(c.name||"").toLowerCase().includes(q.toLowerCase())) return true;
     return false;
-  });
-  telecallerLastQuery = q;
-  telecallerHasSearched = true;
-  telecallerSelectedCustomerId = null;
+  }).slice(0, 25);
   renderMain();
 }
 function selectTelecallerCRMCustomer(id){
@@ -4464,7 +4461,7 @@ async function adminAddCustomer(){
   const pendingWork = collectCheckboxGroup("admPW", PENDING_WORK_OPTIONS);
   const connectionType = collectCheckboxGroup("admCT", CONNECTION_TYPE_OPTIONS);
   const record = {
-    sn: nextSn(),
+    sn: await snNext(),
     name, fatherHusbandName, startAt, formNumber, phone, address, bpNo,
     pendingWork, connectionType,
     workStatus: "Pending", meterCompany:"", meterSerialNumber:"", switchOnDate:"",
@@ -4534,7 +4531,8 @@ function renderAdminOverview(){
     <button onclick="setView('billing')" class="w-full bg-[#1a237e] text-white font-bold py-2.5 rounded-lg mb-2">💰 Monetize / Billing (LOA rates) + Summary + PDFs ZIP</button>
     <button onclick="setView('capitalisation')" class="w-full bg-[#8430CE] text-white font-bold py-2.5 rounded-lg mb-2">📑 Capitalisation Sheet (rates bharein)</button>
     <button onclick="exportTejasavMasterWorkbook()" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Export TEJASAV Master Workbook (all sheets + Summary)</button>
-    <button onclick="exportAllToExcel()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg">⬇ Export All Data to Excel</button>
+    <button onclick="exportAllToExcel()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Export All Data to Excel</button>
+    <button onclick="setView('security')" class="w-full bg-[#1b365d] text-white font-bold py-2.5 rounded-lg">🔒 Security setup — kis role ko kya data dikhe ${AUTH_KIND==="firebase" && !authSecure() ? '<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">baaki</span>' : ""}</button>
   `;
 }
 
@@ -4602,6 +4600,7 @@ async function adminAddEmployee(){
   const name = document.getElementById("empName").value.trim();
   const role = document.getElementById("empRole").value;
   if(!name){ alert("Employee ka naam dalein."); return; }
+  if(!["technician","store","surveyor","telecaller"].includes(role)){ alert("Role chuniye."); return; }
   const username = generateUsername(name);
   const password = generatePassword(name);
   const ephone = phone10(String((document.getElementById("empPhone")||{}).value||"").trim());
@@ -4610,11 +4609,12 @@ async function adminAddEmployee(){
   if(db){
     try{ await db.collection("users").doc(username).set(record); }
     catch(e){ console.error(e); alert("Add karne mein error aaya, dobara try karein."); return; }
+    await secStaffUpdate(record, {});
+    await secCreateOne(record);
   } else {
     allUsers.push(record); renderMain();
   }
   document.getElementById("empName").value = ""; { const pe = document.getElementById("empPhone"); if(pe) pe.value = ""; }
-  if(ephone) await staffPublicSave(record);
   alert(`Employee add ho gaya!\n\nUsername: ${username}\nPassword: ${password}\n\nYe details employee ko de dein — dobara yahan nahi dikhengi, isliye abhi note kar lein.`);
 }
 
@@ -4641,6 +4641,7 @@ async function toggleEmployeeActive(username){
   if(db){
     try{ await db.doc("users/"+username).update({active:newActive}); }
     catch(e){ console.error(e); alert("Update failed."); return; }
+    await secStaffUpdate(u, {active:newActive});
   } else {
     u.active = newActive; renderMain();
   }
@@ -4681,15 +4682,18 @@ async function saveEmpPassword(username){
   if(!currentUser || currentUser.role !== "admin") return;
   const input = document.getElementById("pwUpdateInput_"+username);
   const newPass = input ? input.value.trim() : "";
-  if(!newPass || newPass.length < 4){ alert("Kam se kam 4 character ka password dein."); return; }
+  if(!newPass || newPass.length < 6){ alert("Kam se kam 6 character ka password dein."); return; }
+  const u = allUsers.find(x=>x.username===username);
   if(db){
+    if(u && u.uid && AUTH_KIND==="firebase"){     // the secure login account changes first; only then the record
+      try{ const au = await secAppAuth(); const cred = await au.signInWithEmailAndPassword(staffEmail(username), String(u.password||"")); await cred.user.updatePassword(newPass); try{ await au.signOut(); }catch(e){} }
+      catch(e){ console.error(e); alert("Secure login ka password nahi badla (" + ((e && e.code) || "error") + "). Security setup → Step 2 se dobara account update karein."); return; }
+    }
     try{ await db.doc("users/"+username).update({password: newPass}); }
     catch(e){ console.error(e); alert("Password update nahi ho paya, dobara try karein."); return; }
-  } else {
-    const u = allUsers.find(u=>u.username===username);
-    if(u) u.password = newPass;
   }
-  const u2 = employeeList().find(u=>u.username===username);
+  if(u) u.password = newPass;
+  const u2 = employeeList().find(x=>x.username===username);
   if(u2) u2.password = newPass;
   const curEl = document.getElementById("pwCurrentVal_"+username);
   if(curEl) curEl.textContent = newPass;
@@ -4697,7 +4701,7 @@ async function saveEmpPassword(username){
   alert(`Password update ho gaya!\n\nUsername: ${username}\nNaya Password: ${newPass}\n\nYe employee ko bata dein — purana password ab kaam nahi karega.`);
 }
 
-function viewEmployeeDetail(username){
+function viewEmployeeDetailInner(username){
   if(!currentUser || currentUser.role !== "admin") return;
   const u = employeeList().find(u=>u.username===username);
   if(!u) return;
@@ -5840,7 +5844,10 @@ async function custEditSave(cid){
   }catch(e){ console.error(e); msg.textContent = "Save nahi hua, dobara try karein"; }
 }
 /* next workbook serial number for a newly added customer */
-function nextSn(){ return customers.reduce((m,c)=>Math.max(m, Number(c.sn)||0), 0) + 1; }
+function nextSn(){
+  if(currentUser && currentUser.role!=="admin") return null;
+  return customers.reduce((m,c)=>Math.max(m, Number(c.sn)||0), 0) + 1;
+}
 let loaChkState = {cid:null, v:{}};
 function loaChkOpen(cid){
   const c = customers.find(x=>x.id===cid); if(!c) return;
@@ -7275,8 +7282,8 @@ const CAP_HEADER_DEFAULT = {
   asset: "DOMESTIC PNG CONNECTION.",
   address: "GARH SAHJAPUR,REWLI,SEC 7,SEC 15,JAWAHAR NAGAR, TARA NAGAR,KABIRPUR,SANTI VIHAR,",
   date: "UPTO 06.06.2026",
-  contractor: "CREATIVE ENTREPRENEURS LLP",
-  contractNo: "LOA NO. GAIL GAS/NOIDA/9407/5600007750/25-26/33/AK dated 16-04-2026",
+  contractor: "M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED",
+  contractNo: "LOA NO. GAILGas/NOIDA/PK/5600008408/26-27/WALKIN dated 22.07.2026",
 };
 // qty: "auto key" is computed live from customer data; null = manual entry (no link in the source sheet)
 const CAP_MATERIAL = [
@@ -7395,7 +7402,12 @@ function capAutoQty(k){
   }
   return 0;
 }
-function capHeader(){ return {...CAP_HEADER_DEFAULT, ...(capConfig.header||{}), ...capDraft.header}; }
+function capHeader(){
+  const OLD = {contractor:"CREATIVE ENTREPRENEURS LLP", contractNo:"LOA NO. GAIL GAS/NOIDA/9407/5600007750/25-26/33/AK dated 16-04-2026"};
+  const saved = {...(capConfig.header||{})};
+  Object.keys(OLD).forEach(k=>{ if(saved[k]===OLD[k]) delete saved[k]; });     // the earlier default is not a choice the admin made
+  return {...CAP_HEADER_DEFAULT, ...saved, ...capDraft.header};
+}
 function capRate(it){
   if(capDraft.rates[it.id] !== undefined) return Number(capDraft.rates[it.id]) || 0;
   if(capConfig.rates && capConfig.rates[it.id] !== undefined) return Number(capConfig.rates[it.id]) || 0;
@@ -9260,14 +9272,15 @@ function tcAssignRow(c){
 }
 
 /* ---------- telecaller: assigned customers with stage-wise status + feedback ---------- */
-let tcWorkTab = "todo", tcOpenFb = null;
+let tcWorkTab = "todo", tcOpenFb = null, tcWorkTabSet = false;
 function tcMine(){ return customers.filter(c=>c.tcAssigned===currentUser.username); }
 function tcNeedsReply(c){ const fb = c.tcFeedback||[], last = fb[fb.length-1]; return !last || String(last.at) < String(c.tcAssignedAt||""); }
 function renderTcWork(){
   const mine = tcMine().sort((a,b)=>String(b.tcAssignedAt||"").localeCompare(String(a.tcAssignedAt||"")));
   const todo = mine.filter(tcNeedsReply), done = mine.filter(c=>!tcNeedsReply(c));
+  if(!tcWorkTabSet && tcWorkTab==="todo" && !todo.length && mine.length) tcWorkTab = "all";     // nothing waiting: open on the full list
   const list = tcWorkTab==="todo" ? todo : tcWorkTab==="done" ? done : mine;
-  const tab = (k, l, n)=>`<button onclick="tcWorkTab='${k}'; renderMain()" class="flex-1 text-xs font-bold py-2 rounded ${tcWorkTab===k?"bg-[#0D904F] text-white":"bg-white border text-gray-600"}">${l} (${n})</button>`;
+  const tab = (k, l, n)=>`<button onclick="tcWorkTab='${k}'; tcWorkTabSet=true; renderMain()" class="flex-1 text-xs font-bold py-2 rounded ${tcWorkTab===k?"bg-[#0D904F] text-white":"bg-white border text-gray-600"}">${l} (${n})</button>`;
   return `<h2 class="font-bold text-gray-800 mb-1">🗂 Admin ne diye customers</h2>
     <p class="text-[11px] text-gray-500 mb-2">Har customer ka kaam stage-wise neeche hai. Customer ko call / WhatsApp karke confirm kijiye aur feedback bhejiye — admin ko turant dikhega.</p>
     <div class="flex gap-1 mb-3">${tab("todo","Reply baaki",todo.length)}${tab("done","Reply diya",done.length)}${tab("all","Sab",mine.length)}</div>
@@ -9539,7 +9552,7 @@ function closePublicLeadForm(){
   const ov = document.getElementById("leadScreen"); if(ov) ov.remove();
   try{ if(isPublicFormUrl() && window.history && history.replaceState) history.replaceState(null, "", location.pathname); }catch(e){}
   if(leadOnBehalf && currentUser){ renderMain(); return; }
-  if(!currentUser){ try{ const saved = JSON.parse(localStorage.getItem("png_user")||"null"); if(saved){ currentUser = saved; showApp(); } }catch(e){} }   // staff phone: back to the app
+  if(!currentUser) restoreSession();   // staff phone: back to the app
 }
 const phone10 = p=>{ const d = String(p||"").replace(/\D/g,""); return d.length===12 && d.startsWith("91") ? d.slice(2) : d.length===11 && d.startsWith("0") ? d.slice(1) : d; };
 async function submitPublicLead(){
@@ -9571,7 +9584,7 @@ async function submitPublicLead(){
 
 /* ----- telecaller / admin: the leads inbox ----- */
 let leadTab = "new", leadOpen = null;
-function leadDupCust(l){ const p = phone10(l.phone); return p.length===10 ? customers.find(c=>phone10(c.phone)===p) : null; }
+function leadDupCust(l){ const p = phone10(l.phone); if(p.length!==10) return null; const hit = phoneLookupCached(p); return hit && hit.length ? hit[0] : null; }
 function renderLeads(){
   const sorted = [...leads].sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
   const by = k=>sorted.filter(l=>(l.status||"new")===k);
@@ -9646,13 +9659,13 @@ async function leadAddToDb(id){
   d.phone = phone10(d.phone);
   if(!d.name){ alert("Naam khali hai."); return; }
   if(!/^\d{10}$/.test(d.phone)){ alert("Mobile 10 digit ka hona chahiye."); return; }
-  const dup = customers.find(c=>phone10(c.phone)===d.phone);
+  const dup = (await phoneLookupNow(d.phone))[0] || null;
   if(dup && !confirm(`Is mobile ka customer pehle se hai: ${dup.name} (S.No ${dup.sn||"—"}). Phir bhi naya customer banayein?`)) return;
   const now = new Date().toISOString();
   const address = [d.houseNo, d.street, d.society, d.area, l.city||"Sonipat", d.pinCode].filter(Boolean).join(", ");
   const calls = (l.contactLog||[]).filter(x=>x.how!=="note" || x.note || x.result).map(x=>({at:x.at, by:x.by, category:"QR lead", items:x.how==="note" ? (TC_RESULT[x.result]||"") : x.how, note:x.note||""}));
   const record = {
-    sn: nextSn(), name:d.name, phone:d.phone, altPhone:d.altPhone, address, fatherHusbandName:d.fatherHusbandName, startAt:"", formNumber:"", email:"",
+    sn: await snNext(), name:d.name, phone:d.phone, altPhone:d.altPhone, address, fatherHusbandName:d.fatherHusbandName, startAt:"", formNumber:"", email:"",
     houseNo:d.houseNo, pinCode:d.pinCode, society:d.society, street:d.street, area:String(d.area||"").toUpperCase(), landmark:d.landmark, city:l.city||"Sonipat", bpNo:"",
     notes:[l.notes, l.ownership, l.lpg?"LPG: "+l.lpg:"", l.bestTime?"Call: "+l.bestTime:""].filter(Boolean).join(" • "),
     ownership:l.ownership||"", lpg:l.lpg||"",
@@ -9901,14 +9914,16 @@ function chkPdfBuild(d){
   return pdf;
 }
 // telecaller "Checklist" tab: find a customer and open the 7 forms
-let chkQuery = "";
+let chkQuery = "", chkLookedUp = "";
 function renderChecklistHub(){
   const q = chkQuery.trim().toLowerCase(), qd = q.replace(/\D/g,"");
   const mine = customers.filter(c=>c.tcAssigned===currentUser.username || c.telecallerId===currentUser.username);
-  const res = q ? customers.filter(c=>[c.name, c.bpNo, c.area, c.address].some(x=>String(x||"").toLowerCase().includes(q)) || (qd.length>=5 && String(c.phone||"").replace(/\D/g,"").includes(qd))).slice(0,40) : mine.slice(0,40);
+  // other customers come from the server only by phone / BP / name search (need-to-know)
+  if(q && currentUser.role!=="admin" && chkLookedUp!==q){ chkLookedUp = q; custLookup(chkQuery.trim()).then(()=>{ if(currentView==="tcchk") renderMain(); }); }
+  const res = q ? customers.filter(c=>[c.name, c.bpNo, c.area, c.address].some(x=>String(x||"").toLowerCase().includes(q)) || (qd.length>=5 && [c.phone, c.altPhone].some(p=>String(p||"").replace(/\D/g,"").includes(qd)))).slice(0,40) : mine.slice(0,40);
   return `<h2 class="font-bold text-gray-800 mb-1">📋 SOP & Inspection Checklists</h2>
     <p class="text-[11px] text-gray-500 mb-2">7 forms: Site survey, Work permit & safety, TF & MDPE, GI & meter, Pressure test, Conversion & purging, JIR & handover. Customer chuniye, YES / NO aur remarks bhariye, phir PDF download karein.</p>
-    <input class="ff-input mb-3" placeholder="Naam / BP / phone / area se dhoondhein" value="${wzEsc(chkQuery)}" onchange="chkQuery=this.value; renderMain()">
+    <input class="ff-input mb-3" placeholder="Naam / BP / poora mobile number se dhoondhein" value="${wzEsc(chkQuery)}" onchange="chkQuery=this.value; renderMain()">
     <p class="text-[11px] font-bold text-gray-500 mb-1">${q ? `Search ke ${res.length} customers` : "Aapke customers"}</p>
     <div class="space-y-2">${res.map(c=>`<button onclick="openChk('${c.id}')" class="w-full text-left bg-white rounded-lg shadow p-3 border-l-4 ${c.chkList?"border-[#0D904F]":"border-gray-300"}">
       <p class="font-bold text-sm">${wzEsc(c.name)} <span class="text-[11px] text-gray-400">S.No ${c.sn||"—"} ${c.bpNo?"• BP "+wzEsc(c.bpNo):""}</span></p>
@@ -9936,7 +9951,8 @@ const MEDIA_KINDS = [
 const MEDIA_CHUNK = 200000, MEDIA_VIDEO_SEC = 10;
 const mediaCache = {};
 let mediaCtx = {where:"main", cid:null};
-const mediaKind = k=>MEDIA_KINDS.find(x=>x.k===k) || (String(k||"").startsWith("svy_") ? {k, st:"SVY", l:"Survey photo", icon:"🧭", type:"photo"} : undefined);
+const mediaKind = k=>MEDIA_KINDS.find(x=>x.k===k) || (String(k||"").startsWith("svy_") ? {k, st:"SVY", l:"Survey photo", icon:"🧭", type:"photo"}
+  : k==="x_contact" ? {k, st:"WIZ", l:"Customer contact photo", icon:"📞", type:"photo"} : String(k||"").startsWith("gauge_") ? {k, st:"WIZ", l:"Gauge reading photo", icon:"🧪", type:"photo"} : undefined);
 function mediaMeta(c, k){
   const m = ((c||{}).media||{})[k];
   if(m && m.n) return m;
@@ -10588,12 +10604,12 @@ function svyPdfBuild(c, photos){
 }
 
 
-/* ---------- customer status page (v50): the customer opens it from a QR / link, enters the mobile number + a 4-digit code
-   (PIN the team sends on WhatsApp, or the last 4 digits of the BP number), sees every stage of the work and gives feedback
+/* ---------- customer status page (v50): the customer opens it from a QR / link, enters the mobile number + the 4-digit PIN
+   (made when the telecaller verifies the customer, sent on WhatsApp), sees every stage of the work and gives feedback
    step by step: each of the 6 work photos (did it really happen?) and 6 questions. The feedback goes to the telecaller,
    who verifies it and forwards it to the admin; the admin downloads it as Excel or a PDF form. ---------- */
 let custFeedbacks = [], portalRequests = [];
-let portal = {phone:"", list:[], cid:null, step:0, fb:null, tries:0};
+let portal = {phone:"", key:"", list:[], fbAt:{}, cid:null, step:0, fb:null, tries:0};
 const PORTAL_Q = [
   {k:"sl", l:"SL (service line) ka kaam hua?", need:"SL", ok:"yes", o:{yes:"✅ Haan, hua", no:"❌ Nahi hua"}},
   {k:"gi", l:"GI pipe ka kaam hua?", need:"GI", ok:"yes", o:{yes:"✅ Haan, hua", no:"❌ Nahi hua"}},
@@ -10632,7 +10648,7 @@ function portalOfferPin(c, pin){
   if(confirm(`${c.name}: customer login PIN ${pin} ban gaya.\nCustomer ko status link + PIN WhatsApp par bhejein?`)){ const wa = waLink(c.phone, portalPinMsg(c, pin)); if(wa){ try{ window.open(wa, "_blank"); }catch(e){} } }
 }
 // technician name + number the customer may see (kept apart from the login records)
-async function staffPublicSave(u){ if(!db || !u || !u.username) return; try{ await db.doc("staffPublic/" + u.username).set({name:u.name||u.username, phone:u.phone||"", role:u.role||""}); }catch(e){ console.error(e); } }
+async function staffPublicSave(u){ if(!db || !u || !u.username) return; await secStaffUpdate(u, {}); }
 async function empSetPhone(username){
   if(!currentUser || currentUser.role!=="admin") return;
   const u = (allUsers.length ? allUsers : SEED_USERS).find(x=>x.username===username); if(!u) return;
@@ -10685,19 +10701,20 @@ async function portalQrPdf(){
   hideToast(tt);
   await savePdfFile(pdf, "PNG_Customer_Status_QR.pdf");
 }
-// ----- the public page -----
+// ----- the public page: the customer opens only HIS status page (portal/<key>, key = hash of mobile + PIN) — never the customer list -----
 function openPortal(){
-  portal = {phone:"", list:[], cid:null, step:0, fb:null, tries:0};
-  try{ const s = JSON.parse(sessionStorage.getItem("png_portal")||"null"); if(s && s.phone && s.ids && Date.now() - (s.t||0) < 2*3600e3){ portal.phone = s.phone; portal.ids = s.ids; } }catch(e){}
+  portal = {phone:"", key:"", list:[], fbAt:{}, cid:null, step:0, fb:null, tries:0};
+  let saved = null; try{ saved = JSON.parse(sessionStorage.getItem("png_portal")||"null"); }catch(e){}
   let ov = document.getElementById("portalScreen");
   if(!ov){ ov = document.createElement("div"); ov.id = "portalScreen"; document.body.appendChild(ov); }
   ov.style.cssText = "position:fixed;inset:0;z-index:91;background:#f3f4f6;overflow-y:auto;padding:0 0 40px 0;";
-  if(portal.ids) portalLoad(portal.phone, portal.ids); else portalRender();
+  if(saved && saved.key && Date.now() - (saved.t||0) < 2*3600e3){ portal.phone = saved.phone || ""; portalRender(); portalLoad(saved.key); }
+  else portalRender();
 }
 function closePortal(){
   const ov = document.getElementById("portalScreen"); if(ov) ov.remove();
   try{ if(isPortalUrl() && window.history && history.replaceState) history.replaceState(null, "", location.pathname); }catch(e){}
-  if(!currentUser){ try{ const saved = JSON.parse(localStorage.getItem("png_user")||"null"); if(saved){ currentUser = saved; showApp(); } }catch(e){} }
+  if(!currentUser) restoreSession();
 }
 function portalHead(sub){ return `<div class="bg-[#0D904F] text-white p-4"><p class="font-bold text-lg">📱 Mera PNG connection</p><p class="text-xs text-green-100">${sub || "M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED • Sonipat"}</p></div>`; }
 function portalRender(){
@@ -10706,7 +10723,7 @@ function portalRender(){
   if(portal.fb && c){ ov.innerHTML = portalHead(wzEsc(c.name)) + `<div class="p-4 max-w-md mx-auto">${portalFbHtml(c)}</div>`; portalFbLoadMedia(c); return; }
   if(c){ ov.innerHTML = portalHead(wzEsc(c.name)) + `<div class="p-4 max-w-md mx-auto">${portalHomeHtml(c)}</div>`; return; }
   if(portal.list.length > 1 && portal.verified){ ov.innerHTML = portalHead() + `<div class="p-4 max-w-md mx-auto"><p class="text-sm text-gray-700 mb-2">Is number par ${portal.list.length} connection hain — chuniye:</p>
-    ${portal.list.map(x=>`<button onclick="portal.cid='${x.id}'; portalRender()" class="w-full text-left bg-white rounded-lg shadow p-3 mb-2"><p class="font-bold text-sm">${wzEsc(x.name)}</p><p class="text-[11px] text-gray-500">${wzEsc(x.address||x.area||"")}</p></button>`).join("")}
+    ${portal.list.map(x=>`<button onclick="portal.cid='${x.id}'; portalRender()" class="w-full text-left bg-white rounded-lg shadow p-3 mb-2"><p class="font-bold text-sm">${wzEsc(x.name)}</p><p class="text-[11px] text-gray-500">${wzEsc(x.addr||x.area||"")}</p></button>`).join("")}
     <button onclick="portalLogout()" class="w-full text-xs text-gray-400 mt-3">Dusra number</button></div>`; return; }
   ov.innerHTML = portalHead() + `<div class="p-4 max-w-md mx-auto"><div class="bg-white rounded-lg shadow p-4">
       <p class="text-sm text-gray-700 mb-3">Apna mobile number aur PIN daaliye — aapke connection ka kaam kahan tak pahuncha, wo dikhega.</p>
@@ -10720,14 +10737,17 @@ function portalRender(){
     <button onclick="closePortal(); openPublicLeadForm(false)" class="w-full bg-white border border-[#0D904F] text-[#0D904F] font-bold py-2.5 rounded-lg mt-4 text-sm">📝 Naya PNG connection chahiye?</button>
     <button onclick="closePortal()" class="w-full text-xs text-gray-400 mt-4">Staff login</button></div>`;
 }
-async function portalFind(ph){
+async function portalOpenDoc(key){
   if(!db){ try{ await dbConnect(); }catch(e){ console.error(e); } }
-  if(!db) return null;
-  const seen = {}, out = [];
-  for(const [f, v] of [["phone", ph], ["altPhone", ph], ["phone", "+91" + ph], ["phone", "91" + ph]]){
-    try{ const sn = await db.collection("customers").where(f, "==", v).get(); sn.docs.forEach(d=>{ if(!seen[d.id]){ seen[d.id] = 1; out.push({id:d.id, ...d.data()}); } }); }catch(e){ console.error(e); }
-  }
-  return out;
+  if(!rawDb || !key) return null;
+  try{ const s = await rawDb.doc("portal/" + key).get(); return s && s.exists ? (s.data()||{}) : {}; }catch(e){ console.error(e); return null; }
+}
+function portalListOf(d){ return Object.values((d && d.c) || {}).filter(v=>v && v.id).sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""))); }
+function portalSetList(key, d, list){
+  portal.key = key; portal.fbAt = (d && d.fb) || {}; portal.list = list; portal.verified = true;
+  if(!list.some(v=>v.id===portal.cid)) portal.cid = list.length===1 ? list[0].id : null;
+  try{ sessionStorage.setItem("png_portal", JSON.stringify({phone:portal.phone, key, t:Date.now()})); }catch(e){}
+  portalRender();
 }
 async function portalVerify(){
   const ph = phone10(String((document.getElementById("ptPhone")||{}).value||"").trim()), pin = String((document.getElementById("ptPin")||{}).value||"").replace(/\D/g,"");
@@ -10736,27 +10756,24 @@ async function portalVerify(){
   if(!/^\d{4}$/.test(pin)){ portal.err = "4 ank ka PIN daaliye."; return portalRender(); }
   let blockUntil = 0; try{ blockUntil = Number(localStorage.getItem("png_portal_block")||0); }catch(e){}
   if(Date.now() < blockUntil){ portal.err = "Bahut baar galat PIN — 15 minute baad try karein."; return portalRender(); }
-  const found = await portalFind(ph);
-  if(found===null){ portal.err = "Server se connect nahi ho pa raha. Internet check karke dobara try karein."; return portalRender(); }
-  const ok = found.filter(c=>c.portalPin && String(c.portalPin)===pin);
-  if(!ok.length){
+  const key = await portalKeyOf(ph, pin), d = await portalOpenDoc(key);
+  if(d===null){ portal.err = "Server se connect nahi ho pa raha. Internet check karke dobara try karein."; return portalRender(); }
+  const list = portalListOf(d);
+  if(!list.length){
     portal.tries++;
     if(portal.tries >= 5){ try{ localStorage.setItem("png_portal_block", String(Date.now() + 15*60e3)); }catch(e){} portal.tries = 0; }
-    portal.err = !found.length ? "Is number par koi connection nahi mila." : found.some(c=>c.portalPin) ? "PIN sahi nahi hai — WhatsApp par aaya PIN daaliye." : "Aapka PIN abhi nahi bana — neeche 'PIN mangwayein' dabaiye, telecaller verify karke PIN bhejega.";
+    portal.err = "Mobile number ya PIN sahi nahi hai — WhatsApp par aaya PIN daaliye. PIN nahi hai to neeche 'PIN mangwayein' dabaiye.";
     return portalRender();
   }
-  portal.list = ok; portal.verified = true; portal.cid = ok.length===1 ? ok[0].id : null;
-  try{ sessionStorage.setItem("png_portal", JSON.stringify({phone:ph, ids:ok.map(c=>c.id), t:Date.now()})); }catch(e){}
-  portalRender();
+  portal.tries = 0;
+  portalSetList(key, d, list);
 }
-async function portalLoad(ph, ids){
-  if(!db){ try{ await dbConnect(); }catch(e){} }
-  const list = [];
-  for(const id of ids||[]){ try{ const d = await db.doc("customers/" + id).get(); if(d.exists) list.push({id:d.id, ...d.data()}); }catch(e){ console.error(e); } }
-  portal.list = list.filter(c=>phone10(c.phone)===ph || phone10(c.altPhone)===ph); portal.verified = portal.list.length>0; portal.cid = portal.list.length===1 ? portal.list[0].id : null;
-  portalRender();
+async function portalLoad(key){
+  const d = await portalOpenDoc(key), list = portalListOf(d);
+  if(!list.length){ try{ sessionStorage.removeItem("png_portal"); }catch(e){} portal.verified = false; portal.list = []; portal.cid = null; return portalRender(); }
+  portalSetList(key, d, list);
 }
-function portalLogout(){ try{ sessionStorage.removeItem("png_portal"); }catch(e){} portal = {phone:"", list:[], cid:null, step:0, fb:null, tries:0}; portalRender(); }
+function portalLogout(){ try{ sessionStorage.removeItem("png_portal"); }catch(e){} portal = {phone:"", key:"", list:[], fbAt:{}, cid:null, step:0, fb:null, tries:0}; portalRender(); }
 async function portalAskPin(){
   const ph = phone10(String((document.getElementById("ptPhone")||{}).value||"").trim());
   if(!/^\d{10}$/.test(ph)){ portal.err = "Pehle sahi 10 digit mobile number daaliye."; portal.phone = ph; return portalRender(); }
@@ -10770,72 +10787,79 @@ async function portalAskPin(){
     <button onclick="portalRender()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Theek hai</button></div></div>`;
 }
 const PORTAL_ST = [["SL","SL (service line)"],["GI","GI pipe fitting"],["NG","NG — gas chalu"],["REST","Restoration"]];
+// staff side: who works on this customer (stage-wise) — what the status page shows as "Technician"
 function portalTechList(c){
   const al = c.allotted || {}, out = {};
   WS_STAGES.forEach(st=>{ const u = al[st] || null; if(u) (out[u] = out[u] || []).push(st); });
   if(!Object.keys(out).length && c.assignedTechnician) out[c.assignedTechnician] = ["ALL"];
   return out;
 }
-async function portalLoadStaff(c){
-  const ul = Object.keys(portalTechList(c)); portal.staff = portal.staff || {};
-  for(const u of ul){ if(portal.staff[u]) continue; try{ const d = db ? await db.doc("staffPublic/" + u).get() : null; portal.staff[u] = d && d.exists ? d.data() : {name:u.charAt(0).toUpperCase() + u.slice(1), phone:""}; }catch(e){ portal.staff[u] = {name:u, phone:""}; } }
-  const box = document.getElementById("ptTech"); if(box) box.innerHTML = portalTechHtml(c);
-}
-function portalTechHtml(c){
-  const tl = portalTechList(c), us = Object.keys(tl);
-  if(!us.length) return `<p class="text-sm text-gray-500">⏳ Abhi kisi technician ko kaam allot nahi hua.</p>`;
-  return us.map(u=>{ const sp = (portal.staff||{})[u] || {name:u, phone:""}, call = sp.phone ? callLink(sp.phone) : "";
-    return `<div class="flex items-center justify-between gap-2 border-b border-gray-100 py-2"><div><p class="text-sm font-bold">👷 ${wzEsc(sp.name)}</p>
-      <p class="text-[11px] text-gray-500">${tl[u].includes("ALL") ? "Poora kaam" : tl[u].map(x=>x==="REST"?"Restoration":x).join(", ")}${sp.phone ? " • 📞 " + wzEsc(sp.phone) : ""}</p></div>
+function portalTechHtml(v){
+  const ts = v.techs || [];
+  if(!ts.length) return `<p class="text-sm text-gray-500">⏳ Abhi kisi technician ko kaam allot nahi hua.</p>`;
+  return ts.map(t=>{ const call = t.p ? callLink(t.p) : "", st = t.st || [];
+    return `<div class="flex items-center justify-between gap-2 border-b border-gray-100 py-2"><div><p class="text-sm font-bold">👷 ${wzEsc(t.n)}</p>
+      <p class="text-[11px] text-gray-500">${st.includes("ALL") ? "Poora kaam" : st.map(x=>x==="REST"?"Restoration":x).join(", ")}${t.p ? " • 📞 " + wzEsc(t.p) : ""}</p></div>
       ${call ? `<a href="${call}" class="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded">📞 Call</a>` : `<span class="text-[10px] text-gray-400">number nahi</span>`}</div>`; }).join("");
 }
-function portalHomeHtml(c){
-  const s2 = stageLive(c), d = portalDone(c), mine = c.portalFb || [], dd = x=>x ? fpDate(x) : "";
-  const dates = {SL:s2.already ? "Pehle se line hai" : dd(s2.dSL), GI:dd(s2.dGI), NG:dd(s2.dNG), REST:dd(s2.dRS)};
-  const meterNo = c.meterSerialNumber || (c.wizMeter||{}).number || "";
-  setTimeout(()=>portalLoadStaff(c), 0);
-  if(d.ALL) setTimeout(()=>portalLoadThumbs(c), 0);
-  return `<div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-base">${wzEsc(c.name)}</p>
-      <p class="text-xs text-gray-500">${wzEsc(c.address||c.area||"")}</p><p class="text-[11px] text-gray-400">${c.bpNo ? "BP " + wzEsc(c.bpNo) + " • " : ""}${c.sn ? "S.No " + c.sn : ""}</p></div>
-    <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-1">Technician</p><div id="ptTech">${portalTechHtml(c)}</div></div>
+function portalFbDates(id){
+  const fromDoc = ((portal.fbAt||{})[id]) || [];
+  let mine = []; try{ mine = JSON.parse(localStorage.getItem("png_portal_fb_" + id) || "[]"); }catch(e){}
+  return [...new Set([...fromDoc, ...mine])].sort();
+}
+function portalHomeHtml(v){
+  const d = v.done || {}, dates = v.dates || {}, mine = portalFbDates(v.id), media = v.media || {};
+  if(d.ALL) setTimeout(()=>portalLoadThumbs(v), 0);
+  return `<div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-base">${wzEsc(v.name)}</p>
+      <p class="text-xs text-gray-500">${wzEsc(v.addr||v.area||"")}</p><p class="text-[11px] text-gray-400">${v.bp ? "BP " + wzEsc(v.bp) + " • " : ""}${v.sn ? "S.No " + wzEsc(v.sn) : ""}</p></div>
+    <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-1">Technician</p><div id="ptTech">${portalTechHtml(v)}</div></div>
     <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-2">Kaam ka status</p>
       ${PORTAL_ST.map(([k,l])=>`<div class="flex items-center justify-between border-b border-gray-100 py-2"><span class="text-sm">${l}</span>
         <span class="text-xs font-bold px-2 py-1 rounded ${d[k] ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}">${d[k] ? "✅ Ho gaya" + (dates[k] ? " • " + wzEsc(dates[k]) : "") : "⏳ Baaki"}</span></div>`).join("")}
-      <div class="flex items-center justify-between py-2"><span class="text-sm">Meter</span><span class="text-xs font-bold px-2 py-1 rounded ${s2.meterIn ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}">${s2.meterIn ? "✅ Laga" + (meterNo ? " • " + wzEsc(meterNo) : "") : "⏳ Baaki"}</span></div>
+      <div class="flex items-center justify-between py-2"><span class="text-sm">Meter</span><span class="text-xs font-bold px-2 py-1 rounded ${v.meterIn ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}">${v.meterIn ? "✅ Laga" + (v.meterNo ? " • " + wzEsc(v.meterNo) : "") : "⏳ Baaki"}</span></div>
     </div>
     ${d.ALL ? `<div class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 border-[#0D904F]"><p class="font-bold text-sm mb-1">✅ Kaam poora ho gaya</p>
       <p class="text-[11px] text-gray-500 mb-2">Ye photos aapke ghar ke kaam ki hain — dekhkar verify kijiye aur apni location ke saath final submission dijiye.</p>
-      <div class="grid grid-cols-3 gap-1 mb-2">${MEDIA_KINDS.filter(x=>mediaMeta(c, x.k)).map(x=>`<div class="text-center"><div id="ptTh_${x.k}" class="bg-gray-100 rounded h-20 flex items-center justify-center text-xl">${x.icon}</div><p class="text-[9px] text-gray-500 leading-tight mt-0.5">${x.l}</p></div>`).join("") || `<p class="text-[11px] text-gray-400 col-span-3">Photos abhi nahi aayi.</p>`}</div>
+      <div class="grid grid-cols-3 gap-1 mb-2">${MEDIA_KINDS.filter(x=>media[x.k]).map(x=>`<div class="text-center"><div id="ptTh_${x.k}" class="bg-gray-100 rounded h-20 flex items-center justify-center text-xl">${x.icon}</div><p class="text-[9px] text-gray-500 leading-tight mt-0.5">${x.l}</p></div>`).join("") || `<p class="text-[11px] text-gray-400 col-span-3">Photos abhi nahi aayi.</p>`}</div>
       <button onclick="portalFbStart()" class="w-full bg-[#EA8600] text-white font-bold py-3 rounded-lg">✍️ Verify karke final submission</button>
       ${mine.length ? `<p class="text-[11px] text-green-700 mt-2">✓ Aapka final submission mil chuka hai (${fpDate(String(mine[mine.length-1]).slice(0,10))})</p>` : ""}
     </div>` : `<p class="text-[11px] text-gray-500 text-center mb-3">Kaam poora hone par yahan photos aur final submission ka option aayega.</p>`}
     ${portal.list.length>1 ? `<button onclick="portal.cid=null; portalRender()" class="w-full text-xs text-[#0D904F] font-bold mb-2">Dusra connection dekhein</button>` : ""}
     <button onclick="portalLogout()" class="w-full text-xs text-gray-400">Bahar niklein</button>`;
 }
-async function portalLoadThumbs(c){
-  for(const x of MEDIA_KINDS){ if(!mediaMeta(c, x.k)) continue;
-    try{ const d = await mediaLoad(c, x.k), box = document.getElementById("ptTh_" + x.k); if(!box || !d) continue;
+// the customer's own photo, by its exact id (media/<customer>__<kind>__<version>__<part>)
+async function portalMediaLoad(v, k){
+  const m = (v.media||{})[k]; if(!m || !m.ver || !m.n) return null;
+  const key = `${v.id}|${k}|${m.ver}`; if(mediaCache[key]) return mediaCache[key];
+  if(!rawDb) return null;
+  const parts = [];
+  for(let i=0;i<m.n;i++){ const s = await rawDb.doc(`media/${v.id}__${k}__${m.ver}__${i}`).get(); if(!s || !s.exists) return null; parts.push((s.data()||{}).d || ""); }
+  return (mediaCache[key] = parts.join(""));
+}
+async function portalLoadThumbs(v){
+  for(const x of MEDIA_KINDS){ if(!(v.media||{})[x.k]) continue;
+    try{ const d = await portalMediaLoad(v, x.k), box = document.getElementById("ptTh_" + x.k); if(!box || !d) continue;
       box.innerHTML = /^data:video/.test(d) ? `<video src="${d}" muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:4px"></video>` : `<img src="${d}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`; }catch(e){ console.error(e); } }
 }
-// feedback steps for this customer: the photos of work that is done, then the questions of work that is done, then a comment
-function portalFbSteps(c){
-  const d = portalDone(c), steps = [];
+// feedback steps: the photos of work that is done, then the questions of work that is done, then a comment
+function portalFbSteps(v){
+  const d = (v && v.done) || {}, steps = [];
   if(!d.ALL) return [{kind:"end"}];
-  MEDIA_KINDS.forEach(x=>{ if(d[PORTAL_PHOTO_NEED[x.k]] && mediaMeta(c, x.k)) steps.push({kind:"photo", k:x.k}); });
+  MEDIA_KINDS.forEach(x=>{ if(d[PORTAL_PHOTO_NEED[x.k]] && (v.media||{})[x.k]) steps.push({kind:"photo", k:x.k}); });
   PORTAL_Q.forEach(q=>{ if(d[q.need]) steps.push({kind:"q", k:q.k}); });
   steps.push({kind:"end"});
   return steps;
 }
 function portalFbStart(){
-  const c = portal.list.find(x=>x.id===portal.cid); if(!c) return;
+  const v = portal.list.find(x=>x.id===portal.cid); if(!v) return;
   portal.fb = {photos:{}, ans:{}, rating:0, comment:""}; portal.step = 0; portalRender();
 }
-function portalFbHtml(c){
-  const steps = portalFbSteps(c), i = Math.min(portal.step, steps.length-1), st = steps[i], f = portal.fb, pct = Math.round(i/Math.max(1, steps.length-1)*100);
+function portalFbHtml(v){
+  const steps = portalFbSteps(v), i = Math.min(portal.step, steps.length-1), st = steps[i], f = portal.fb, pct = Math.round(i/Math.max(1, steps.length-1)*100);
   const btns = (cur, opts, fn)=>`<div class="grid grid-cols-1 gap-2 mt-3">${Object.keys(opts).map(k=>`<button onclick="${fn}('${k}')" class="py-3 rounded-lg font-bold text-sm ${cur===k ? "bg-[#0D904F] text-white" : "bg-gray-100 text-gray-800"}">${opts[k]}</button>`).join("")}</div>`;
   let body = "";
   if(st.kind==="photo"){
-    const x = mediaKind(st.k), m = mediaMeta(c, st.k);
+    const x = mediaKind(st.k), m = (v.media||{})[st.k];
     body = `<p class="text-xs text-gray-500 mb-1">Photo ${steps.filter(s=>s.kind==="photo").indexOf(st)+1} / ${steps.filter(s=>s.kind==="photo").length}</p>
       <p class="font-bold text-base mb-2">${x.icon} ${x.l}</p>
       <div id="ptMedia" class="bg-gray-100 rounded-lg text-center text-xs text-gray-400 py-10">Photo load ho rahi hai…</div>
@@ -10848,8 +10872,8 @@ function portalFbHtml(c){
     body = `<p class="font-bold text-base mb-2">Aakhri step</p>
       <p class="ff-label">Rating</p><div class="flex gap-1 mb-2">${[1,2,3,4,5].map(n=>`<button onclick="portal.fb.rating=${n}; portalRender()" class="text-4xl leading-none ${n<=(f.rating||0)?"text-yellow-500":"text-gray-300"}">★</button>`).join("")}</div>
       <label class="ff-label">Kuch kehna hai? (shikayat / sujhav)</label><textarea id="ptComment" class="ff-input" rows="3" oninput="portal.fb.comment=this.value">${wzEsc(f.comment||"")}</textarea>
-      <div class="bg-gray-50 rounded p-2 mt-2 text-xs">${steps.filter(s=>s.kind!=="end").map(s=>{ const v = s.kind==="photo" ? f.photos[s.k] : f.ans[s.k], lab = s.kind==="photo" ? mediaKind(s.k).l : PORTAL_Q.find(q=>q.k===s.k).l, good = s.kind==="photo" ? v==="yes" : v===PORTAL_Q.find(q=>q.k===s.k).ok;
-        return `<p class="flex justify-between gap-2 border-b border-gray-100 py-0.5"><span>${lab}</span><b class="${!v ? "text-gray-400" : good ? "text-green-700" : "text-red-600"}">${!v ? "—" : v==="yes" ? "Haan" : "Nahi"}</b></p>`; }).join("") || "<p>Abhi koi kaam poora nahi hua — sirf apni baat likh sakte hain.</p>"}</div>
+      <div class="bg-gray-50 rounded p-2 mt-2 text-xs">${steps.filter(s=>s.kind!=="end").map(s=>{ const val = s.kind==="photo" ? f.photos[s.k] : f.ans[s.k], lab = s.kind==="photo" ? mediaKind(s.k).l : PORTAL_Q.find(q=>q.k===s.k).l, good = s.kind==="photo" ? val==="yes" : val===PORTAL_Q.find(q=>q.k===s.k).ok;
+        return `<p class="flex justify-between gap-2 border-b border-gray-100 py-0.5"><span>${lab}</span><b class="${!val ? "text-gray-400" : good ? "text-green-700" : "text-red-600"}">${!val ? "—" : val==="yes" ? "Haan" : "Nahi"}</b></p>`; }).join("") || "<p>Abhi koi kaam poora nahi hua — sirf apni baat likh sakte hain.</p>"}</div>
       <p id="ptGeo" class="text-[11px] mt-2 ${portal.geo ? "text-green-700" : "text-gray-500"}">${portal.geo ? `📍 Aapki location: ${portal.geo.lat.toFixed(6)}, ${portal.geo.lng.toFixed(6)}` : "📍 Submit karte waqt aapki location (lat / long) li jayegi — browser puchhe to Allow dabaiye."}</p>
       <button onclick="portalFbSubmit()" class="w-full bg-[#0D904F] text-white py-3 rounded-lg font-bold mt-2">✅ Final submission</button>`;
   }
@@ -10859,38 +10883,40 @@ function portalFbHtml(c){
     <div class="flex gap-2"><button onclick="portalFbBack()" class="px-4 py-3 rounded-lg bg-gray-200 font-bold text-sm">← ${i===0 ? "Wapas" : "Pichla"}</button>
       ${st.kind!=="end" ? `<button onclick="portalFbNext()" class="flex-1 bg-white border border-gray-300 py-3 rounded-lg font-bold text-sm">Aage →</button>` : ""}</div>`;
 }
-async function portalFbLoadMedia(c){
-  const steps = portalFbSteps(c), st = steps[Math.min(portal.step, steps.length-1)];
+async function portalFbLoadMedia(v){
+  const steps = portalFbSteps(v), st = steps[Math.min(portal.step, steps.length-1)];
   if(!st || st.kind!=="photo") return;
-  let d = null; try{ d = await mediaLoad(c, st.k); }catch(e){ console.error(e); }
+  let d = null; try{ d = await portalMediaLoad(v, st.k); }catch(e){ console.error(e); }
   const box = document.getElementById("ptMedia"); if(!box) return;
   if(!d){ box.textContent = "Photo load nahi hui (internet check karein)."; return; }
   box.className = "rounded-lg overflow-hidden";
   box.innerHTML = /^data:video/.test(d) ? `<video src="${d}" controls playsinline muted style="width:100%;max-height:50vh"></video>` : `<img src="${d}" style="width:100%;max-height:55vh;object-fit:contain">`;
 }
-function portalFbPhoto(v){ const c = portal.list.find(x=>x.id===portal.cid), st = portalFbSteps(c)[portal.step]; if(st && st.kind==="photo"){ portal.fb.photos[st.k] = v; portal.step++; portalRender(); } }
-function portalFbAns(v){ const c = portal.list.find(x=>x.id===portal.cid), st = portalFbSteps(c)[portal.step]; if(st && st.kind==="q"){ portal.fb.ans[st.k] = v; portal.step++; portalRender(); } }
+function portalFbPhoto(val){ const v = portal.list.find(x=>x.id===portal.cid), st = portalFbSteps(v)[portal.step]; if(st && st.kind==="photo"){ portal.fb.photos[st.k] = val; portal.step++; portalRender(); } }
+function portalFbAns(val){ const v = portal.list.find(x=>x.id===portal.cid), st = portalFbSteps(v)[portal.step]; if(st && st.kind==="q"){ portal.fb.ans[st.k] = val; portal.step++; portalRender(); } }
 function portalFbNext(){ portal.step++; portalRender(); }
 function portalFbBack(){ if(portal.step===0){ portal.fb = null; } else portal.step--; portalRender(); }
 async function portalFbSubmit(){
-  const c = portal.list.find(x=>x.id===portal.cid), f = portal.fb; if(!c || !f) return;
+  const v = portal.list.find(x=>x.id===portal.cid), f = portal.fb; if(!v || !f) return;
   const el = document.getElementById("ptComment"); if(el) f.comment = el.value;
   const answered = Object.keys(f.photos).length + Object.keys(f.ans).length;
   if(!answered && !String(f.comment||"").trim() && !f.rating){ alert("Kam se kam ek sawaal ka jawab dijiye ya apni baat likhiye."); return; }
   const g = document.getElementById("ptGeo"); if(g) g.textContent = "📍 Location li ja rahi hai…";
   const geo = await getGeoTag(); portal.geo = geo;
   if(!geo && !confirm("Location nahi mili. Bina location ke submit karna hai?")){ portalRender(); return; }
-  const d = portalDone(c), bad = Object.values(f.photos).includes("no") || PORTAL_Q.some(q=>f.ans[q.k] && f.ans[q.k]!==q.ok);
-  const rec = {cid:c.id, sn:c.sn||"", name:c.name||"", phone:phone10(c.phone), bp:c.bpNo||"", area:c.area||"", at:new Date().toISOString(),
+  const d = v.done || {}, bad = Object.values(f.photos).includes("no") || PORTAL_Q.some(q=>f.ans[q.k] && f.ans[q.k]!==q.ok);
+  const rec = {cid:v.id, sn:v.sn||"", name:v.name||"", phone:portal.phone, bp:v.bp||"", area:v.area||"", at:new Date().toISOString(),
     photos:{...f.photos}, ans:{...f.ans}, rating:Number(f.rating)||0, comment:String(f.comment||"").trim(), stages:{...d}, geo: geo || null,
     urgent: f.ans.leak==="yes", issue: bad, status:"new"};
   if(!db){ try{ await dbConnect(); }catch(e){} }
   if(!db){ alert("Server se connect nahi ho pa raha. Dobara try karein."); return; }
   try{ await db.collection("custFeedback").add(rec); }catch(e){ console.error(e); alert("Feedback nahi gaya — dobara bhejiye."); return; }
-  try{ await db.doc("customers/" + c.id).update({portalFb:[...(c.portalFb||[]), rec.at].slice(-20)}); c.portalFb = [...(c.portalFb||[]), rec.at]; }catch(e){ console.error(e); }
+  try{ const mine = JSON.parse(localStorage.getItem("png_portal_fb_" + v.id) || "[]"); mine.push(rec.at); localStorage.setItem("png_portal_fb_" + v.id, JSON.stringify(mine.slice(-10))); }catch(e){}
+  const fbAt = {...(portal.fbAt||{})}; fbAt[v.id] = [...(fbAt[v.id]||[]), rec.at].slice(-10);
+  try{ if(portal.key) await rawDb.doc("portal/" + portal.key).update({fb: fbAt}); portal.fbAt = fbAt; }catch(e){ console.error(e); }
   portal.fb = null; portal.step = 0;
   const ov = document.getElementById("portalScreen");
-  if(ov) ov.innerHTML = portalHead(wzEsc(c.name)) + `<div class="p-4 max-w-md mx-auto"><div class="bg-white rounded-lg shadow p-6 text-center"><p class="text-4xl mb-2">🙏</p>
+  if(ov) ov.innerHTML = portalHead(wzEsc(v.name)) + `<div class="p-4 max-w-md mx-auto"><div class="bg-white rounded-lg shadow p-6 text-center"><p class="text-4xl mb-2">🙏</p>
     <p class="font-bold text-lg text-gray-800 mb-1">Dhanyavaad!</p><p class="text-sm text-gray-600 mb-4">${rec.urgent ? "Leakage ki baat hamari team tak turant pahunch gayi hai — jaldi aapse sampark karenge. Tab tak gas valve band rakhiye." : "Aapka feedback hamari team ko mil gaya."}</p>
     <button onclick="portalRender()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Status par wapas</button></div></div>`;
 }
@@ -10905,7 +10931,7 @@ function cfbLines(f){
   return out;
 }
 function cfbCardHtml(f, who){
-  const c = customers.find(x=>x.id===f.cid) || {}, lines = cfbLines(f), call = callLink(f.phone);
+  const c = custEnsure(f.cid) || {}, lines = cfbLines(f), call = callLink(f.phone);
   const wa = waLink(f.phone, `Namaste ${f.name||""} ji, aapka PNG kaam ka feedback mila. Main ${currentUser.name} — M/S TEJASAV (Sonipat) se baat kar raha/rahi hoon.`);
   return `<div class="bg-white rounded-lg shadow p-3 ${f.urgent ? "border-l-4 border-red-600" : f.issue ? "border-l-4 border-[#EA8600]" : "border-l-4 border-[#0D904F]"}">
     <div class="flex justify-between items-start gap-2"><div><p class="font-bold text-sm">${wzEsc(f.name)} <span class="text-[11px] text-gray-400">S.No ${f.sn||"—"} ${f.bp?"• BP "+wzEsc(f.bp):""}</span></p>
@@ -10932,8 +10958,8 @@ function renderCfbInbox(){
   return `<h2 class="font-bold text-gray-800 mb-2">⭐ Customer feedback</h2>
     ${renderPortalQrCard()}
     ${reqs.length ? `<div class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 border-teal-600"><p class="font-bold text-sm mb-1">🔑 PIN ki requests (${reqs.length})</p>
-      ${reqs.map(r=>{ const cs2 = customers.filter(c=>phone10(c.phone)===r.phone || phone10(c.altPhone)===r.phone); return `<div class="border-b border-gray-100 py-2"><p class="text-xs"><b>${wzEsc(r.phone)}</b> • ${new Date(r.at).toLocaleString("en-IN")}</p>
-        ${cs2.length ? cs2.map(c=>`<button onclick="portalSendPin('${c.id}'); cfbReqDone('${r.id}')" class="w-full text-left text-xs bg-teal-50 text-teal-800 font-bold px-2 py-1.5 rounded mt-1">🔑 ${wzEsc(c.name)} (S.No ${c.sn||"—"}) ko PIN bhejein</button>`).join("") : `<p class="text-[11px] text-red-600">Is number ka koi customer nahi mila.</p>`}
+      ${reqs.map(r=>{ const cs2 = phoneLookupCached(r.phone); return `<div class="border-b border-gray-100 py-2"><p class="text-xs"><b>${wzEsc(r.phone)}</b> • ${new Date(r.at).toLocaleString("en-IN")}</p>
+        ${cs2===null ? `<p class="text-[11px] text-gray-400">Customer dhoondh rahe hain…</p>` : cs2.length ? cs2.map(c=>`<button onclick="portalSendPin('${c.id}'); cfbReqDone('${r.id}')" class="w-full text-left text-xs bg-teal-50 text-teal-800 font-bold px-2 py-1.5 rounded mt-1">🔑 ${wzEsc(c.name)} (S.No ${c.sn||"—"}) ko PIN bhejein</button>`).join("") : `<p class="text-[11px] text-red-600">Is number ka koi customer nahi mila.</p>`}
         <button onclick="cfbReqDone('${r.id}')" class="text-[11px] text-gray-400 mt-1">Hatao</button></div>`; }).join("")}</div>` : ""}
     <div class="flex gap-1 mb-3">${tab("new","Naye")}${tab("forwarded","Bheje")}${tab("rejected","Galat")}${tab("all","Sab")}</div>
     ${list.length ? `<div class="space-y-2">${list.map(f=>cfbCardHtml(f, "tc")).join("")}</div>` : `<p class="text-gray-400 text-center mt-6 text-sm">Koi feedback nahi.</p>`}`;
@@ -11017,6 +11043,853 @@ async function cfbPdf(id){
   await savePdfFile(pdf, `Feedback_${String(f.name||"").replace(/[^\w]+/g,"_").slice(0,24)}_${String(f.at||"").slice(0,10)}.pdf`);
 }
 
+
+
+/* ===================== v52 — need-to-know data access, secure staff login, customer status pages ===================== */
+/* Every role loads only what its own work needs:
+     admin      everything (employees with passwords, all customers, bills, store, feedback, settings)
+     technician customers allotted to him (any stage), his own material, forms and safety check
+     surveyor   customers he added or was given for survey
+     telecaller customers given to him or whose calls he logged, QR leads, customer feedback, PIN requests,
+                and a phone / BP / name search (25 results at a time) for customers who call in
+     store      stock, issues, and the running jobs (to tag an issue to a job)
+     customer   only his own status page (portal/<key>, key = hash of mobile + PIN), never the customer list
+   On the live site the Firestore security rules (Admin → Security setup) enforce the same split on the server. */
+const STAFF_ROLES = ["admin","technician","surveyor","telecaller","store"];
+let rawDb = null;                 // the store itself (Firestore, or the trial's db); `db` = the same store with customer hooks
+let AUTH_KIND = "none";           // "firebase" on the live site, "none" in the claude.ai trial
+let staffDir = {};                // username -> {name, phone, role, active, specialization} (staffPublic: no passwords)
+let custSrc = {}, custExtra = {}; // customers per listener, and customers fetched on demand (search / lookups)
+let dataSubs = [], dataRole = null, dataNote = "";
+let lookupCache = {};
+let migrationsDone = false, showAppBusy = false;
+const todayISO = ()=>new Date().toISOString().slice(0,10);
+const nameKeyOf = s=>String(s||"").toUpperCase().replace(/\s+/g," ").trim();
+const docsOf = snap=>((snap && snap.docs) || []).map(d=>({id:d.id, ...d.data()}));
+const sameList = (a, b)=>JSON.stringify(a||[])===JSON.stringify(b||[]);
+const pauseMs = ms=>new Promise(r=>setTimeout(r, ms));
+function techsOf(at, al){
+  const out = [];
+  [at, ...WS_STAGES.map(st=>al && al[st])].forEach(u=>{ if(typeof u==="string" && u && !out.includes(u)) out.push(u); });
+  return out;
+}
+// per-stage allotment as plain top-level fields: a technician's app asks "alGI == me" — an exact match the security rules can always verify
+const AL_FIELDS = {SL:"alSL", GI:"alGI", NG:"alNG", REST:"alREST"};
+function alFieldsOf(al){ const o = {}; WS_STAGES.forEach(st=>{ const u = al && al[st]; o[AL_FIELDS[st]] = (typeof u==="string" && u) ? u : null; }); return o; }
+function staffPubOf(u){
+  return {name:String(u.name||u.username||""), phone:String(u.phone||""), role:String(u.role||""), active:u.active!==false,
+    specialization:Array.isArray(u.specialization) ? u.specialization.filter(x=>WS_STAGES.includes(x)) : []};
+}
+function staffDirList(){ return Object.keys(staffDir).map(k=>({username:k, ...staffDir[k]})); }
+const stableJson = o=>JSON.stringify(o, Object.keys(o||{}).sort());
+
+/* ---------- hashing: SHA-256 for the status-page key (SubtleCrypto, or the same algorithm in plain JS), FNV for change marks ---------- */
+function sha256hexSync(str){
+  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const bytes = []; const s = unescape(encodeURIComponent(String(str)));
+  for(let i=0;i<s.length;i++) bytes.push(s.charCodeAt(i) & 255);
+  const bitLen = bytes.length * 8; bytes.push(0x80); while(bytes.length % 64 !== 56) bytes.push(0);
+  for(let i=7;i>=0;i--) bytes.push(i >= 4 ? 0 : (bitLen >>> (i*8)) & 255);
+  let h = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const w = new Array(64), rr = (x,n)=>(x>>>n)|(x<<(32-n));
+  for(let o=0;o<bytes.length;o+=64){
+    for(let i=0;i<16;i++) w[i] = (bytes[o+4*i]<<24)|(bytes[o+4*i+1]<<16)|(bytes[o+4*i+2]<<8)|bytes[o+4*i+3];
+    for(let i=16;i<64;i++){ const s0 = rr(w[i-15],7)^rr(w[i-15],18)^(w[i-15]>>>3), s1 = rr(w[i-2],17)^rr(w[i-2],19)^(w[i-2]>>>10); w[i] = (w[i-16]+s0+w[i-7]+s1)|0; }
+    let [a,b,c,d,e,f,g,hh] = h;
+    for(let i=0;i<64;i++){
+      const S1 = rr(e,6)^rr(e,11)^rr(e,25), ch = (e&f)^(~e&g), t1 = (hh+S1+ch+K[i]+w[i])|0;
+      const S0 = rr(a,2)^rr(a,13)^rr(a,22), mj = (a&b)^(a&c)^(b&c), t2 = (S0+mj)|0;
+      hh = g; g = f; f = e; e = (d+t1)|0; d = c; c = b; b = a; a = (t1+t2)|0;
+    }
+    h = [(h[0]+a)|0,(h[1]+b)|0,(h[2]+c)|0,(h[3]+d)|0,(h[4]+e)|0,(h[5]+f)|0,(h[6]+g)|0,(h[7]+hh)|0];
+  }
+  return h.map(x=>(x>>>0).toString(16).padStart(8,"0")).join("");
+}
+async function sha256hex(str){
+  try{
+    const C = (typeof window!=="undefined" && window.crypto) || (typeof crypto!=="undefined" ? crypto : null);
+    if(C && C.subtle && typeof TextEncoder!=="undefined"){
+      const b = await C.subtle.digest("SHA-256", new TextEncoder().encode(String(str)));
+      return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("");
+    }
+  }catch(e){}
+  return sha256hexSync(str);
+}
+function fnv1a(s){ let h1 = 0x811c9dc5, h2 = 0x050c5d1f; s = String(s); for(let i=0;i<s.length;i++){ const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619) >>> 0; h2 = Math.imul(h2 ^ c, 2246822519) >>> 0; } return h1.toString(36) + "." + h2.toString(36); }
+
+/* ---------- customer writes: every write keeps `techs` (who may open the job) + `nameKey` (search) right and refreshes the status page ---------- */
+function custHookDb(raw){
+  if(!raw || raw.__hooked) return raw;
+  const fix = (id, data, full)=>{
+    if(!data || typeof data!=="object") return data;
+    const d = {...data};
+    const cur = full ? {} : ((id && (customers.find(c=>c.id===id) || custExtra[id])) || {});
+    if(full || ("allotted" in d) || ("assignedTechnician" in d)){
+      const al = ("allotted" in d) ? d.allotted : cur.allotted, at = ("assignedTechnician" in d) ? d.assignedTechnician : cur.assignedTechnician;
+      d.techs = techsOf(at, al);
+      if(full || ("allotted" in d)) Object.assign(d, alFieldsOf(al));
+    }
+    if("name" in d) d.nameKey = nameKeyOf(d.name);
+    return d;
+  };
+  const wrapDoc = (ref, id)=>({
+    id: ref.id, path: ref.path,
+    get: (...a)=>ref.get(...a),
+    onSnapshot: (...a)=>ref.onSnapshot(...a),
+    collection: (...a)=>ref.collection(...a),
+    async set(data, opt){ const d = fix(id, data, !(opt && opt.merge)); if(opt) await ref.set(d, opt); else await ref.set(d); custAfterWrite(id, d); },
+    async update(data){ const d = fix(id, data, false); await ref.update(d); custAfterWrite(id, d); },
+    async delete(){ await ref.delete(); delete custExtra[id]; },
+  });
+  const custCol = col=>{
+    const o = {path: col.path};
+    ["where","orderBy","limit","get","onSnapshot"].forEach(k=>{ if(typeof col[k]==="function") o[k] = col[k].bind(col); });
+    o.doc = id=>{ const ref = (id===undefined) ? col.doc() : col.doc(id); return wrapDoc(ref, ref.id); };
+    o.add = async data=>{ const d = fix(null, data, true); const ref = await col.add(d); if(ref && ref.id) custAfterWrite(ref.id, d); return ref; };
+    return o;
+  };
+  return {
+    __hooked: true, __raw: raw,
+    doc(path){ const ref = raw.doc(path), m = /^customers\/([^/]+)$/.exec(String(path)); return m ? wrapDoc(ref, m[1]) : ref; },
+    collection(path){ const col = raw.collection(path); return path==="customers" ? custCol(col) : col; },
+  };
+}
+function custAfterWrite(id, d){
+  if(!id) return;
+  if(custExtra[id]){ custExtra[id] = {...custExtra[id], ...(d||{})}; custRebuild(); }
+  if(d && Object.keys(d).length && Object.keys(d).every(k=>k==="portalKeys" || k==="portalSig")) return;   // the status page's own mark
+  portalSyncSoon(id);
+}
+
+/* ---------- connecting + login ---------- */
+const SECONDARY_APP = "pngAdminOps";
+const staffEmail = u=>String(u||"").trim().toLowerCase() + "@" + String(firebaseConfig.authDomain || (firebaseConfig.projectId + ".firebaseapp.com"));
+function authUser(){ try{ return AUTH_KIND==="firebase" ? firebase.auth().currentUser : null; }catch(e){ return null; } }
+const authSecure = ()=>{ const u = authUser(); return !!(u && !u.isAnonymous); };
+function authWaitReady(){
+  return new Promise(res=>{
+    let done = false; const fin = ()=>{ if(!done){ done = true; res(); } };
+    const t = setTimeout(fin, 8000);
+    try{ const un = firebase.auth().onAuthStateChanged(()=>{ clearTimeout(t); fin(); try{ if(typeof un==="function") un(); }catch(e){} }); }catch(e){ clearTimeout(t); fin(); }
+  });
+}
+async function authEnsureAnon(){
+  if(AUTH_KIND!=="firebase") return;
+  if(!authUser()){ try{ await firebase.auth().signInAnonymously(); }catch(e){ console.error("anonymous sign-in", e); } }
+}
+async function dbOpenStore(){
+  /*STORE-OPEN-BEGIN*/
+  if(firebaseConfig.apiKey === "PASTE_YOUR_API_KEY_HERE") throw new Error("Firebase config not filled in yet");
+  if(!window.firebase){
+    await loadScriptOnce("https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js");
+    await loadScriptOnce("https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js");
+    await loadScriptOnce("https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js");
+  }
+  if(!firebase.apps.length){ firebase.initializeApp(firebaseConfig); }
+  AUTH_KIND = "firebase";
+  await authWaitReady();          // a staff member who logged in earlier is restored by Firebase itself
+  await authEnsureAnon();         // everyone else (QR form, status page, old login) is a silent anonymous visitor
+  return firebase.firestore();
+  /*STORE-OPEN-END*/
+}
+async function dbConnect(){
+  if(db) return db;
+  try{ rawDb = await dbOpenStore(); }catch(e){ console.error("Database connect error", e); rawDb = null; }
+  db = rawDb ? custHookDb(rawDb) : null;
+  return db;
+}
+// a brand-new database has no users at all: the first person who logs in on the Admin tab becomes the admin
+async function bootstrapFirstAdmin(user, pass){
+  if(loginRole!=="admin" || !rawDb) return null;
+  try{ const any = await rawDb.collection("users").limit(1).get(); if(!any.empty) return null; }catch(e){ return null; }
+  if(String(pass).length < 6){ alert("Naye admin ka password kam se kam 6 character ka rakhiye."); return null; }
+  if(!confirm(`Database mein abhi koi user nahi hai.\n"${user}" ko pehla ADMIN banayein (isi password ke saath)?`)) return null;
+  const rec = {username:user, password:pass, role:"admin", name:user.charAt(0).toUpperCase() + user.slice(1), active:true, createdAt:new Date().toISOString()};
+  try{ await rawDb.doc("users/" + user).set(rec); await rawDb.doc("staffPublic/" + user).set(staffPubOf(rec)); }catch(e){ console.error(e); return null; }
+  return rec;
+}
+// is the saved login still valid? (secure: Firebase account + staff record; older login: the user record)
+async function sessionCheck(){
+  if(!currentUser || !rawDb) return true;
+  try{
+    if(authSecure()){
+      const sd = await rawDb.doc("staff/" + authUser().uid).get();
+      const s = sd && sd.exists ? (sd.data()||{}) : null;
+      if(!s || s.active===false || !STAFF_ROLES.includes(s.role)){ doLogout(s ? "Ye login access remove kar diya gaya hai. Admin se sampark karein." : "Login record nahi mila — dobara login karein."); return false; }
+      if(s.username!==currentUser.username || s.role!==currentUser.role || !currentUser.secure){   // the server's record decides who this is
+        currentUser = {username:s.username, role:s.role, name:s.name||s.username, secure:true};
+        try{ localStorage.setItem("png_user", JSON.stringify(currentUser)); }catch(e){}
+      }
+      return true;
+    }
+    if(currentUser.secure){ doLogout("Session khatam ho gaya — dobara login karein."); return false; }
+    const ud = await rawDb.doc("users/" + currentUser.username).get();
+    const u = ud && ud.exists ? (ud.data()||{}) : null;
+    if(!u || u.role!==currentUser.role){ doLogout("Login record nahi mila — dobara login karein."); return false; }
+    if(u.active===false){ doLogout("Ye login access remove kar diya gaya hai. Admin se sampark karein."); return false; }
+    return true;
+  }catch(e){
+    if(e && e.code==="permission-denied"){ doLogout("Secure login chalu ho gaya hai — apne username / password se dobara login karein."); return false; }
+    console.error("session check", e); return true;    // offline: carry on with the saved session
+  }
+}
+
+/* ---------- live data per role ---------- */
+let safetyDay = "", safetyTimer = null;
+function dataStop(){
+  dataSubs.forEach(u=>{ try{ u(); }catch(e){} }); dataSubs = [];
+  custSrc = {}; dataRole = null; dataNote = "";
+  clearTimeout(reconTimer); clearInterval(safetyTimer); safetyTimer = null;
+}
+function dataReset(){   // nothing the last user saw stays in memory on this phone
+  allUsers = []; inventory = []; issues = []; consumption = []; submissions = []; customers = []; attendance = []; safetyChecks = []; raBills = [];
+  leads = []; custFeedbacks = []; portalRequests = []; staffDir = {}; custExtra = {}; lookupCache = {}; safetyHist = {};
+  try{ Object.keys(mediaCache).forEach(k=>delete mediaCache[k]); }catch(e){}
+}
+function dataError(tag, e){
+  console.error("data listener " + tag, e);
+  if(!e || e.code!=="permission-denied" || !currentUser) return;
+  if(!authSecure()){ doLogout("Secure login chalu ho gaya hai — apne username / password se dobara login karein."); return; }
+  dataNote = `Kuch data (${tag}) is login ko nahi mila — admin "Security setup" check kare.`;
+  renderMain();
+}
+function listen(ref, onSnap, tag){
+  try{
+    const u = ref.onSnapshot(snap=>{ try{ onSnap(snap); }catch(e){ console.error(tag, e); } }, e=>dataError(tag, e));
+    if(typeof u==="function") dataSubs.push(u);
+  }catch(e){ dataError(tag, e); }
+}
+// fields the app keeps for itself (search, who may open, status page): a change in them alone needs no new screen
+const CUST_SILENT = ["techs","nameKey","portalKeys","portalSig","alSL","alGI","alNG","alREST"];
+function stableStr(v){
+  if(Array.isArray(v)) return "[" + v.map(stableStr).join(",") + "]";
+  if(v && typeof v==="object") return "{" + Object.keys(v).sort().map(k=>JSON.stringify(k) + ":" + stableStr(v[k])).join(",") + "}";
+  return JSON.stringify(v===undefined ? null : v);
+}
+function custSilentOnly(a, b){
+  if(!a || !b) return false;
+  const strip = o=>{ const x = {...o}; CUST_SILENT.forEach(k=>{ delete x[k]; }); return x; };
+  return stableStr(strip(a)) === stableStr(strip(b));
+}
+function custListen(key, q){
+  custSrc[key] = custSrc[key] || {};
+  listen(q, snap=>{
+    const prev = custSrc[key] || {}, m = {};
+    ((snap && snap.docs)||[]).forEach(d=>{ m[d.id] = d.data(); });
+    let quiet = false;
+    try{ const ch = typeof snap.docChanges==="function" ? snap.docChanges() : null; quiet = !!(ch && ch.length && ch.every(x=>x.type==="modified" && custSilentOnly(prev[x.doc.id], m[x.doc.id]))); }catch(e){}
+    custSrc[key] = m; custRebuild(quiet);
+  }, "customers:" + key);
+}
+function custRebuild(quiet){
+  const m = {};
+  Object.keys(custExtra).forEach(id=>{ m[id] = custExtra[id]; });
+  Object.values(custSrc).forEach(src=>Object.keys(src).forEach(id=>{ m[id] = src[id]; delete custExtra[id]; }));
+  customers = Object.keys(m).sort().map(id=>({...m[id], id}));
+  if(currentUser && currentUser.role==="admin") adminReconcileSoon();
+  if(!quiet) renderSoon();
+}
+// many live changes at once (another phone saving a list) -> one new screen
+let renderTimer = null;
+function renderSoon(){ if(renderTimer) return; renderTimer = setTimeout(()=>{ renderTimer = null; renderMain(); }, 60); }
+async function loadSettings(role){
+  const get = async k=>{ try{ const s = await rawDb.doc("settings/" + k).get(); return s && s.exists ? (s.data()||{}) : null; }catch(e){ console.error("settings " + k, e); return null; } };
+  const admin = role==="admin";   // invoice / bank details, bill settings and the RA draft: admin only; every role: the fixed form details
+  const [iv, fd, bs, rd] = await Promise.all([admin ? "invoiceCfg" : "", "formDefaults", admin ? "billingCfg" : "", admin ? "raDraft" : ""].map(k=>k ? get(k) : null));
+  if(iv) invCfg = Object.assign({}, invCfg, iv);
+  if(fd) formDefaults = fd;
+  if(bs) BILL_SAVED_KEYS.forEach(k=>{ if(bs[k]!==undefined) billCfg[k] = bs[k]; });
+  if(LOA_OLD_NOS.includes(String(billCfg.loaNo))) billCfg.loaNo = LOA_NO_DEFAULT;
+  if(role==="admin"){
+    if(rd) raCfg = Object.assign({final:false, invoiceDate:"", periodFrom:"", chk:{}, hold:[]}, rd);
+    listen(rawDb.doc("settings/capitalisation"), snap=>{ if(snap && snap.exists) capConfig = snap.data(); renderSoon(); }, "settings:capitalisation");
+  }
+  if(role==="admin" || role==="telecaller"){
+    listen(rawDb.doc("settings/payoutRates"), snap=>{ if(snap && snap.exists) payoutRates = {crmRate:50, formRate:100, ...snap.data()}; renderSoon(); }, "settings:payoutRates");
+    listen(rawDb.doc("settings/leadForm"), snap=>{ leadCfg = (snap && snap.exists) ? (snap.data()||{}) : {}; renderSoon(); }, "settings:leadForm");
+  }
+}
+async function dataStart(){
+  if(!db || !rawDb || !currentUser) return;
+  dataStop();
+  const me = currentUser.username, role = currentUser.role; dataRole = role;
+  const C = n=>rawDb.collection(n), cust = ()=>db.collection("customers");
+  const into = fn=>snap=>{ fn(docsOf(snap)); renderSoon(); };
+  // employees: names + mobile numbers for every role; the login records (with passwords) only for the admin
+  listen(C("staffPublic"), snap=>{ const m = {}; ((snap && snap.docs)||[]).forEach(d=>{ m[d.id] = d.data(); }); staffDir = m; if(currentUser && currentUser.role!=="admin") allUsers = staffDirList(); renderSoon(); }, "staffPublic");
+  await loadSettings(role);
+  if(role==="admin"){
+    listen(C("users"), into(l=>{ allUsers = l; adminReconcileSoon(); }), "users");
+    custListen("all", cust());
+    listen(C("inventory"), into(l=>{ inventory = l; }), "inventory");
+    listen(C("issues"), into(l=>{ issues = l; }), "issues");
+    listen(C("consumption"), into(l=>{ consumption = l; }), "consumption");
+    listen(C("submissions"), into(l=>{ submissions = l; }), "submissions");
+    listen(C("attendance"), into(l=>{ attendance = l; }), "attendance");
+    listen(C("bills"), into(l=>{ raBills = l.sort((a,b)=>(Number(a.seq)||0)-(Number(b.seq)||0)); }), "bills");
+    listen(C("leads"), into(l=>{ leads = l; }), "leads");
+    listen(C("custFeedback"), into(l=>{ custFeedbacks = l; }), "custFeedback");
+    listen(C("portalRequests"), into(l=>{ portalRequests = l; }), "portalRequests");
+    safetyListen(()=>C("safety_checks").where("date","==",todayISO()));
+  } else if(role==="technician"){
+    custListen("asg", cust().where("assignedTechnician","==",me));
+    WS_STAGES.forEach(st=>custListen(AL_FIELDS[st], cust().where(AL_FIELDS[st],"==",me)));
+    listen(C("issues").where("technicianUsername","==",me), into(l=>{ issues = l; }), "issues");
+    listen(C("consumption").where("technicianUsername","==",me), into(l=>{ consumption = l; }), "consumption");
+    listen(C("submissions").where("technicianUsername","==",me), into(l=>{ submissions = l; }), "submissions");
+    listen(C("inventory"), into(l=>{ inventory = l; }), "inventory");
+    safetyListen(()=>C("safety_checks").where("username","==",me).where("date","==",todayISO()));
+  } else if(role==="surveyor"){
+    custListen("add", cust().where("addedBy","==",me));
+    custListen("svy", cust().where("surveyAssigned","==",me));
+    listen(C("inventory"), into(l=>{ inventory = l; }), "inventory");
+  } else if(role==="telecaller"){
+    custListen("tc", cust().where("tcAssigned","==",me));
+    custListen("tcid", cust().where("telecallerId","==",me));
+    listen(C("leads"), into(l=>{ leads = l; }), "leads");
+    listen(C("custFeedback"), into(l=>{ custFeedbacks = l; }), "custFeedback");
+    listen(C("portalRequests"), into(l=>{ portalRequests = l; }), "portalRequests");
+  } else if(role==="store"){
+    custListen("run", cust().where("status","==","assigned"));
+    listen(C("inventory"), into(l=>{ inventory = l; }), "inventory");
+    listen(C("issues"), into(l=>{ issues = l; }), "issues");
+  }
+}
+// today's safety checks only (photos are heavy): the listener moves to the new day by itself
+let safetyHist = {};
+function safetyListen(mk){
+  let unsub = null;
+  const sub = ()=>{
+    if(unsub){ try{ unsub(); }catch(e){} dataSubs = dataSubs.filter(x=>x!==unsub); unsub = null; }
+    safetyDay = todayISO();
+    try{
+      unsub = mk().onSnapshot(snap=>{ const day = docsOf(snap); safetyChecks = [...day, ...Object.values(safetyHist).flat().filter(s=>!day.some(x=>x.id===s.id))]; renderSoon(); }, e=>dataError("safety_checks", e));
+      if(typeof unsub==="function") dataSubs.push(unsub);
+    }catch(e){ dataError("safety_checks", e); }
+  };
+  sub();
+  clearInterval(safetyTimer);
+  safetyTimer = setInterval(()=>{ if(currentUser && safetyDay !== todayISO()) sub(); }, 60000);
+}
+// admin: an employee's last two weeks of safety checks, fetched when his details are opened
+async function safetyLoadHistory(username){
+  if(!rawDb || safetyHist[username]) return;
+  safetyHist[username] = [];
+  const out = [];
+  for(let i=0;i<14;i++){
+    const day = new Date(Date.now() - i*86400000).toISOString().slice(0,10);
+    try{ const sn = await rawDb.collection("safety_checks").where("username","==",username).where("date","==",day).get(); out.push(...docsOf(sn)); }catch(e){ console.error(e); break; }
+  }
+  safetyHist[username] = out;
+  safetyChecks = [...safetyChecks.filter(s=>!out.some(x=>x.id===s.id)), ...out];
+}
+
+/* ---------- customer S.No: one shared counter (settings/snCounter) so every role gets the next number at once ---------- */
+async function snNext(){
+  const localMax = customers.reduce((m,c)=>Math.max(m, Number(c.sn)||0), 0);
+  const isAdmin = !!(currentUser && currentUser.role==="admin");
+  if(!rawDb) return isAdmin ? localMax + 1 : null;
+  const ref = rawDb.doc("settings/snCounter");
+  const step = (d, put)=>{
+    if(!d){ if(!isAdmin) return null; const n = localMax + 1; put("set", {last:n}); return n; }
+    const n = Math.max(Number(d.last)||0, isAdmin ? localMax : 0) + 1; put("update", {last:n}); return n;
+  };
+  try{
+    if(typeof rawDb.runTransaction === "function"){
+      return await rawDb.runTransaction(async tx=>{ const sn = await tx.get(ref); return step(sn && sn.exists ? (sn.data()||{}) : null, (k, v)=>tx[k](ref, v)); });
+    }
+    const sn = await ref.get(); let w = null;
+    const n = step(sn && sn.exists ? (sn.data()||{}) : null, (k, v)=>{ w = [k, v]; });
+    if(w) await ref[w[0]](w[1]);
+    return n;
+  }catch(e){ console.error("S.No counter", e); return isAdmin ? localMax + 1 : null; }
+}
+
+/* ---------- admin: keep shared records right (runs quietly after changes) ---------- */
+let reconTimer = null, reconBusy = false, reconDirty = false;
+function adminReconcileSoon(){
+  if(!currentUser || currentUser.role!=="admin" || !rawDb) return;
+  if(reconBusy){ reconDirty = true; return; }
+  clearTimeout(reconTimer); reconTimer = setTimeout(adminReconcile, 2500);
+}
+async function adminReconcile(){
+  if(reconBusy || !currentUser || currentUser.role!=="admin" || !rawDb) return;
+  reconBusy = true; reconDirty = false;
+  try{
+    // 1. employees -> staffPublic (name, mobile, role, active, kaam: never the password)
+    for(const u of allUsers.slice()){
+      if(!u || !u.username || !currentUser || currentUser.role!=="admin") continue;
+      const want = staffPubOf(u), have = staffDir[u.username];
+      if(!have || stableJson(staffPubOf({username:u.username, ...have})) !== stableJson(want)){ await rawDb.doc("staffPublic/" + u.username).set(want); staffDir[u.username] = want; await pauseMs(40); }
+    }
+    // 2. customers: techs (who may open the job), nameKey (search), S.No for customers that staff added
+    let mx = customers.reduce((m,c)=>Math.max(m, Number(c.sn)||0), 0);
+    const noSn = customers.filter(c=>!(Number(c.sn)>0)).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))).map(c=>c.id);
+    const snFor = {}; noSn.forEach(id=>{ snFor[id] = ++mx; });
+    for(const c of customers.slice()){
+      if(!currentUser || currentUser.role!=="admin") break;
+      const patch = {}, t = techsOf(c.assignedTechnician, c.allotted), nk = nameKeyOf(c.name);
+      if(!sameList(c.techs, t) && !(t.length===0 && c.techs===undefined)) patch.techs = t;   // nobody allotted + no field yet: nothing to write
+      if(c.allotted || Object.values(AL_FIELDS).some(f=>c[f]!==undefined)){ const af = alFieldsOf(c.allotted); Object.keys(af).forEach(f=>{ if((c[f]===undefined ? null : c[f]) !== af[f] || c[f]===undefined) patch[f] = af[f]; }); }
+      if((c.nameKey||"") !== nk) patch.nameKey = nk;
+      if(snFor[c.id]) patch.sn = snFor[c.id];
+      if(Object.keys(patch).length){ try{ await rawDb.doc("customers/" + c.id).update(patch); Object.assign(c, patch); }catch(e){ console.error("reconcile " + c.id, e); } await pauseMs(40); }
+    }
+    // the shared S.No counter never lags behind the customer list
+    try{ const cr = rawDb.doc("settings/snCounter"), cs = await cr.get(), last = cs && cs.exists ? (Number((cs.data()||{}).last)||0) : -1; if(last < mx) await cr.set({last:mx}); }catch(e){ console.error("S.No counter", e); }
+    // 3. customer status pages of every verified customer
+    for(const c of customers.slice()){
+      if(!currentUser || currentUser.role!=="admin") break;
+      if(c.portalPin || (c.portalKeys||[]).length){ try{ await portalSync(c); }catch(e){ console.error("status page " + c.id, e); } }
+    }
+  }catch(e){ console.error("reconcile", e); }
+  finally{ reconBusy = false; if(reconDirty){ reconDirty = false; adminReconcileSoon(); } }
+}
+
+/* ---------- search for customers who are not in this login's own list (telecaller: callers, PIN requests, leads) ---------- */
+function custLocalSearch(q, list){
+  q = String(q||"").trim(); const ql = q.toLowerCase(), qd = q.replace(/\D/g,"");
+  return (list || customers).filter(c=>{
+    if(c.bpNo && String(c.bpNo).trim()===q) return true;
+    if(qd.length>=6 && [c.phone, c.altPhone].some(p=>String(p||"").replace(/\D/g,"").includes(qd))) return true;
+    if(!qd && ql.length>=2 && [c.name, c.area, c.address].some(x=>String(x||"").toLowerCase().includes(ql))) return true;
+    return false;
+  });
+}
+async function custLookup(q){
+  q = String(q||"").trim(); if(!q) return [];
+  if(!currentUser || currentUser.role==="admin" || !db) return custLocalSearch(q);
+  const out = {}, runs = [], C = ()=>db.collection("customers"), digits = q.replace(/\D/g,"");
+  if(digits.length>=10){ const p = digits.slice(-10); [["phone",p],["altPhone",p],["phone","+91"+p],["phone","91"+p],["phone","0"+p]].forEach(([f,v])=>runs.push(C().where(f,"==",v).limit(25))); }
+  if(/^\d{6,}$/.test(q)){ runs.push(C().where("bpNo","==",q).limit(25)); if(Number(q) < 9007199254740991) runs.push(C().where("bpNo","==",Number(q)).limit(25)); }
+  if(/[a-z]/i.test(q)){ const k = nameKeyOf(q); if(k.length>=2) runs.push(C().where("nameKey",">=",k).where("nameKey","<=",k + "").limit(25)); }
+  for(const r of runs){ try{ const sn = await r.get(); ((sn && sn.docs)||[]).forEach(d=>{ out[d.id] = d.data(); }); }catch(e){ console.error("lookup", e); } }
+  Object.keys(out).forEach(id=>{ if(!customers.some(c=>c.id===id)) custExtra[id] = out[id]; });
+  if(Object.keys(out).length) custRebuild();
+  const local = custLocalSearch(q);
+  local.forEach(c=>{ if(!out[c.id]) out[c.id] = c; });
+  return Object.keys(out).map(id=>customers.find(c=>c.id===id) || {...out[id], id});
+}
+// customers with this mobile number: answers from memory, fetching once in the background (re-renders when ready)
+function phoneLookupCached(ph){
+  const p = phone10(ph); if(!/^\d{10}$/.test(p)) return [];
+  const match = c=>phone10(c.phone)===p || phone10(c.altPhone)===p;
+  if(!currentUser || currentUser.role==="admin") return customers.filter(match);
+  const e = lookupCache[p];
+  if(!e){ lookupCache[p] = {busy:true}; custLookup(p).then(()=>{ lookupCache[p] = {at:Date.now()}; renderMain(); }).catch(()=>{ lookupCache[p] = {at:Date.now()}; }); return null; }
+  if(e.busy) return null;
+  return customers.filter(match);
+}
+async function phoneLookupNow(ph){
+  const p = phone10(ph); if(!/^\d{10}$/.test(p)) return [];
+  if(currentUser && currentUser.role!=="admin"){ await custLookup(p); lookupCache[p] = {at:Date.now()}; }
+  return customers.filter(c=>phone10(c.phone)===p || phone10(c.altPhone)===p);
+}
+// one customer by id (e.g. the customer of a feedback): from memory, else fetched once
+const custEnsureBusy = {};
+function custEnsure(id){
+  if(!id) return null;
+  const c = customers.find(x=>x.id===id); if(c) return c;
+  if(!db || !currentUser || custEnsureBusy[id]) return null;
+  custEnsureBusy[id] = 1;
+  db.doc("customers/" + id).get().then(s=>{ if(s && s.exists){ custExtra[id] = s.data(); custRebuild(); } }).catch(e=>console.error(e));
+  return null;
+}
+
+/* ---------- customer status page (portal/<key>): what the customer may see, nothing else ---------- */
+const PORTAL_SALT = "png-tejasav-status|v1|";
+async function portalKeyOf(phone, pin){
+  const p = phone10(phone), n = String(pin||"").replace(/\D/g,"");
+  if(!/^\d{10}$/.test(p) || !/^\d{4}$/.test(n)) return "";
+  return sha256hex(PORTAL_SALT + p + "|" + n);
+}
+function portalView(c){
+  const s = stageLive(c), d = portalDone(c), dd = x=>x ? fpDate(x) : "", tl = portalTechList(c);
+  const techs = Object.keys(tl).sort().map(u=>{ const sp = staffDir[u] || {}; return {n:String(sp.name || ((SEED_USERS.find(x=>x.username===u)||{}).name) || u), p:String(sp.phone||""), st:tl[u]}; });
+  const media = {};
+  MEDIA_KINDS.forEach(x=>{ const m = (c.media||{})[x.k]; if(m && m.ver && m.n) media[x.k] = {ver:String(m.ver), n:Number(m.n)||1, type:String(m.type||""), at:String(m.at||"")}; });
+  return {id:c.id, name:String(c.name||""), addr:String(c.address||c.area||""), area:String(c.area||""), bp:c.bpNo ? String(c.bpNo) : "", sn:c.sn ? String(c.sn) : "",
+    done:{SL:!!d.SL, GI:!!d.GI, NG:!!d.NG, REST:!!d.REST, ALL:!!d.ALL},
+    dates:{SL: s.already ? "Pehle se line hai" : dd(s.dSL), GI:dd(s.dGI), NG:dd(s.dNG), REST:dd(s.dRS)},
+    meterIn:!!s.meterIn, meterNo:String(c.meterSerialNumber || (c.wizMeter||{}).number || ""),
+    techs, media};
+}
+const portalSyncTimers = {};
+function portalSyncSoon(cid){
+  if(!db || !currentUser || !cid) return;
+  clearTimeout(portalSyncTimers[cid]);
+  portalSyncTimers[cid] = setTimeout(()=>{ delete portalSyncTimers[cid]; const c = customers.find(x=>x.id===cid) || (custExtra[cid] ? {...custExtra[cid], id:cid} : null); if(c) portalSync(c).catch(e=>console.error("status page", e)); }, 1500);
+}
+async function portalSync(c){
+  if(!rawDb || !currentUser || !c || !c.id || currentUser.role==="store") return;
+  const pin = /^\d{4}$/.test(String(c.portalPin||"")) ? String(c.portalPin) : "";
+  // a verified customer's old meter photo (saved inside the customer record) moves to the photo store, so his page can show it
+  if(pin && !(c.media||{}).meter && c.wizMeterPhoto && c.wizMeterPhoto.dataUrl && customers.some(x=>x.id===c.id) && mediaCanEdit(c, "meter")){
+    await mediaStore(c.id, "meter", c.wizMeterPhoto.dataUrl, {type:"image/jpeg", at:c.wizMeterPhoto.capturedAt || "", geo:c.wizMeterPhoto.geotag || null});
+    return;                                   // that write brings the next refresh
+  }
+  const phones = [...new Set([phone10(c.phone), phone10(c.altPhone)])].filter(p=>/^\d{10}$/.test(p));
+  const keys = pin ? (await Promise.all(phones.map(p=>portalKeyOf(p, pin)))).filter(Boolean) : [];
+  const view = keys.length ? portalView(c) : null;
+  const sig = view ? fnv1a(JSON.stringify(view) + "|" + keys.join(",")) : "";
+  const oldKeys = Array.isArray(c.portalKeys) ? c.portalKeys : [];
+  if(sig === String(c.portalSig||"") && sameList([...oldKeys].sort(), [...keys].sort())) return;
+  for(const k of oldKeys) if(!keys.includes(k)) await portalDocEdit(k, c.id, null);
+  for(const k of keys) await portalDocEdit(k, c.id, view);
+  await rawDb.doc("customers/" + c.id).update({portalKeys:keys, portalSig:sig});
+  if(custExtra[c.id]) custExtra[c.id] = {...custExtra[c.id], portalKeys:keys, portalSig:sig};
+}
+async function portalDocEdit(key, cid, view){
+  const ref = rawDb.doc("portal/" + key);
+  let d = {}; try{ const s = await ref.get(); if(s && s.exists) d = s.data() || {}; }catch(e){}
+  const cs = {...(d.c||{})};
+  if(view) cs[cid] = view; else delete cs[cid];
+  if(!Object.keys(cs).length){ try{ await ref.delete(); }catch(e){ console.error(e); } return; }
+  await ref.set({c:cs, fb:d.fb || {}, at:new Date().toISOString()});
+}
+
+/* ---------- Firestore security rules for the live site (Admin → Security setup → copy → Firebase console) ---------- */
+const SECURE_RULES = `rules_version = '2';
+// PNG Enterprise (M/S TEJASAV) - need-to-know access. Admin: everything. Others: only their own work.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function staffPath() { return /databases/$(database)/documents/staff/$(request.auth.uid); }
+    function isStaff() { return signedIn() && exists(staffPath()) && get(staffPath()).data.active == true; }
+    function role() { return get(staffPath()).data.role; }
+    function me() { return get(staffPath()).data.username; }
+    function isRole(r) { return isStaff() && role() == r; }
+    function isAdmin() { return isRole('admin'); }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    // the customer is allotted to this technician: main job, or any one stage (exact matches, so his queries are always allowed)
+    function techOwns() { return resource.data.assignedTechnician == me() || resource.data.alSL == me() || resource.data.alGI == me() || resource.data.alNG == me() || resource.data.alREST == me(); }
+
+    // Admin: full access to every record
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+    // login identity of each employee (written by the admin's Security setup)
+    match /staff/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+    }
+    // employee name + mobile + role (no password) for the team
+    match /staffPublic/{username} {
+      allow read: if isStaff();
+    }
+    // users (login passwords), bills, invoice / bank details, rates and the other settings: admin only (no rule here)
+    match /settings/{key} {
+      // the public QR form reads its own setup
+      allow get: if key == 'leadForm';
+      // the team: fixed form details and the S.No counter
+      allow get: if isStaff() && (key == 'formDefaults' || key == 'snCounter');
+      // telecaller: his call / form payout rates
+      allow get: if isRole('telecaller') && key == 'payoutRates';
+    }
+    // next customer S.No: any team member takes the next number (one step up, nothing else)
+    match /settings/snCounter {
+      allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last']) && request.resource.data.last == resource.data.last + 1;
+    }
+    match /customers/{cid} {
+      // technician: only the customers allotted to him (main job, or any one stage)
+      allow read: if isRole('technician') && techOwns();
+      allow update: if isRole('technician') && techOwns()
+        && !changed().hasAny(['allotted', 'assignedTechnician', 'techs', 'alSL', 'alGI', 'alNG', 'alREST', 'tcAssigned', 'surveyAssigned', 'billed', 'addedBy']);
+      // surveyor: customers he added or was given for survey
+      allow read: if isRole('surveyor') && (resource.data.addedBy == me() || resource.data.surveyAssigned == me());
+      allow create: if isRole('surveyor') && request.resource.data.addedBy == me();
+      allow update: if isRole('surveyor') && (resource.data.addedBy == me() || resource.data.surveyAssigned == me())
+        && !changed().hasAny(['allotted', 'assignedTechnician', 'techs', 'alSL', 'alGI', 'alNG', 'alREST', 'tcAssigned', 'surveyAssigned', 'billed', 'addedBy', 'portalPin']);
+      // telecaller: his assigned customers and calls; search by phone / BP / name, 25 at a time
+      allow get: if isRole('telecaller');
+      allow list: if isRole('telecaller') && (resource.data.tcAssigned == me() || resource.data.telecallerId == me() || request.query.limit <= 25);
+      allow create: if isRole('telecaller');
+      allow update: if isRole('telecaller')
+        && !changed().hasAny(['allotted', 'assignedTechnician', 'techs', 'alSL', 'alGI', 'alNG', 'alREST', 'tcAssigned', 'surveyAssigned', 'billed', 'addedBy']);
+      // store: running jobs only (to tag an issue to a job)
+      allow list: if isRole('store') && resource.data.status == 'assigned';
+    }
+    match /inventory/{id} {
+      allow read: if isStaff();
+      allow create, update: if isRole('store');
+    }
+    match /stockLog/{id} {
+      allow read, create: if isRole('store');
+    }
+    match /issues/{id} {
+      allow read, create: if isRole('store');
+      allow read: if isRole('technician') && resource.data.technicianUsername == me();
+    }
+    match /consumption/{id} {
+      allow read: if isRole('technician') && resource.data.technicianUsername == me();
+      allow create: if isRole('technician') && request.resource.data.technicianUsername == me();
+    }
+    match /submissions/{id} {
+      allow read, delete: if isRole('technician') && resource.data.technicianUsername == me();
+      allow create: if isRole('technician') && request.resource.data.technicianUsername == me();
+    }
+    match /attendance/{id} {
+      allow read: if isStaff() && resource.data.username == me();
+      allow create: if isStaff() && request.resource.data.username == me();
+    }
+    match /safety_checks/{id} {
+      allow read: if isStaff() && resource.data.username == me();
+      allow create: if isStaff() && request.resource.data.username == me();
+    }
+    // work photos / videos: read by exact id only (the customer's status page shows his own)
+    match /media/{id} {
+      allow get: if true;
+      allow create, update, delete: if isStaff() && role() != 'store';
+    }
+    // customer status pages: the id is a hash of mobile + PIN, so only that customer can open his page
+    match /portal/{key} {
+      allow get: if true;
+      allow create, update, delete: if isStaff();
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fb']);
+    }
+    // public QR form, status-page feedback and PIN requests: anyone may send, only the team reads
+    match /leads/{id} {
+      allow create: if request.resource.data.status == 'new';
+      allow read, update: if isRole('telecaller');
+    }
+    match /custFeedback/{id} {
+      allow create: if request.resource.data.status == 'new';
+      allow read, update: if isRole('telecaller');
+    }
+    match /portalRequests/{id} {
+      allow create: if request.resource.data.status == 'new';
+      allow read, update: if isRole('telecaller');
+    }
+  }
+}`;
+const OPEN_RULES_ROLLBACK = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}`;
+
+/* ---------- Admin → Security setup ---------- */
+let secUi = {busy:false, fresh:true, results:null, check:null, msg:""};
+function secApp(){
+  let a = (firebase.apps||[]).find(x=>x.name===SECONDARY_APP);
+  if(!a) a = firebase.initializeApp(firebaseConfig, SECONDARY_APP);
+  return a;
+}
+async function secAppAuth(){
+  const a = secApp(), au = a.auth();
+  try{ await au.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e){}
+  return au;
+}
+function secUsersList(){ return allUsers.filter(u=>u && u.username && STAFF_ROLES.includes(u.role)).sort((a,b)=>(a.role==="admin"?-1:0)-(b.role==="admin"?-1:0) || String(a.username).localeCompare(String(b.username))); }
+function renderSecuritySetup(){
+  if(!currentUser || currentUser.role!=="admin") return "";
+  const live = AUTH_KIND==="firebase", secure = authSecure(), list = secUsersList(), withAcc = list.filter(u=>u.uid).length;
+  const step = (n, title, body, done)=>`<div class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 ${done?"border-[#0D904F]":"border-[#EA8600]"}"><p class="font-bold text-sm mb-1">${done?"✅":"⬜"} Step ${n}: ${title}</p>${body}</div>`;
+  const res = secUi.results;
+  return `<button onclick="setView('overview')" class="text-sm text-[#0D904F] font-bold mb-2">← Back</button>
+    <h2 class="font-bold text-gray-800 mb-1">🔒 Security setup (need-to-know data access)</h2>
+    <p class="text-[11px] text-gray-500 mb-3">App mein har role ko sirf uske kaam ka data milta hai (technician: apne allotted customers; surveyor: apne survey; telecaller: diye gaye customers + leads + feedback; store: stock; customer: sirf apna status). Admin ko sab kuch. Live website par ise server par pakka karne ke liye ye 3 step ek baar kijiye.</p>
+    <div class="bg-gray-50 rounded-lg p-3 mb-3 text-xs">
+      <p>Abhi login: <b class="${secure?"text-green-700":"text-orange-700"}">${!live ? "Trial (claude.ai) — yahan secure login ki zarurat nahi" : secure ? "🔒 Secure (Firebase account)" : "⚠️ Purana tareeka (password database se)"}</b></p>
+      ${live ? `<p>Secure accounts: <b>${withAcc} / ${list.length}</b> employees</p>` : ""}
+      ${secUi.check ? `<p>Rules check: <b class="${secUi.check.ok?"text-green-700":"text-red-600"}">${wzEsc(secUi.check.text)}</b></p>` : ""}
+      ${(secUi.roleTest||[]).map(r=>`<p>${wzEsc(r.role)}${r.user ? " (" + wzEsc(r.user) + ")" : ""}: <b class="${r.ok?"text-green-700":"text-red-600"}">${wzEsc(r.text)}</b></p>`).join("")}
+      ${secUi.msg ? `<p class="text-blue-700 mt-1">${wzEsc(secUi.msg)}</p>` : ""}
+    </div>
+    ${!live ? `<p class="text-xs bg-yellow-50 rounded p-2">Ye trial version hai — yahan data claude.ai par hai aur role-wise data pehle se alag-alag dikh raha hai. Secure login + rules live website (Firebase) par lagte hain.</p>` : `
+    ${step(1, "Firebase console mein Email/Password login chalu karein", `<p class="text-[11px] text-gray-600">console.firebase.google.com → project <b>${wzEsc(firebaseConfig.projectId)}</b> → Authentication → Sign-in method → <b>Email/Password</b> → Enable → Save. (<b>Anonymous</b> bhi Enabled rehna chahiye — QR form aur customer status page ke liye.)</p>`, withAcc>0)}
+    ${step(2, "Sabke secure login accounts banayein", `<p class="text-[11px] text-gray-600 mb-2">Har employee ka Firebase account isi username se banega. Purane password app ke code mein the (public), isliye naye password banana behtar hai.</p>
+      <label class="flex items-center gap-2 text-xs mb-2"><input type="checkbox" ${secUi.fresh?"checked":""} onchange="secUi.fresh=this.checked" class="w-4 h-4 accent-[#0D904F]"> Sabke naye password banayein (recommended)</label>
+      <button onclick="secCreateAccounts()" class="w-full bg-[#0D904F] text-white text-xs font-bold py-2.5 rounded ${secUi.busy?"opacity-50":""}">${secUi.busy ? "Ban rahe hain…" : "🔐 Secure accounts banayein / update karein"}</button>
+      <div class="mt-2 space-y-1">${list.map(u=>{ const r = res && res.find(x=>x.username===u.username);
+        return `<div class="flex justify-between gap-2 text-[11px] border-b border-gray-100 py-1"><span>${wzEsc(u.name||u.username)} <span class="text-gray-400">(${wzEsc(u.username)} • ${wzEsc(u.role)})</span></span>
+          <span class="${r && r.err ? "text-red-600" : (u.uid ? "text-green-700" : "text-gray-400")} font-bold">${r ? (r.err ? "❌ " + wzEsc(r.err) : "✅ " + wzEsc(r.pass||"")) : (u.uid ? "✅ account hai" : "— abhi nahi")}</span></div>`; }).join("")}</div>
+      ${res && res.some(r=>r.pass) ? `<button onclick="secCredPdf()" class="w-full bg-[#1b365d] text-white text-xs font-bold py-2 rounded mt-2">⬇ Naye login details (PDF) — employees ko dein</button>` : ""}`, list.length>0 && withAcc===list.length)}
+    ${step(3, "Security rules publish karein", `<p class="text-[11px] text-gray-600 mb-1">Step 2 poora hone ke <b>baad</b>: console → Firestore Database → <b>Rules</b> → purana text hata kar neeche wala poora text paste → <b>Publish</b>.</p>
+      <button onclick="secCopyRules()" class="w-full bg-[#1b365d] text-white text-xs font-bold py-2 rounded mb-1">📋 Rules copy karein</button>
+      <textarea id="secRulesBox" class="ff-input text-[10px] font-mono" rows="8" readonly>${wzEsc(SECURE_RULES)}</textarea>
+      <button onclick="secCheckRules()" class="w-full bg-[#1a73e8] text-white text-xs font-bold py-2 rounded mt-2">🧪 Rules check karein</button>
+      <p class="text-[10px] text-gray-500 mt-2">Kuch galat ho jaye to wapas purane rules (sirf emergency): <button onclick="secCopyRollback()" class="underline font-bold">purane rules copy</button></p>`, !!(secUi.check && secUi.check.ok))}
+    <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-1">🔑 Admin ka apna password</p>
+      <input id="secMyPass" type="text" class="ff-input text-xs mb-2" placeholder="Naya password (kam se kam 8 character)">
+      <button onclick="secChangeMyPassword()" class="w-full bg-[#8430CE] text-white text-xs font-bold py-2 rounded">💾 Apna password badlein</button></div>`}`;
+}
+async function secCreateAccounts(){
+  if(!currentUser || currentUser.role!=="admin" || secUi.busy) return;
+  if(AUTH_KIND!=="firebase"){ alert("Ye live website (Firebase) par hi chalta hai."); return; }
+  const list = secUsersList(); if(!list.length){ alert("Employees ki list abhi load nahi hui."); return; }
+  if(!confirm(`${list.length} employees ke secure login accounts banane / update karne hain?${secUi.fresh ? "\n\nSabke NAYE password banenge — naye password list / PDF employees ko dene honge." : ""}`)) return;
+  secUi.busy = true; secUi.results = []; secUi.msg = ""; renderMain();
+  let au = null; try{ au = await secAppAuth(); }catch(e){ console.error(e); secUi.busy = false; alert("Firebase login module load nahi hua."); renderMain(); return; }
+  let stop = false;
+  for(const u of list){
+    if(stop) break;
+    const old = String(u.password||""), pass = (secUi.fresh || old.length < 6) ? generatePassword(u.name || u.username) : old;
+    const r = {username:u.username, role:u.role};
+    try{
+      let cred = null;
+      try{ cred = await au.createUserWithEmailAndPassword(staffEmail(u.username), pass); }
+      catch(e){
+        if(e && e.code==="auth/email-already-in-use"){
+          cred = await au.signInWithEmailAndPassword(staffEmail(u.username), old);
+          if(pass !== old) await cred.user.updatePassword(pass);
+        } else throw e;
+      }
+      const uid = cred.user.uid;
+      try{ await au.signOut(); }catch(e){}
+      await rawDb.doc("staff/" + uid).set({username:u.username, role:u.role, name:u.name||u.username, active:u.active!==false});
+      await rawDb.doc("users/" + u.username).update({uid, password:pass, authAt:new Date().toISOString()});
+      u.uid = uid; u.password = pass; r.pass = pass;
+    }catch(e){
+      console.error("secure account " + u.username, e);
+      const code = (e && e.code) || (e && e.message) || "error";
+      r.err = code==="auth/operation-not-allowed" ? "Email/Password login band hai (Step 1)" : code==="auth/wrong-password" ? "purana Firebase password alag hai" : code;
+      if(code==="auth/operation-not-allowed" || code==="auth/network-request-failed") stop = true;
+      try{ await au.signOut(); }catch(e2){}
+    }
+    secUi.results.push(r); renderMain();
+  }
+  // this admin switches to the secure login straight away
+  const mine = secUi.results.find(r=>r.username===currentUser.username && r.pass);
+  if(mine){
+    try{
+      await firebase.auth().signInWithEmailAndPassword(staffEmail(mine.username), mine.pass);
+      try{ localStorage.setItem("png_user", JSON.stringify({...currentUser, secure:true})); }catch(e){}
+      dataStop(); await dataStart();
+      secUi.msg = "Aap ab secure login se hain. Ab Step 3 (rules) kijiye.";
+    }catch(e){ console.error(e); secUi.msg = "Accounts ban gaye — ek baar logout karke naye password se login kijiye."; }
+  }
+  secUi.busy = false; renderMain();
+  if(mine) alert(`Aapka (admin) login: ${mine.username} / ${mine.pass}\n\nIse abhi likh lijiye. (Bhool jaayein to Firebase console → Firestore Database → users → ${mine.username} → password mein dikhega.)\n\nBaaki employees ke naye password neeche list aur PDF mein hain.`);
+  if(secUi.results.some(r=>r.err)) alert("Kuch accounts nahi bane — list mein ❌ dekhiye.");
+}
+async function secCopyRules(){ try{ await navigator.clipboard.writeText(SECURE_RULES); showToast("Rules copy ho gaye — Firebase console mein paste karein."); }catch(e){ const b = document.getElementById("secRulesBox"); if(b && b.select){ b.select(); } alert("Rules box ka poora text select karke copy kijiye."); } }
+async function secCopyRollback(){ if(!confirm("Purane (khule) rules sirf emergency ke liye hain — inse har koi data padh sakta hai. Copy karein?")) return; try{ await navigator.clipboard.writeText(OPEN_RULES_ROLLBACK); showToast("Purane rules copy ho gaye."); }catch(e){ prompt("Ye text copy karein:", OPEN_RULES_ROLLBACK); } }
+async function secCheckRules(){
+  if(AUTH_KIND!=="firebase") return;
+  secUi.check = {ok:false, text:"check ho raha hai…"}; renderMain();
+  const name = "pngRulesCheck";
+  try{
+    const a = (firebase.apps||[]).find(x=>x.name===name) || firebase.initializeApp(firebaseConfig, name), au = a.auth();
+    try{ await au.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e){}
+    await au.signInAnonymously();
+    let open = true;
+    try{ await a.firestore().collection("users").limit(1).get(); }catch(e){ open = !(e && e.code==="permission-denied"); }
+    try{ if(au.currentUser) await au.currentUser.delete(); }catch(e){ try{ await au.signOut(); }catch(e2){} }
+    secUi.check = open ? {ok:false, text:"❌ Rules abhi purane hain — koi bhi data padh sakta hai. Step 3 kijiye."} : {ok:true, text:"✅ Secure rules chalu hain — bahar wala koi data nahi padh sakta."};
+  }catch(e){ console.error(e); secUi.check = {ok:false, text:"Check nahi ho paya: " + ((e && e.code) || "internet")}; }
+  renderMain();
+  if(secUi.check && secUi.check.ok) await secRoleTest();
+}
+// each role's own app queries, run as one employee of that role (his saved login): every role must get its data, and nothing more
+async function secRoleTest(){
+  if(AUTH_KIND!=="firebase" || !currentUser || currentUser.role!=="admin") return;
+  const out = [], name = "pngRoleTest", day = todayISO();
+  const a = (firebase.apps||[]).find(x=>x.name===name) || firebase.initializeApp(firebaseConfig, name), au = a.auth(), fs = a.firestore();
+  try{ await au.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e){}
+  const C = n=>fs.collection(n);
+  const plan = {
+    technician: u=>[["apne customers (main)", C("customers").where("assignedTechnician","==",u), true], ["SL ke customers", C("customers").where("alSL","==",u), true], ["GI ke customers", C("customers").where("alGI","==",u), true],
+      ["NG ke customers", C("customers").where("alNG","==",u), true], ["Restoration ke customers", C("customers").where("alREST","==",u), true],
+      ["apna material", C("issues").where("technicianUsername","==",u), true], ["apne forms", C("submissions").where("technicianUsername","==",u), true],
+      ["aaj ka safety check", C("safety_checks").where("username","==",u).where("date","==",day), true], ["stock list", C("inventory"), true], ["team list", C("staffPublic"), true],
+      ["forms ki fixed details", fs.doc("settings/formDefaults"), true], ["invoice / bank details (nahi milne chahiye)", fs.doc("settings/invoiceCfg"), false],
+      ["login records (nahi milne chahiye)", C("users").limit(1), false], ["sab customers (nahi milne chahiye)", C("customers").limit(1), false]],
+    surveyor: u=>[["apne add kiye customers", C("customers").where("addedBy","==",u), true], ["diye gaye survey", C("customers").where("surveyAssigned","==",u), true], ["stock list", C("inventory"), true],
+      ["leads (nahi milne chahiye)", C("leads").limit(1), false]],
+    telecaller: u=>[["diye gaye customers", C("customers").where("tcAssigned","==",u), true], ["apni calls", C("customers").where("telecallerId","==",u), true],
+      ["naam se search", C("customers").where("nameKey",">=","A").where("nameKey","<=","A\uf8ff").limit(25), true], ["QR leads", C("leads"), true], ["feedback", C("custFeedback"), true], ["PIN requests", C("portalRequests"), true],
+      ["payout rates", fs.doc("settings/payoutRates"), true],
+      ["bills (nahi milne chahiye)", C("bills").limit(1), false]],
+    store: u=>[["chal rahe kaam", C("customers").where("status","==","assigned"), true], ["stock", C("inventory"), true], ["issue history", C("issues"), true],
+      ["leads (nahi milne chahiye)", C("leads").limit(1), false]],
+  };
+  for(const role of Object.keys(plan)){
+    const u = allUsers.find(x=>x.role===role && x.active!==false && x.uid && x.password);
+    if(!u){ out.push({role, text:"— is role ka koi secure account nahi"}); continue; }
+    try{
+      await au.signInWithEmailAndPassword(staffEmail(u.username), String(u.password));
+      const bad = [];
+      for(const [label, q, should] of plan[role](u.username)){
+        let okRead = true; try{ await q.get(); }catch(e){ okRead = !(e && e.code==="permission-denied"); if(okRead) console.error(e); }
+        if(okRead !== should) bad.push(label);
+      }
+      out.push({role, user:u.username, ok:!bad.length, text: bad.length ? "❌ " + bad.join(", ") : "✅ sahi"});
+    }catch(e){ out.push({role, user:u.username, ok:false, text:"login nahi hua: " + ((e && e.code) || "error")}); }
+    try{ await au.signOut(); }catch(e){}
+  }
+  secUi.roleTest = out; renderMain();
+}
+async function secChangeMyPassword(){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const np = String((document.getElementById("secMyPass")||{}).value||"").trim();
+  if(np.length < 8){ alert("Admin ka password kam se kam 8 character ka rakhiye."); return; }
+  const me = allUsers.find(u=>u.username===currentUser.username); if(!me){ alert("Aapka record load nahi hua."); return; }
+  try{
+    if(me.uid && AUTH_KIND==="firebase"){ const au = await secAppAuth(); const cred = await au.signInWithEmailAndPassword(staffEmail(me.username), String(me.password||"")); await cred.user.updatePassword(np); try{ await au.signOut(); }catch(e){} }
+    await rawDb.doc("users/" + me.username).update({password:np});
+    me.password = np; const el = document.getElementById("secMyPass"); if(el) el.value = "";
+    alert("Aapka naya password save ho gaya. Agli baar isi se login kijiye.");
+  }catch(e){ console.error(e); alert("Password nahi badla: " + ((e && e.code) || "error")); }
+}
+async function secCredPdf(){
+  const rows = (secUi.results||[]).filter(r=>r.pass); if(!rows.length) return;
+  const tt = showToast("PDF ban rahi hai...");
+  try{ await ensurePdfLibs(); }catch(e){ hideToast(tt); alert("PDF engine load nahi hua."); return; }
+  const pdf = new window.jspdf.jsPDF("p","mm","a4");
+  pdf.setFillColor(13,144,79); pdf.rect(0,0,210,28,"F"); pdf.setTextColor(255,255,255); pdf.setFont("helvetica","bold"); pdf.setFontSize(16);
+  pdf.text("PNG ENTERPRISE - LOGIN DETAILS (CONFIDENTIAL)", 105, 13, {align:"center"}); pdf.setFontSize(10); pdf.setFont("helvetica","normal");
+  pdf.text("M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED  -  " + pgDate(new Date()), 105, 21, {align:"center"});
+  pdf.setTextColor(30,41,59); let y = 40;
+  pdf.setFont("helvetica","bold"); pdf.text("Name", 16, y); pdf.text("Role", 76, y); pdf.text("Username", 110, y); pdf.text("Password", 152, y); y += 3; pdf.line(14, y, 196, y); y += 6;
+  pdf.setFont("helvetica","normal");
+  rows.forEach(r=>{ const u = allUsers.find(x=>x.username===r.username) || {}; pdf.text(String(u.name||r.username).slice(0,30), 16, y); pdf.text(String(r.role||""), 76, y); pdf.text(String(r.username), 110, y); pdf.text(String(r.pass), 152, y); y += 8; });
+  y += 6; pdf.setFontSize(9); pdf.text(pdf.splitTextToSize("Har employee ko sirf uska apna username / password dein. Login: website kholein -> apna role chunein -> username + password -> LOGIN.", 180), 16, y);
+  hideToast(tt);
+  await savePdfFile(pdf, `PNG_Login_Details_${localISODate()}.pdf`);
+}
+// employee changes by the admin also reach the secure login (Firebase account) and the team list
+async function secStaffUpdate(u, patch){
+  if(!u || !rawDb) return;
+  try{ await rawDb.doc("staffPublic/" + u.username).set(staffPubOf({...u, ...patch})); staffDir[u.username] = staffPubOf({...u, ...patch}); }catch(e){ console.error(e); }
+  if(u.uid){ try{ await rawDb.doc("staff/" + u.uid).set({username:u.username, role:u.role, name:(patch.name||u.name||u.username), active:(("active" in patch) ? patch.active : u.active)!==false}); }catch(e){ console.error(e); } }
+}
+async function secCreateOne(u){   // a new employee after Security setup: his Firebase account right away
+  if(AUTH_KIND!=="firebase" || !u || !u.password || !allUsers.some(x=>x.uid)) return "";
+  try{
+    const au = await secAppAuth(); const cred = await au.createUserWithEmailAndPassword(staffEmail(u.username), u.password); const uid = cred.user.uid;
+    try{ await au.signOut(); }catch(e){}
+    await rawDb.doc("staff/" + uid).set({username:u.username, role:u.role, name:u.name||u.username, active:true});
+    await rawDb.doc("users/" + u.username).update({uid, authAt:new Date().toISOString()});
+    return uid;
+  }catch(e){ console.error(e); alert("Employee add ho gaya, par secure account nahi bana (" + ((e && e.code) || "error") + "). Admin → Security setup → Step 2 dobara chalaiye."); return ""; }
+}
+
+/* ---------- v52: new functions from the overrides file ---------- */
+function viewEmployeeDetail(username){
+  if(!currentUser || currentUser.role !== "admin") return;
+  viewEmployeeDetailInner(username);
+  const u = employeeList().find(x=>x.username===username);
+  if(u && u.role==="technician" && !safetyHist[username]){
+    safetyLoadHistory(username).then(()=>{ const m = document.getElementById("empDetailModal"); if(m && m.innerHTML) viewEmployeeDetailInner(username); });
+  }
+}
+
+async function wizThumb(c, k, wrapId, h){
+  let d = null; try{ d = await mediaLoad(c, k); }catch(e){ console.error(e); }
+  const w = document.getElementById(wrapId); if(!w) return;
+  w.innerHTML = d ? `<img src="${d}" class="w-full rounded-lg border" style="max-height:${h||180}px;object-fit:cover;">` : `<p class="text-xs text-gray-400">Photo load nahi hui.</p>`;
+}
+
+async function wizGaugeThumb(c, k, imgId){
+  let d = null; try{ d = await mediaLoad(c, k); }catch(e){ console.error(e); }
+  const el = document.getElementById(imgId); if(el && d) el.src = d;
+}
 
 /* ============ SESSION RESTORE (runs last) ============ */
 applyLoginLang();
