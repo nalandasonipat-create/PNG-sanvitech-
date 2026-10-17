@@ -5607,8 +5607,8 @@ function billLines(c){
   const restDone = stageDone(c,"REST") || String(rs[0]||"").toUpperCase()==="DONE";
   if(restDone){ add("1.2.a", bnum(rs,7)+bnum(rs,8)); add("1.2.b", bnum(rs,3)+bnum(rs,4)); add("1.2.c", bnum(rs,5)); add("1.2.d", bnum(rs,6)); }
   if(/^done$/i.test(String(gi[41]||""))) add("1.8 iii", 1);
-  add(billCfg.gi12==="contractor" ? "7.1.1 a" : "7.1.1 b", bnum(gi,5));
-  add(billCfg.gi34==="contractor" ? "7.1.1 c" : "7.1.1 d", bnum(gi,6));
+  add(billCfg.gi12==="contractor" ? "7.1.1 a" : "7.1.1 b", bnum(gi,5)+bnum(gi,7));
+  add(billCfg.gi34==="contractor" ? "7.1.1 c" : "7.1.1 d", bnum(gi,6)+bnum(gi,8));
   if(gi[2] || c.meterSerialNumber) add("7.3 a", 1);
   if(/^done$/i.test(String(ng[2]||""))) add("7.3 b", 1);
   add("7.4 a", bnum(gi,27)); add("7.4 b", bnum(gi,28)); add("7.4 d", bnum(gi,25));
@@ -5998,7 +5998,7 @@ function raStatus(c){
     bp: !!String(c.bpNo||"").trim(),
     slDone: stageDone(c,"SL") || /^done$/i.test(String(sl[2]||"")),
     slTested: ffOk(sl[32]) || (((c.slTesting||{}).readings)||[]).length>0,
-    giDone: stageDone(c,"GI") || ((bnum(gi,5)+bnum(gi,6))>0 && giTested),
+    giDone: stageDone(c,"GI") || ((bnum(gi,5)+bnum(gi,6)+bnum(gi,7)+bnum(gi,8))>0 && giTested),
     giTested, gasIn: /GAS\s*IN/i.test(String(gi[46]||"")), ngDone, ngTested: /PRESS/i.test(String(ng[7]||"")),
     meterIn: !!(gi[2] || c.meterSerialNumber),
     restDone: stageDone(c,"REST") || String(rs[0]||"").toUpperCase()==="DONE",
@@ -6019,8 +6019,8 @@ function raQty(c, s){
   put("1.1.b", slAfter4(sl)); put("1.1.c", bnum(sl,6));
   put("1.2.a", bnum(rs,7)+bnum(rs,8)); put("1.2.b", bnum(rs,3)+bnum(rs,4)); put("1.2.c", bnum(rs,5)); put("1.2.d", bnum(rs,6));
   if(/^done$/i.test(String(gi[41]||""))) put("1.8 iii", 1);
-  put(billCfg.gi12==="contractor" ? "7.1.1 a" : "7.1.1 b", bnum(gi,5));
-  put(billCfg.gi34==="contractor" ? "7.1.1 c" : "7.1.1 d", bnum(gi,6));
+  put(billCfg.gi12==="contractor" ? "7.1.1 a" : "7.1.1 b", bnum(gi,5)+bnum(gi,7));   // GI PIPE + EXTRA PIPE (same total as the forms)
+  put(billCfg.gi34==="contractor" ? "7.1.1 c" : "7.1.1 d", bnum(gi,6)+bnum(gi,8));
   if(s.meterIn) put("7.3 a", 1);
   if(s.ngDone) put("7.3 b", 1);
   put("7.4 a", bnum(gi,27)); put("7.4 b", bnum(gi,28)); put("7.4 d", bnum(gi,25));
@@ -6721,11 +6721,13 @@ function xbRA(m){
     XT.set(s, 2, "A", "            Measurement Sheet for Laying of MDPE Pipeline, Flushing, Testing & Commissioning (" + H.bill + ")");
     XT.set(s, 3, "A", hdrLines.proj); XT.set(s, 4, "A", hdrLines.client); XT.set(s, 5, "A", hdrLines.cmc); XT.set(s, 6, "A", hdrLines.ctr); XT.set(s, 7, "A", hdrLines.foa); XT.set(s, 8, "A", hdrLines.loa);
     XT.set(s, 4, "J", "MEASUREMENT PERIOD " + H.period); XT.set(s, 5, "J", "INVOICE NO. :-   " + H.inv); XT.set(s, 6, "J", "BILL SUBMISSION DATE-" + H.date); XT.set(s, 7, "J", "VENDOR CODE :- " + H.vendor);
-    XT.set(s, 9, "L", "1.1.a"); XT.set(s, 9, "M", "1.1.b"); XT.set(s, 9, "N", null); XT.set(s, 9, "O", "1.1.c");
+    XT.set(s, 9, "L", "1.1.a"); XT.set(s, 9, "M", "1.1.b"); XT.set(s, 9, "N", "1.1.b"); XT.set(s, 9, "O", "1.1.c");   // moling is 1.1.b too
     const list = xbRowsOf(m, "SL"); let r = 11;
     list.forEach((x, i)=>{ const c = x.c, w = rowOf(c), p20 = bnum(w.sl,7), p32 = bnum(w.sl,6);
-      XT.row(s, 11, r, {A:i+1, B:c.society || c.street || "", C:c.area || "", D:c.name || "", E:fpPhone(c.phone)||"", F:xbIR(c, i), G:xn(w.sl[3]), H:xn(w.sl[4]),
-        I:xd(w.sl[1]), J:xd(w.sl[1]), K:xd(w.ng[8] || w.gi[47]), L:1, M:xn(slAfter4(w.sl)), O:xn(p32), S:xn(p20), T:xn(p32)}, {blank:true});
+      const a4 = slAfter4(w.sl), mol = bround(Math.min(bnum(w.sl,12), a4));          // beyond 4 m = open cut + moling (master sheet MOL)
+      const xgeo = v=>{ const n = Number(v); return v === null || v === undefined || v === "" || !isFinite(n) || !n ? null : Math.round(n*1e6)/1e6; };   // GPS keeps 6 decimals
+      XT.row(s, 11, r, {A:i+1, B:c.society || c.street || "", C:c.area || "", D:c.name || "", E:fpPhone(c.phone)||"", F:xbIR(c, i), G:xgeo(w.sl[3]), H:xgeo(w.sl[4]),
+        I:xd(w.sl[1]), J:xd(w.sl[1]), K:xd(w.ng[8] || w.gi[47]), L:slAlready(w.sl) ? null : 1, M:xn(bround(a4 - mol)), N:xn(mol), O:xn(p32), S:xn(p20), T:xn(p32)}, {blank:true});
       r++; });
     const last = Math.max(11, r - 1), tr = r;
     XT.shrink(s, 11, last);
@@ -6757,7 +6759,7 @@ function xbRA(m){
       XT.row(s, 11, r, {A:i+1, B:c.bpNo||"", C:ffStr(w.ng[12]) || String(i+1).padStart(2,"0"), D:c.name||"", E:c.society || c.street || "", F:c.street || "", G:c.houseNo || "", H:c.area || "", I:fpPhone(c.phone)||"",
         J:xd(w.ng[8] || w.ng[0]), K:c.meterSerialNumber || "", L:w.gi[4]===null||w.gi[4]===undefined||w.gi[4]==="" ? null : Number(w.gi[4]), M:w.gi[2] || c.meterCompany || "",
         N:lat ? Number(lat).toFixed(6) + "'" : "", O:lng ? Number(lng).toFixed(6) + "'" : "", P:FP_CONTRACTOR, Q:xn(w.ng[3]) ? String(w.ng[3]).padStart(2,"0") : "", S:/^yes$/i.test(String(w.ng[6]||"")) ? 1 : null,
-        T:"NG", U:1, V:xn(w.gi[25])}, {blank:true});
+        T:"NG", U:1, V:xn(w.gi[25]), W:xn(w.gi[31])}, {blank:true});
       r++; });
     const last = Math.max(11, r - 1), tr = r;
     XT.shrink(s, 11, last);
@@ -6897,7 +6899,7 @@ function xbMatKey(label){
   const sz = [];
   if(has(/1\/2/)) sz.push("12"); if(has(/3\/4/)) sz.push("34"); if(has(/(^|[^\d\/.])1"|"1"|\b1 inch|1"x|x ?1"/)) sz.push("1");
   const mm = t.match(/\b(12|20|32|63|90|125)\s*mm\b/); if(mm) sz.push(mm[1]);
-  const dims = (t.match(/\b(\d{2})\s*x\s*(\d{2})\b/) || []).slice(1).join("x");
+  const dims = (t.match(/\b(\d{2,3})\s*x\s*(\d{2,3})\s*(?:mm)?\b/) || []).slice(1).join("x");   // 63X32MM, 32 x 20 mm
   const nip = t.match(/x\s*([234])"/);
   let k = "";
   if(has(/adaptor|adapter|adopter/)) k = "adaptor";
@@ -6909,7 +6911,7 @@ function xbMatKey(label){
   else if(has(/copper|cu 12|coper/)) k = "cu";
   else if(has(/hose|anaconda/)) k = "hose";
   else if(has(/isolation|\bi\.? ?v\b|brass i v/)) k = "iv" + (sz.includes("34") ? "34" : sz.includes("1") && !sz.includes("12") ? "1" : "12");
-  else if(has(/appliance|\ba\.? ?v\b|brass a v/)) k = "av12";
+  else if(has(/appliance|\ba\.? ?v\b|brass a v/)) k = "av" + (sz.includes("34") ? "34" : "12");
   else if(has(/reducer tee/)) k = "rtee";
   else if(has(/reducer elbow|\bre\b/)) k = "relb";
   else if(has(/reducer socket|\brs\b/)) k = "rsock";
@@ -6920,7 +6922,9 @@ function xbMatKey(label){
   else if(has(/socket/)) k = "socket" + (sz.includes("34") ? "34" : sz.includes("1") && !sz.includes("12") ? "1" : "12");
   else if(has(/m\/f/)) k = "mf" + (sz.includes("34") ? "34" : "12");
   else if(has(/nipple/)) k = "nip" + (sz.includes("34") ? "34" : sz.includes("1") && !sz.includes("12") ? "1" : "12") + "x" + (nip ? nip[1] : "");
-  else if(has(/clamp/)) k = "clamp" + (t.match(/(\d(?:\.\d)?)"?\s*x/) || [,""])[1] + (sz.includes("34") ? "34" : sz.includes("12") ? "12" : "");
+  else if(has(/clamp/)){ const xs = t.match(/(\d(?:\.\d)?)"?\s*x/);
+    if(xs) k = "clamp" + xs[1] + (sz.includes("34") ? "34" : sz.includes("12") ? "12" : "");
+    else { const fs = t.match(/clamp\s*\(?\s*(\d(?:\.\d)?)/); k = "clamp" + (fs ? fs[1] : "") + (sz.includes("34") ? "34" : "12"); } }   // "Clamp 2.5" = 2.5" x 1/2"
   else if(has(/gitti|pench/)) k = "gitti";
   else if(has(/ta?fl?on|teflon|taplon|tafflon/)) k = "teflon";
   else if(has(/plat|marker|warning plate/)) k = "plate";
@@ -6928,7 +6932,7 @@ function xbMatKey(label){
   else if(has(/pvc/)) k = "pvc";
   else if(has(/saddle|seddle/)) k = "saddle" + dims;
   else if(has(/coupler/)) k = "coupler" + (mm ? mm[1] : "");
-  else if(has(/end ?cap|end pluck|end plug|d\/plug|plug/)) k = "endcap";
+  else if(has(/end ?cap|end pluck|end plug|d\/plug|plug/)) k = "endcap" + (mm ? mm[1] : "");   // ENDCAP 20MM (MDPE) apart from END CAP 1/2" (GI)
   else if(has(/\btf\b|transition/)) k = "tf";
   else if(has(/gi sleeve|sleeve/)) k = "sleeve";
   else if(has(/screw/)) k = "screw";
@@ -6942,14 +6946,21 @@ function xbUsed(c){
   if(/INSTAL|REPLAC/i.test(String(gi[38]||""))) add("reg21", 1);
   add("mdpe20", sl[7]); add("mdpe32", sl[6]);
   add("gipipe12", bnum(gi,5)+bnum(gi,7)); add("gipipe34", bnum(gi,6)+bnum(gi,8));
-  add("hose", gi[31]); add("adaptor", gi[37]); add("iv34", gi[28]); add("iv12", gi[27]); add("av12", gi[25]);
+  add("hose", gi[31]); add("adaptor", gi[37]); add("iv34", gi[28]); add("iv12", gi[27]); add("av12", gi[25]); add("av34", gi[26]);
+  add("clamp1.512", gi[32]); add("clamp2.512", gi[33]);                                          // CLAMP 1.5 / 2.5 (1/2" pipe)
+  const yes = i=>/^done$/i.test(String(gi[i]||""));
+  if(yes(42)) add("pvc", 1); if(yes(49)) add("sleeve", 1); if(yes(43)) add("mclamp", 1);       // PVC SLEEVE, GI SLEEVE, METER CLAMP
+  add("wmat", sl[30]); add("gicasing", sl[28]);                                                  // W/MAT, GI CASING (Mtr.)
   add("elbow34", gi[12]); add("elbow12", gi[9]); add("relb", gi[11]); add("tee12", gi[23]); add("tee34", gi[24]); add("union34", gi[30]); add("union12", gi[29]);
   add("rsock", gi[15]); add("socket12", gi[14]); add("socket34", gi[16]); add("mf12", gi[10]); add("mf34", gi[13]);
   add("nip12x2", gi[17]); add("nip12x3", gi[18]); add("nip12x4", gi[19]); add("nip34x2", gi[20]); add("nip34x3", gi[21]); add("nip34x4", gi[22]);
   add("gitti", gi[34]); add("teflon", gi[36]); add("screw", gi[35]); if(/^done$/i.test(String(gi[41]||""))) add("plate", 1);
-  add("saddle63x20", sl[13]); add("mred32x20", sl[17]); add("mred63x32", sl[16]); add("coupler20", sl[19]); add("coupler32", sl[18]); add("mtee20", sl[15]); add("mtee32", sl[14]); add("tf", sl[20]); add("endcap", sl[21]);
+  add("saddle63x20", sl[13]); add("mred32x20", sl[17]); add("mred63x32", sl[16]); add("coupler20", sl[19]); add("coupler32", sl[18]); add("mtee20", sl[15]); add("mtee32", sl[14]); add("tf", sl[20]); add("endcap20", sl[21]);
   return u;
 }
+// master-sheet items the GAIL consumption format has no column for: own column (title) at the right
+const XB_CON_EXTRA = {av34:'APPLIANCE BALL VALVE 3/4"', "clamp1.512":'CLAMP 1.5"X1/2"', gitti:"GITTI / PENCH", screw:"SCREW", plate:"WARNING PLATE",
+  pvc:"PVC SLEEVE", sleeve:"GI SLEEVE", mclamp:"METER CLAMP", saddle63x20:"SADDLE / TEE 63X20MM", wmat:"WARNING MAT (MTR)", gicasing:"GI CASING PIPE (MTR)"};
 function xbMatRec(m, store){
   const bk = XT.book("matrec");
   // column key of every material heading on a template sheet; app items without a heading get extra columns at the right
@@ -6983,6 +6994,11 @@ function xbMatRec(m, store){
   // CONSUMPTION — per connection, from the master sheet rows
   const con = XT.sheet(bk, "CONSUMPTION"); XT.row(con, 1, 1);
   const mCon = plan(con, 1, 5, []);
+  { const used = new Set(), order = Object.keys(XB_CON_EXTRA), H1 = con.T.rows[1].c;
+    customers.forEach(c=>Object.keys(xbUsed(c)).forEach(k=>used.add(k)));
+    let maxC = Math.max(...Object.keys(H1).map(Number).filter(c=>H1[c][0]));
+    [...used].filter(k=>!mCon[k]).sort((a,b)=>order.indexOf(a)-order.indexOf(b)).forEach(k=>{ maxC++; mCon[k] = maxC; (con.extra = con.extra || []).push([maxC, XB_CON_EXTRA[k] || k.toUpperCase()]); });
+    putExtraHeads(con, 1); }
   let rc = 2;
   customers.slice().sort((a,b)=>(Number(a.sn)||9999)-(Number(b.sn)||9999)).forEach(c=>{
     const u = xbUsed(c); if(!Object.keys(u).length) return;
@@ -7324,18 +7340,37 @@ function tejMatQty(c, re){ return ((c.wizMaterialUsed)||[]).reduce((s,m)=>s + (r
 function tejDate(iso){ return iso ? String(iso).slice(0,10) : null; }
 /* material the technician recorded as used (wizard stage 7) fills any EMPTY cell of the stage row,
    so the master sheet, the forms and the bill all show what was actually used where */
-const MAT_TO_ROW = {
-  SL: [[/MDPE.*20/i,7],[/MDPE.*32/i,6]],
-  GI: [[/GI\s*Pipe\s*1\/2/i,5],[/GI\s*Pipe\s*3\/4/i,6],[/Elbow\s*1\/2/i,9],[/Elbow\s*3\/4/i,12],[/Socket\s*1\/2/i,14],[/Socket\s*3\/4/i,16],
-       [/Tee\s*1\/2/i,23],[/Tee\s*3\/4/i,24],[/(Appliance|\bA\.?V\b).*1\/2/i,25],[/(Appliance|\bA\.?V\b).*3\/4/i,26],
-       [/(Isolation|\bI\.?V\b).*1\/2/i,27],[/(Isolation|\bI\.?V\b).*3\/4/i,28],[/(Union|U\/N).*1\/2/i,29],[/(Union|U\/N).*3\/4/i,30],
-       [/(Fl\.?|Flexible|Flexi)\s*\/?\s*Hose/i,31],[/Clamp.*1\.5/i,32],[/Clamp.*2\.5/i,33],[/Ta?fl?on|Teflon/i,36]]
+// item -> column of the stage row (material keys of the GAIL formats); a 'done'-type item marks its column Done
+const MAT_ROW_KEY = {
+  GI: {gipipe12:5, gipipe34:6, elbow12:9, mf12:10, relb:11, elbow34:12, mf34:13, socket12:14, rsock:15, socket34:16, nip12x2:17, nip12x3:18, nip12x4:19,
+       nip34x2:20, nip34x3:21, nip34x4:22, tee12:23, tee34:24, av12:25, av34:26, iv12:27, iv34:28, union12:29, union34:30, hose:31, gitti:34, screw:35, teflon:36, adaptor:37},
+  SL: {mdpe32:6, mdpe20:7, saddle63x20:13, mtee32:14, mtee20:15, mred63x32:16, mred32x20:17, coupler32:18, coupler20:19, tf:20, endcap20:21}
 };
+const MAT_ROW_DONE = {GI: {plate:41, pvc:42, mclamp:43, sleeve:49}};
+function matKeyOf(name){
+  const nm = String(name||"");
+  if(/suraksha|rubber|clip|burner|nozzle|\bjet\b/i.test(nm)) return "";                       // NG conversion items, not GI / SL material
+  let k = xbMatKey(nm);
+  if(/^(mdpe|gipipe)/.test(k) && /coupler|\btee\b|reducer|saddle|end\s*cap|plug|\btf\b|transition|clamp|elbow|socket|union|nipple|valve|\bav\b|\biv\b|m\/f/i.test(nm))
+    k = xbMatKey(nm.replace(/\b(mdpe|hdpe|pe|gi|g\.i\.)\s*pipe\b|\bmdpe\b|\bhdpe\b/ig, " "));   // "MDPE Coupler 20mm" is a coupler, not pipe
+  return k;
+}
+function matRowIdx(tab, name){
+  const k = matKeyOf(name); if(!k) return null;
+  if(tab==="GI" && /^clamp1\.5/.test(k)) return 32;                                          // CLAMP 1.5 / 2.5 (any pipe size)
+  if(tab==="GI" && /^clamp2\.5/.test(k)) return 33;
+  const m = MAT_ROW_KEY[tab] || {}; return Object.prototype.hasOwnProperty.call(m, k) ? m[k] : null;
+}
 function rowEmpty(v){ return v===null || v===undefined || v===""; }
 function matFillRow(c, row, tab){
   const used = (c && c.wizMaterialUsed) || [];
   if(!used.length) return row;
-  (MAT_TO_ROW[tab]||[]).forEach(([re,i])=>{ if(rowEmpty(row[i])){ const q = tejMatQty(c, re); if(q) row[i] = Math.round(q*100)/100; } });
+  const sum = {}, done = {};
+  used.forEach(m=>{ const q = Number(m.qty)||0; if(!(q > 0)) return;
+    const i = matRowIdx(tab, m.itemName); if(i !== null){ sum[i] = (sum[i]||0) + q; return; }
+    const d = (MAT_ROW_DONE[tab]||{})[matKeyOf(m.itemName)]; if(d !== undefined) done[d] = true; });
+  Object.keys(sum).forEach(i=>{ if(rowEmpty(row[i])) row[i] = Math.round(sum[i]*100)/100; });
+  Object.keys(done).forEach(i=>{ if(rowEmpty(row[i])) row[i] = "Done"; });
   if(tab==="GI" && rowEmpty(row[38]) && tejMatQty(c,/Regulator/i) > 0) row[38] = "INSTALD";
   for(let i=0;i<row.length;i++) if(row[i]===undefined) row[i] = null;
   return row;
