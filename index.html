@@ -6031,8 +6031,9 @@ function raQty(c, s){
 // has the work reached this payment milestone (LOA payment terms), with its document on file, by the as-on date?
 function raReached(c, code, kind, s, extra){
   const on = dt=>!dt || dt <= billCfg.asOn;
+  const doc = ok=>!raCfg.docGate || ok;                                  // forms 100% first: only when the RA screen switch is on
   const fin = !!raCfg.final && s.all;                                   // closure 5% only in a final bill, once all 6 forms are complete
-  const commOK = s.fNG && s.meterIn && (s.ngDone || s.gasIn) && on(s.dNG);   // gas charging + meter installation & conversion
+  const commOK = doc(s.fNG) && s.meterIn && (s.ngDone || s.gasIn) && on(s.dNG);   // gas charging + meter installation & conversion
   if(extra){
     if(kind==="supply" || kind==="work") return true;
     if(kind==="test") return s.giTested || s.slTested || s.gasIn;
@@ -6042,13 +6043,13 @@ function raReached(c, code, kind, s, extra){
   }
   const st = raStageOf(code);
   if(st==="REG") return kind==="work" ? s.bp : (kind==="close" && fin);
-  if(st==="SL"){ const w = s.slDone && s.fSL && on(s.dSL);
+  if(st==="SL"){ const w = s.slDone && doc(s.fSL) && on(s.dSL);
     return kind==="work" ? w : kind==="test" ? w && (s.slTested || s.giTested || s.gasIn) : kind==="comm" ? w && s.giDone && commOK : kind==="close" ? w && fin : false; }
   if(st==="REST"){ const w = s.restDone && on(s.dRS);
     return kind==="work" ? w : kind==="noc" ? w && s.noc && commOK : kind==="close" ? w && fin : false; }
-  if(st==="NG"){ const w = s.ngDone && s.fNG && on(s.dNG);
+  if(st==="NG"){ const w = s.ngDone && doc(s.fNG) && on(s.dNG);
     return kind==="work" ? w : kind==="test" ? w && (s.ngTested || s.gasIn || s.giTested) : kind==="close" ? w && fin : false; }
-  const w = s.giDone && s.fGI && on(s.dGI);                            // GI pipe, valves, meter, regulator, warning plate …
+  const w = s.giDone && doc(s.fGI) && on(s.dGI);                            // GI pipe, valves, meter, regulator, warning plate …
   if(code==="7.3 a") return kind==="work" ? w && s.meterIn : kind==="test" ? w && s.meterIn && (s.giTested || s.gasIn) : kind==="close" ? w && fin : false;
   return (kind==="supply" || kind==="work") ? w : kind==="test" ? w && s.giTested : kind==="comm" ? w && commOK : kind==="close" ? w && fin : false;
 }
@@ -6090,25 +6091,34 @@ function raDev(abs, prev){
 function raNext(){ const seq = raBills.reduce((m,b)=>Math.max(m, Number(b.seq)||0), 0) + 1; return {seq, no:"RA-"+String(seq).padStart(2,"0")}; }
 function raDraft(){
   billDefaults();
-  const rows = [], skip = [], over = [], heldBy = {};
+  const rows = [], skip = [], over = [], heldBy = {}, docs = [];
   customers.slice().sort((a,b)=>(Number(a.sn)||9999)-(Number(b.sn)||9999)).forEach(c=>{
     const r = raCustLines(c), s = r.s;
     r.over.forEach(o=>over.push({c, ...o}));
     r.held.forEach(l=>{ const h = heldBy[l.code] || (heldBy[l.code] = {code:l.code, ids:new Set(), amount:0}); h.ids.add(c.id); h.amount = bround(h.amount+l.amount); });
-    if(r.lines.length){ rows.push({c, lines:r.lines, total:bround(r.lines.reduce((t,l)=>t+l.amount,0))}); return; }
-    const why = [];
+    const now = new Set(r.lines.map(l=>raStageOf(l.code))), before = new Set((c.billed||[]).map(e=>raStageOf(e.k)));
+    if(r.lines.length){
+      rows.push({c, lines:r.lines, total:bround(r.lines.reduce((t,l)=>t+l.amount,0))});
+      const miss = [];                                                     // in the bill, but its form is not complete yet
+      if(now.has("SL") && !s.fSL) miss.push("SL Job Card"); if(now.has("GI") && !s.fGI) miss.push("Isometric Graph");
+      if(now.has("NG") && !s.fNG) miss.push("Conversion / Installation Report");
+      if(miss.length) docs.push({c, miss});
+    }
+    const why = [], open = st=>!now.has(st) && !before.has(st), late = dt=>dt && dt > billCfg.asOn;
     if(!s.bp && (s.slDone || s.giDone || s.ngDone)) why.push("BP no. nahi");
-    if(s.bp && s.slDone && !s.fSL) why.push("SL ho gaya — Service Line Job Card adhoora");
-    if(s.bp && s.giDone && !s.fGI) why.push("GI ho gaya — Isometric Graph adhoora");
-    if(s.bp && s.ngDone && !s.fNG) why.push("NG ho gaya — Conversion / Installation Report adhoora");
-    if(why.length) skip.push({c, why});
+    if(s.bp && s.slDone && open("SL")) why.push(raCfg.docGate && !s.fSL ? "SL ho gaya — Service Line Job Card adhoora" : late(s.dSL) ? "SL ki tareekh as-on date ke baad" : "");
+    const qk = Object.keys(raQty(c, s)), giQty = qk.some(k=>raStageOf(k)==="GI"), restQty = qk.some(k=>raStageOf(k)==="REST");
+    if(s.bp && s.giDone && open("GI")) why.push(!giQty ? "GI DONE hai, par GI sheet me pipe / meter ki entry nahi (₹0)" : raCfg.docGate && !s.fGI ? "GI ho gaya — Isometric Graph adhoora" : late(s.dGI) ? "GI ki tareekh as-on date ke baad" : "");
+    if(s.bp && s.ngDone && open("NG")) why.push(raCfg.docGate && !s.fNG ? "NG ho gaya — Conversion / Installation Report adhoora" : late(s.dNG) ? "NG ki tareekh as-on date ke baad" : "");
+    if(s.bp && s.restDone && open("REST")) why.push(!restQty ? "Restoration DONE hai, par RCC / PCC / block / brick / asphalt ki entry nahi (₹0)" : late(s.dRS) ? "Restoration ki tareekh as-on date ke baad" : "");
+    if(why.filter(Boolean).length) skip.push({c, why:why.filter(Boolean)});
   });
   const nx = raNext(), abs = raAbstract(rows), prev = raPrev(nx.seq);
   const held = Object.values(heldBy).map(h=>({code:h.code, n:h.ids.size, amount:h.amount})).sort((a,b)=>raLoaIdx(a.code)-raLoaIdx(b.code));
   const sub = bround(rows.reduce((t,r)=>t+r.total,0)), gst = bround(sub*billCfg.gst/100);
   return {draft:true, no:nx.no, seq:nx.seq, invoiceNo:(invCfg.prefix||"")+nx.no, invoiceDate:raCfg.invoiceDate || localISODate(),
     periodFrom:raCfg.periodFrom || raDefaultFrom(), periodTo:billCfg.asOn, final:!!raCfg.final, gstPct:billCfg.gst, chk:raCfg.chk||{},
-    rows, abs, prev, sub, gst, total:bround(sub+gst), skip, over, held, dev:raDev(abs, prev)};
+    rows, abs, prev, sub, gst, total:bround(sub+gst), skip, over, held, docs, dev:raDev(abs, prev)};
 }
 function raDefaultFrom(){
   const last = raBills.filter(b=>b.status==="submitted").slice(-1)[0];
@@ -6146,9 +6156,11 @@ function raHold(code, on){ const h = new Set(raCfg.hold||[]); if(on) h.add(code)
 function raWarnHtml(m){
   const prevSub = bround(Object.values(m.prev).reduce((t,p)=>t+p.amount,0)), up = bround(prevSub+m.sub), pct = x=>Math.round(x/LOA_INFO.value*1000)/10;
   let h = `<p class="text-[11px] text-gray-600 mt-2">LOA value ₹ ${billInr(LOA_INFO.value)} me se: ab tak ₹ ${billInr(prevSub)} (${pct(prevSub)}%) • is bill ke baad ₹ ${billInr(up)} (${pct(up)}%)</p>`;
+  if(m.periodTo && LOA_INFO.validTill && m.periodTo > LOA_INFO.validTill) h += `<p class="text-[11px] text-orange-700 font-bold mt-1">⚠ Kaam ki tareekh (${fpDateD(m.periodTo)}) LOA validity (${fpDateD(LOA_INFO.validTill)}) ke baad hai — GAIL se extension / amendment check karein.</p>`;
   if(up > LOA_INFO.value) h += `<p class="text-[11px] text-red-600 font-bold mt-1">⚠ Is bill se LOA ki kul value paar ho rahi hai — GAIL se amendment / approval chahiye.</p>`;
   if((m.dev||[]).length) h += `<div class="bg-orange-50 text-orange-800 rounded p-2 mt-2 text-[11px]"><p class="font-bold">⚠ ${m.dev.length} item LOA quantity se zyada (deviation approval chahiye):</p>${m.dev.map(x=>`<p>• ${x.code} ${wzEsc((LOA_RATE[x.code]||{}).desc||"")} — LOA ${x.loa}, is bill tak ${x.cum} (+${x.excess})</p>`).join("")}<p class="mt-1">Approval nahi hai to neeche "Item hold" se us item ko rok dein — wo kaam khula rahega aur hold hatate hi agle bill me aa jayega. Excel me "DEVIATION" sheet bhi hai.</p></div>`;
   if((m.held||[]).length) h += `<p class="text-[11px] text-gray-600 mt-2">⏸ Hold par (is bill me nahi): ${m.held.map(x=>`${x.code} — ${x.n} customer, ₹ ${billInr(x.amount)}`).join(" • ")}</p>`;
+  if((m.docs||[]).length) h += `<details class="bg-yellow-50 text-yellow-900 rounded p-2 mt-2 text-[11px]"><summary class="font-bold">📄 ${m.docs.length} customers ka kaam bill me hai, par unke papers abhi adhoore hain — GAIL ko dene se pehle poore kar lein</summary>${m.docs.map(x=>`<p>• ${wzEsc(x.c.name||"")} (BP ${wzEsc(x.c.bpNo||"—")}) — ${wzEsc(x.miss.join(", "))}</p>`).join("")}</details>`;
   return h;
 }
 
@@ -6268,12 +6280,14 @@ function renderRaBill(){
         <div><label class="ff-label">Measurement period se</label><input type="date" class="ff-input text-xs" value="${d.periodFrom}" onchange="raSet('periodFrom', this.value)"></div>
         <label class="flex items-end gap-2 text-xs pb-2"><input type="checkbox" ${raCfg.final?"checked":""} onchange="raSet('final', this.checked)"> Final bill (closure ka 5% bhi)</label>
       </div>
+      <label class="flex items-start gap-2 text-[11px] mt-2 bg-gray-50 rounded p-2"><input type="checkbox" class="mt-0.5" ${raCfg.docGate?"checked":""} onchange="raSet('docGate', this.checked)">
+        <span>📄 Sirf poore papers waala kaam bill karein (Isometric / SL Job Card / Conversion form 100%). <span class="text-gray-500">Band ho to master sheet ka har hua kaam LOA rate se bill me aata hai, aur adhoore papers ki list neeche dikhti hai.</span></span></label>
       <div class="grid grid-cols-3 gap-2 mt-2 text-center">
         <div class="bg-gray-50 rounded p-2"><p class="font-bold">${d.rows.length}</p><p class="text-[10px] text-gray-500">customers</p></div>
         <div class="bg-gray-50 rounded p-2"><p class="font-bold">₹ ${billInr(d.sub)}</p><p class="text-[10px] text-gray-500">GST se pehle</p></div>
         <div class="bg-green-50 rounded p-2"><p class="font-bold text-[#0D904F]">₹ ${billInr(d.total)}</p><p class="text-[10px] text-gray-500">GST ${billCfg.gst}% ke saath</p></div>
       </div>
-      <p class="text-[10px] text-gray-500 mt-2">GI pipe supply: ½" ${billCfg.gi12==="contractor"?"contractor":"owner free issue"}, ¾" ${billCfg.gi34==="contractor"?"contractor":"owner free issue"} (Monetize screen se badlein) • NOC milestone checklist point 2 se • ${d.skip.length} customers ka kaam hua par document adhoora</p>
+      <p class="text-[10px] text-gray-500 mt-2">GI pipe supply: ½" ${billCfg.gi12==="contractor"?"contractor":"owner free issue"}, ¾" ${billCfg.gi34==="contractor"?"contractor":"owner free issue"} (Monetize screen se badlein) • NOC milestone checklist point 2 se • ${d.skip.length} customers ka kuch kaam is bill me nahi (wajah: Bill preview)</p>
       ${raWarnHtml(d)}
       <button onclick="raPreviewOpen(null)" class="w-full bg-gray-700 text-white font-bold py-2.5 rounded-lg mt-3">👁 Bill preview</button>
       ${raDlHtml(null)}
@@ -6912,9 +6926,9 @@ function xbMatKey(label){
   else if(has(/hose|anaconda/)) k = "hose";
   else if(has(/isolation|\bi\.? ?v\b|brass i v/)) k = "iv" + (sz.includes("34") ? "34" : sz.includes("1") && !sz.includes("12") ? "1" : "12");
   else if(has(/appliance|\ba\.? ?v\b|brass a v/)) k = "av" + (sz.includes("34") ? "34" : "12");
-  else if(has(/reducer tee/)) k = "rtee";
-  else if(has(/reducer elbow|\bre\b/)) k = "relb";
-  else if(has(/reducer socket|\brs\b/)) k = "rsock";
+  else if(has(/reducer tee/) || (has(/\btee\b/) && sz.includes("12") && sz.includes("34"))) k = "rtee";
+  else if(has(/reducer elbow|\bre\b/) || (has(/elbow/) && sz.includes("12") && sz.includes("34"))) k = "relb";
+  else if(has(/reducer socket|\brs\b/) || (has(/socket/) && sz.includes("12") && sz.includes("34"))) k = "rsock";
   else if(has(/reducer/)) k = "mred" + dims;
   else if(has(/elbow/)) k = "elbow" + (sz.includes("34") ? "34" : sz.includes("1") && !sz.includes("12") ? "1" : "12");
   else if(has(/\btee\b/)) k = mm ? "mtee" + mm[1] : "tee" + (sz.includes("34") ? "34" : sz.includes("1") && !sz.includes("12") ? "1" : "12");
@@ -7386,25 +7400,33 @@ function slRowFor(c){
   const r = slGeoFill(c, matFillRow(c, new Array(8).fill(null), "SL"));
   return r.some(v=>!rowEmpty(v)) ? r : null;   // col P = 20 MM pipe
 }
-function giRowFor(c){
-  if(c.giRow) return matFillRow(c, c.giRow.slice(), "GI");
-  if(!c.wizMeter && !c.wizMaterialUsed) return null;
+// the GI sheet columns the technician's app recorded (meter step, material, pressure test, job done)
+function giWizRow(c){
   const r = new Array(48).fill(null);
-  const m = c.wizMeter || {};
-  r[0] = c.assignedTechnician ? techName(c.assignedTechnician) : null;             // WORKER
+  const m = c.wizMeter || {}, tu = (c.allotted && c.allotted.GI) || c.assignedTechnician;
+  r[0] = tu ? techName(tu) : null;                                                 // WORKER
   r[1] = tejDate(c.wizWorkStartedAt);                                               // CHECK IN DATE
   r[2] = m.make || c.meterCompany || null; r[3] = m.type || null;                   // M/MAKER, TYPE
   const rd = ((c.wizTesting||{}).readings||[])[0]; r[4] = rd && rd.pg1 !== "" ? Number(rd.pg1)||rd.pg1 : null; // IN READING
-  const q12 = tejMatQty(c,/GI\s*Pipe\s*1\/2/i), q34 = tejMatQty(c,/GI\s*Pipe\s*3\/4/i);
-  r[5] = q12 || null; r[6] = q34 || null;                                           // GI PIPE 1/2", 3/4"
-  r[9] = tejMatQty(c,/Elbow\s*1\/2/i) || null;                                      // ELBOW 1/2
   if(tejMatQty(c,/Regulator/i) > 0) r[38] = "INSTALD";                              // REGULTER
   if(((c.wizTesting||{}).readings||[]).length) r[44] = "PRESSURE CHECKED";          // PRESSURE CHACK
   if(c.jobStage === "done"){ r[46] = "GAS IN"; r[47] = tejDate(c.jobCompletedAt); } // GAS IN, CHECK OUT DATE
-  return matFillRow(c, r, "GI");
+  return matFillRow(c, r, "GI");                                                    // pipes, fittings, valves ... (material used)
 }
-function ngRowFor(c){
-  if(c.ngRow) return c.ngRow;
+// a stored row wins; the app's own record only fills its EMPTY cells
+function rowMerge(stored, wz){
+  if(!stored) return wz;
+  const r = stored.slice();
+  if(wz) wz.forEach((v, i)=>{ if(rowEmpty(r[i]) && !rowEmpty(v)) r[i] = v; });
+  for(let i=0;i<r.length;i++) if(r[i]===undefined) r[i] = null;
+  return r;
+}
+function giRowFor(c){
+  if(c.giRow) return rowMerge(c.giRow, giWizRow(c));
+  if(!c.wizMeter && !c.wizMaterialUsed) return null;
+  return giWizRow(c);
+}
+function ngWizRow(c){
   if(c.jobStage !== "done") return null;
   const r = new Array(10).fill(null);
   r[0] = tejDate((c.wizContact||{}).contactedAt); r[1] = c.assignedTechnician ? techName(c.assignedTechnician) : null;
@@ -7412,6 +7434,10 @@ function ngRowFor(c){
   if(((c.wizTesting||{}).readings||[]).length) r[7] = "PRESSURE CHACKED";
   r[8] = tejDate(c.jobCompletedAt);                                                 // NG DATE
   return r;
+}
+function ngRowFor(c){
+  if(c.ngRow) return (c.ngRow.length && c.jobStage !== "done") ? c.ngRow : rowMerge(c.ngRow, ngWizRow(c));
+  return ngWizRow(c);
 }
 
 function capSumRow(fn, idx){
@@ -7637,7 +7663,7 @@ async function exportTejasavMasterWorkbook(){
   const CLM = new Map(list.map(c=>[c.id, raStageClaims(c)]));
   const billRow = c=>{ const s = LV.get(c.id).s, rc = CLM.get(c.id), cl = rc.claims, rs = rc.s;
     const pct = x=>x.pct ? x.pct + "%" : (x.bills ? "0%" : "");
-    const status = (done, formOk, x, na)=>na ? "NOT IN BILL (ALREADY)" : !done ? "WORK PENDING" : x.pct>=100 ? "BILLED" : x.pct>0 ? "PART BILLED" : !formOk ? "PAPER PENDING" : "READY FOR BILL";
+    const status = (done, formOk, x, na)=>na ? "NOT IN BILL (ALREADY)" : !done ? "WORK PENDING" : x.pct>=100 ? "BILLED" : x.pct>0 ? "PART BILLED" : !formOk ? (raCfg.docGate ? "PAPER PENDING" : "READY FOR BILL (PAPER PENDING)") : "READY FOR BILL";
     return [...common(c),
       s.already ? "ALREADY" : s.SL ? "SL DONE" : "PENDING", cl.SL.bills, pct(cl.SL), status(s.SL || s.already, rs.fSL, cl.SL, s.already && !cl.SL.pct),
       s.GI ? "GI DONE" : "PENDING", s.giTested ? "PRESSURE CHECKED" : "PENDING", cl.GI.bills, pct(cl.GI), status(s.GI, rs.fGI, cl.GI),
