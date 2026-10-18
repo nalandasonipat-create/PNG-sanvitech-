@@ -37,9 +37,6 @@
   table.ff-table td input, table.ff-table td select{width:100%;border:none;font-size:12px;padding:2px;background:transparent;}
   table.ff-table td input:focus{outline:1px solid #0D904F;background:#fff;}
   #printHost{position:fixed;left:-99999px;top:0;width:794px;background:#fff;}
-  .role-tab{text-align:center;padding:8px 2px;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;line-height:1.3;}
-  .role-tab.active{background:#fff;color:#0D904F;}
-  .role-tab:not(.active){color:#d1fae5;}
   .nav-badge{position:absolute;top:-3px;right:6px;background:#dc2626;color:#fff;border-radius:9999px;font-size:9px;line-height:14px;min-width:14px;padding:0 3px;text-align:center;}
 </style>
 </head>
@@ -60,26 +57,17 @@
       <p id="loginSubtitle" class="text-green-100 text-sm">Universal Automation Engine</p>
     </div>
 
-    <div class="grid grid-cols-5 gap-1 bg-white/15 rounded-xl p-1 mb-4">
-      <div class="role-tab active" data-role="technician" onclick="selectLoginRole('technician')">👷<br><span id="roleTabLabel_technician">Tech</span></div>
-      <div class="role-tab" data-role="surveyor" onclick="selectLoginRole('surveyor')">🧭<br><span id="roleTabLabel_surveyor">Survey</span></div>
-      <div class="role-tab" data-role="telecaller" onclick="selectLoginRole('telecaller')">📞<br><span id="roleTabLabel_telecaller">Call</span></div>
-      <div class="role-tab" data-role="store" onclick="selectLoginRole('store')">📦<br><span id="roleTabLabel_store">Store</span></div>
-      <div class="role-tab" data-role="admin" onclick="selectLoginRole('admin')">🛡️<br><span id="roleTabLabel_admin">Admin</span></div>
-    </div>
-
     <div class="bg-white rounded-xl shadow-lg p-5">
       <label id="loginUserLabel" class="block text-sm font-bold text-gray-700 mb-1">Username</label>
-      <input id="loginUser" type="text" placeholder="Enter username" class="w-full border rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-[#0D904F]">
+      <input id="loginUser" type="text" placeholder="Enter username" autocomplete="username" autocapitalize="none" spellcheck="false" class="w-full border rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-[#0D904F]">
       <label id="loginPassLabel" class="block text-sm font-bold text-gray-700 mb-1">Password</label>
-      <input id="loginPass" type="password" placeholder="Enter password" class="w-full border rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-[#0D904F]">
-      <p id="loginError" class="text-red-600 text-sm mb-2 hidden">Wrong username or password for this role.</p>
+      <input id="loginPass" type="password" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter' && !document.getElementById('loginBtn').disabled) doLogin()" class="w-full border rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-[#0D904F]">
+      <p id="loginError" class="text-red-600 text-sm mb-2 hidden">Wrong username or password.</p>
       <button id="loginBtn" onclick="doLogin()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold active:scale-[0.98] transition">LOGIN</button>
-      <p id="loginDemoHint" class="text-xs text-gray-400 text-center mt-3">Apni Technician ID se login karein</p>
+      <p id="loginDemoHint" class="text-xs text-gray-400 text-center mt-3">Apni ID aur password se login karein</p>
     </div>
     <button onclick="openPublicLeadForm(false)" class="w-full mt-4 bg-white/15 text-white font-bold py-3 rounded-xl text-sm">📝 Naya PNG connection chahiye? Yahan apni details bharein</button>
     <button onclick="openPortal()" class="w-full mt-2 bg-white/15 text-white font-bold py-3 rounded-xl text-sm">📱 Apne connection ke kaam ka status dekhein</button>
-    <button onclick="devLoginOpen(false)" class="w-full mt-4 text-[11px] text-green-100 underline">🧑‍💻 Developer login</button>
   </div>
 </div>
 
@@ -153,10 +141,8 @@ const I18N = {
     login_subtitle: "Universal Automation Engine",
     role_technician: "Tech", role_surveyor: "Survey", role_store: "Store", role_admin: "Admin", role_telecaller: "Call",
     username_label: "Username", password_label: "Password", login_btn: "LOGIN",
-    login_error: "Wrong username or password for this role.",
-    hint_technician: "Login with your Technician ID", hint_surveyor: "Login with your Surveyor ID",
-    hint_store: "Login with your Store ID", hint_admin: "Login with your Admin ID",
-    hint_telecaller: "Login with your Telecaller ID",
+    login_error: "Wrong username or password.",
+    hint_login: "Login with your own ID and password",
     header_technician: "PNG ENTERPRISE — TECHNICIAN", header_surveyor: "PNG ENTERPRISE — SURVEYOR",
     header_store: "PNG ENTERPRISE — STORE", header_admin: "PNG ENTERPRISE — ADMIN",
     header_telecaller: "PNG ENTERPRISE — TELECALLER",
@@ -246,10 +232,8 @@ const I18N = {
     login_subtitle: "यूनिवर्सल ऑटोमेशन इंजन",
     role_technician: "टेक्नीशियन", role_surveyor: "सर्वेयर", role_store: "स्टोर", role_admin: "एडमिन", role_telecaller: "कॉल",
     username_label: "यूज़रनेम", password_label: "पासवर्ड", login_btn: "लॉगिन करें",
-    login_error: "इस भूमिका के लिए यूज़रनेम या पासवर्ड गलत है।",
-    hint_technician: "अपनी टेक्नीशियन आईडी से लॉगिन करें", hint_surveyor: "अपनी सर्वेयर आईडी से लॉगिन करें",
-    hint_store: "अपनी स्टोर आईडी से लॉगिन करें", hint_admin: "अपनी एडमिन आईडी से लॉगिन करें",
-    hint_telecaller: "अपनी टेलीकॉलर आईडी से लॉगिन करें",
+    login_error: "यूज़रनेम या पासवर्ड गलत है।",
+    hint_login: "अपनी आईडी और पासवर्ड से लॉगिन करें",
     header_technician: "PNG एंटरप्राइज़ — टेक्नीशियन", header_surveyor: "PNG एंटरप्राइज़ — सर्वेयर",
     header_store: "PNG एंटरप्राइज़ — स्टोर", header_admin: "PNG एंटरप्राइज़ — एडमिन",
     header_telecaller: "PNG एंटरप्राइज़ — टेलीकॉलर",
@@ -342,17 +326,13 @@ function t(key, vars){
   return s;
 }
 const ROLE_HEADER_KEY = {technician:"header_technician", surveyor:"header_surveyor", store:"header_store", admin:"header_admin", telecaller:"header_telecaller"};
-const ROLE_HINT_KEY = {technician:"hint_technician", surveyor:"hint_surveyor", store:"hint_store", admin:"hint_admin", telecaller:"hint_telecaller"};
 function applyLoginLang(){
   const subEl = document.getElementById("loginSubtitle"); if(subEl) subEl.textContent = t("login_subtitle");
-  ["technician","surveyor","store","admin","telecaller"].forEach(r=>{
-    const el = document.getElementById("roleTabLabel_"+r); if(el) el.textContent = t("role_"+r);
-  });
   const uL = document.getElementById("loginUserLabel"); if(uL) uL.textContent = t("username_label");
   const pL = document.getElementById("loginPassLabel"); if(pL) pL.textContent = t("password_label");
   const btn = document.getElementById("loginBtn"); if(btn) btn.textContent = t("login_btn");
   const err = document.getElementById("loginError"); if(err) err.textContent = t("login_error");
-  const hint = document.getElementById("loginDemoHint"); if(hint) hint.textContent = t(ROLE_HINT_KEY[loginRole] || "hint_technician");
+  const hint = document.getElementById("loginDemoHint"); if(hint) hint.textContent = t("hint_login");
   const enBtn = document.getElementById("langBtnEn"), hiBtn = document.getElementById("langBtnHi");
   if(enBtn) enBtn.className = "px-3 py-1 rounded-full" + (LANG==="en" ? " bg-white text-[#0D904F]" : " text-white");
   if(hiBtn) hiBtn.className = "px-3 py-1 rounded-full" + (LANG==="hi" ? " bg-white text-[#0D904F]" : " text-white");
@@ -505,13 +485,7 @@ function wbRowSame(a, b){ a = a || []; b = b || []; const n = Math.max(a.length,
 const SEED_CUSTOMERS = []; // demo customers removed — real customers load via REAL_CUSTOMERS (one-time import in initDb)
 
 /* ============ LOGIN ============ */
-let loginRole = "technician";
-function selectLoginRole(role){
-  loginRole = role;
-  document.querySelectorAll(".role-tab").forEach(el=>el.classList.toggle("active", el.dataset.role===role));
-  document.getElementById("loginDemoHint").textContent = t(ROLE_HINT_KEY[role] || "hint_technician");
-  document.getElementById("loginError").classList.add("hidden");
-}
+// one login form for everybody: no role to pick — the account itself says who it is (admin, technician, … or the developer)
 
 let db = null;
 let dbReady = false;
@@ -546,6 +520,13 @@ async function doLogin(){
   if(btn) btn.disabled = true;
   await dbConnect();
   if(!db){ fail("Server se connect nahi ho pa raha — internet check karke dobara try karein."); return; }
+  if(user===DEV_USER){                     // the developer: his own account, never the employee records
+    const r = await devLoginCheck(pass);
+    if(r!==true){ fail(r || t("login_error")); return; }
+    if(btn) btn.disabled = false;
+    document.getElementById("loginPass").value = "";
+    devEnter(); return;
+  }
   let found = null, secure = false;
   if(AUTH_KIND==="firebase"){
     try{
@@ -562,7 +543,7 @@ async function doLogin(){
       if(!found && snap.empty) found = await bootstrapFirstAdmin(user, pass);
     }catch(e){ if(!e || e.code!=="permission-denied") console.error(e); }   // refused = the secure login is on and this account is not in it
   }
-  if(!found || found.role!==loginRole){
+  if(!found || !STAFF_ROLES.includes(found.role)){
     if(secure){ try{ await firebase.auth().signOut(); }catch(e){} await authEnsureAnon(); }
     fail(t("login_error")); return;
   }
@@ -578,7 +559,7 @@ async function doLogin(){
 }
 
 function doLogout(msg){
-  try{ chatUnmount(); devLoginClose(); }catch(e){}
+  try{ chatUnmount(); }catch(e){}
   try{ if(typeof mediaVideoClose === "function") mediaVideoClose(); }catch(e){}
   dataStop(); dataReset();
   try{ localStorage.removeItem("png_user"); }catch(e){}
@@ -806,6 +787,7 @@ function setupBottomNav(){
     title.textContent = "PNG ENTERPRISE — DEVELOPER";
     nav.innerHTML = `
       <button onclick="devUi.thread=null; setView('devInbox')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">💬</span>Inbox<span id="navBadge_dev" class="nav-badge hidden"></span></button>
+      <button onclick="setView('security')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🔒</span>Security</button>
       <button onclick="setView('devSettings')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">⚙️</span>Settings</button>`;
     currentView = "devInbox";
   } else if(currentUser.role === "store"){
@@ -912,7 +894,7 @@ function renderMainInner(){
   if(!currentUser) return;
   try{ updateNavBadges(); }catch(e){ console.error(e); }
   const el = document.getElementById("mainContent");
-  if(currentUser.role === "developer"){ el.innerHTML = (currentView==="devThread" && devUi.thread) ? renderDevThread() : currentView==="devSettings" ? renderDevSettings() : renderDevInbox(); return; }
+  if(currentUser.role === "developer"){ el.innerHTML = (currentView==="devThread" && devUi.thread) ? renderDevThread() : currentView==="devSettings" ? renderDevSettings() : currentView==="security" ? renderSecuritySetup() : renderDevInbox(); return; }
 
   // Safety-kit gate: technicians must submit today's selfie + full-body PPE photos before anything else
   if(currentUser.role === "technician" && !hasSafetyCheckToday(currentUser.username)){
@@ -949,7 +931,6 @@ function renderMainInner(){
     else if(currentView==="surveys") el.innerHTML = renderSurveyReports();
     else if(currentView==="cfbAdmin") el.innerHTML = renderCfbAdmin();
     else if(currentView==="leads") el.innerHTML = renderLeads();
-    else if(currentView==="security") el.innerHTML = renderSecuritySetup();
   } else if(currentUser.role === "telecaller"){
     if(currentView==="newCall") el.innerHTML = renderTelecallerNewCall();
     else if(currentView==="trackA") el.innerHTML = renderTelecallerTrackA();
@@ -4542,7 +4523,6 @@ function renderAdminOverview(){
     <button onclick="setView('capitalisation')" class="w-full bg-[#8430CE] text-white font-bold py-2.5 rounded-lg mb-2">📑 Capitalisation Sheet (rates bharein)</button>
     <button onclick="exportTejasavMasterWorkbook()" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Export TEJASAV Master Workbook (all sheets + Summary)</button>
     <button onclick="exportAllToExcel()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Export All Data to Excel</button>
-    <button onclick="setView('security')" class="w-full bg-[#1b365d] text-white font-bold py-2.5 rounded-lg">🔒 Security setup — kis role ko kya data dikhe ${AUTH_KIND==="firebase" && !authSecure() ? '<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">baaki</span>' : ""}</button>
   `;
 }
 
@@ -4576,6 +4556,12 @@ function renderAdminEmployees(){
       <label class="ff-label">${t("payout_rate_form")}</label>
       <input id="payRateForm" type="number" class="ff-input mb-3" value="${payoutRates.formRate}">
       <button onclick="saveTelecallerPayoutRates()" class="w-full bg-[#8430CE] text-white py-2 rounded-lg font-bold text-sm">${t("payout_rate_save_btn")}</button>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <h2 class="font-bold text-gray-800 mb-2">🔑 Admin ka apna password</h2>
+      <input id="secMyPass" type="text" class="ff-input mb-2" placeholder="Naya password (kam se kam 8 character)" autocomplete="off">
+      <button onclick="secChangeMyPassword()" class="w-full bg-[#8430CE] text-white py-2 rounded-lg font-bold text-sm">💾 Apna password badlein</button>
     </div>
 
     <h2 class="font-bold text-gray-800 mb-2">👥 All Employees (${sorted.length})</h2>
@@ -4697,7 +4683,7 @@ async function saveEmpPassword(username){
   if(db){
     if(u && u.uid && AUTH_KIND==="firebase"){     // the secure login account changes first; only then the record
       try{ const au = await secAppAuth(); const cred = await au.signInWithEmailAndPassword(staffEmail(username), String(u.password||"")); await cred.user.updatePassword(newPass); try{ await au.signOut(); }catch(e){} }
-      catch(e){ console.error(e); alert("Secure login ka password nahi badla (" + ((e && e.code) || "error") + "). Security setup → Step 2 se dobara account update karein."); return; }
+      catch(e){ console.error(e); alert("Secure login ka password nahi badla (" + ((e && e.code) || "error") + "). Developer ko 💬 se bataiye — wo Security setup → Step 2 se account update karenge."); return; }
     }
     try{ await db.doc("users/"+username).update({password: newPass}); }
     catch(e){ console.error(e); alert("Password update nahi ho paya, dobara try karein."); return; }
@@ -11125,7 +11111,8 @@ async function cfbPdf(id){
                 and a phone / BP / name search (25 results at a time) for customers who call in
      store      stock, issues, and the running jobs (to tag an issue to a job)
      customer   only his own status page (portal/<key>, key = hash of mobile + PIN), never the customer list
-   On the live site the Firestore security rules (Admin → Security setup) enforce the same split on the server. */
+     developer  the problem chat + the Security setup console (employee login records), nothing else
+   On the live site the Firestore security rules (developer → 🔒 Security setup) enforce the same split on the server. */
 const STAFF_ROLES = ["admin","technician","surveyor","telecaller","store"];
 let rawDb = null;                 // the store itself (Firestore, or the trial's db); `db` = the same store with customer hooks
 let AUTH_KIND = "none";           // "firebase" on the live site, "none" in the claude.ai trial
@@ -11272,9 +11259,9 @@ async function dbConnect(){
   db = rawDb ? custHookDb(rawDb) : null;
   return db;
 }
-// a brand-new database has no users at all: the first person who logs in on the Admin tab becomes the admin
+// a brand-new database has no users at all: the first person who logs in (and confirms) becomes the admin
 async function bootstrapFirstAdmin(user, pass){
-  if(loginRole!=="admin" || !rawDb || String(user||"").trim().toLowerCase()===DEV_USER) return null;
+  if(!rawDb || String(user||"").trim().toLowerCase()===DEV_USER) return null;
   try{ const any = await rawDb.collection("users").limit(1).get(); if(!any.empty) return null; }catch(e){ return null; }
   if(String(pass).length < 6){ alert("Naye admin ka password kam se kam 6 character ka rakhiye."); return null; }
   if(!confirm(`Database mein abhi koi user nahi hai.\n"${user}" ko pehla ADMIN banayein (isi password ke saath)?`)) return null;
@@ -11313,19 +11300,20 @@ async function sessionCheck(){
 let safetyDay = "", safetyTimer = null;
 function dataStop(){
   dataSubs.forEach(u=>{ try{ u(); }catch(e){} }); dataSubs = [];
-  custSrc = {}; dataRole = null; dataNote = "";
+  custSrc = {}; dataRole = null; dataNote = ""; secUi.sub = false;
   clearTimeout(reconTimer); clearInterval(safetyTimer); safetyTimer = null;
 }
 function dataReset(){   // nothing the last user saw stays in memory on this phone
   allUsers = []; inventory = []; issues = []; consumption = []; submissions = []; customers = []; attendance = []; safetyChecks = []; raBills = [];
   leads = []; custFeedbacks = []; portalRequests = []; staffDir = {}; custExtra = {}; lookupCache = {}; safetyHist = {};
+  secUi = {busy:false, fresh:true, results:null, check:null, msg:"", sub:false, loadErr:""};      // new passwords of the last setup: gone at logout
   try{ Object.keys(mediaCache).forEach(k=>delete mediaCache[k]); }catch(e){}
 }
 function dataError(tag, e){
   console.error("data listener " + tag, e);
   if(!e || e.code!=="permission-denied" || !currentUser) return;
   if(!authSecure()){ doLogout("Secure login chalu ho gaya hai — apne username / password se dobara login karein."); return; }
-  dataNote = `Kuch data (${tag}) is login ko nahi mila — admin "Security setup" check kare.`;
+  dataNote = currentUser.role==="developer" ? `Server rules ne (${tag}) mana kiya — 🔒 Security → Step 3 ke rules publish kijiye.` : `Kuch data (${tag}) is login ko nahi mila — developer ko 💬 se bataiye (Security setup).`;
   renderMain();
 }
 function listen(ref, onSnap, tag){
@@ -11625,9 +11613,10 @@ async function portalDocEdit(key, cid, view){
   await ref.set({c:cs, fb:d.fb || {}, at:new Date().toISOString()});
 }
 
-/* ---------- Firestore security rules for the live site (Admin → Security setup → copy → Firebase console) ---------- */
+/* ---------- Firestore security rules for the live site (developer → 🔒 Security setup → copy → Firebase console) ---------- */
 const SECURE_RULES = `rules_version = '2';
 // PNG Enterprise (M/S TEJASAV) - need-to-know access. Admin: everything. Others: only their own work.
+// Developer: the problem chat + the Security setup console (employee login records) - no customers, bills or stock.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
@@ -11642,20 +11631,27 @@ service cloud.firestore {
     function techOwns() { return resource.data.assignedTechnician == me() || resource.data.alSL == me() || resource.data.alGI == me() || resource.data.alNG == me() || resource.data.alREST == me(); }
     // the developer: his own Firebase login (not an employee record, so the admin cannot change it)
     function isDev() { return signedIn() && request.auth.token.email == 'dev.support@pngpro-7b98e.firebaseapp.com'; }
+    // his Security setup console (employee login records): only his exact account - the console writes its id here when he copies these rules
+    function isDevOwner() { return isDev() && request.auth.uid == 'DEV-UID-NOT-SET'; }
 
     // Admin: full access to every record
     match /{document=**} {
       allow read, write: if isAdmin();
     }
-    // login identity of each employee (written by the admin's Security setup)
+    // login identity of each employee (written by the developer's Security setup console)
     match /staff/{uid} {
       allow get: if signedIn() && request.auth.uid == uid;
+      allow read, write: if isDevOwner();
+    }
+    // employee login records (with passwords): the admin (above) and the developer's Security setup console
+    match /users/{username} {
+      allow read, update: if isDevOwner();
     }
     // employee name + mobile + role (no password) for the team
     match /staffPublic/{username} {
       allow read: if isStaff();
     }
-    // users (login passwords), bills, invoice / bank details, rates and the other settings: admin only (no rule here)
+    // bills, invoice / bank details, rates and the other settings: admin only (no rule here)
     match /settings/{key} {
       // the public QR form reads its own setup
       allow get: if key == 'leadForm';
@@ -11757,8 +11753,25 @@ service cloud.firestore {
   }
 }`;
 
-/* ---------- Admin → Security setup ---------- */
-let secUi = {busy:false, fresh:true, results:null, check:null, msg:""};
+/* ---------- Developer → 🔒 Security setup (the admin has no access to it) ---------- */
+let secUi = {busy:false, fresh:true, results:null, check:null, msg:"", sub:false, loadErr:""};
+// the rules as the developer copies them: his own account id written in, so only that exact account runs this console
+function secRulesText(){
+  const u = authUser();
+  const uid = (currentUser && currentUser.role==="developer" && u && !u.isAnonymous) ? String(u.uid || "") : "";
+  return /^[A-Za-z0-9_-]{1,128}$/.test(uid) ? SECURE_RULES.replace("request.auth.uid == 'DEV-UID-NOT-SET'", "request.auth.uid == '" + uid + "'") : SECURE_RULES;
+}
+// the employee login records, read only while the developer has this console open on the live site
+function secDevLoad(){
+  if(!currentUser || currentUser.role!=="developer" || AUTH_KIND!=="firebase" || !rawDb || secUi.sub) return;
+  secUi.sub = true; secUi.loadErr = "";
+  try{
+    const u = rawDb.collection("users").onSnapshot(snap=>{ secUi.loadErr = ""; allUsers = docsOf(snap); renderSoon(); },
+      e=>{ secUi.loadErr = (e && e.code) || "error"; console.warn("users", e); renderSoon(); });
+    if(typeof u==="function") dataSubs.push(u);
+  }catch(e){ secUi.loadErr = "error"; }
+}
+function secDevReload(){ secUi.sub = false; secDevLoad(); renderMain(); }
 function secApp(){
   let a = (firebase.apps||[]).find(x=>x.name===SECONDARY_APP);
   if(!a) a = firebase.initializeApp(firebaseConfig, SECONDARY_APP);
@@ -11771,16 +11784,18 @@ async function secAppAuth(){
 }
 function secUsersList(){ return allUsers.filter(u=>u && u.username && STAFF_ROLES.includes(u.role)).sort((a,b)=>(a.role==="admin"?-1:0)-(b.role==="admin"?-1:0) || String(a.username).localeCompare(String(b.username))); }
 function renderSecuritySetup(){
-  if(!currentUser || currentUser.role!=="admin") return "";
+  if(!currentUser || currentUser.role!=="developer") return "";
+  secDevLoad();
   const live = AUTH_KIND==="firebase", secure = authSecure(), list = secUsersList(), withAcc = list.filter(u=>u.uid).length;
+  const rulesTxt = secRulesText(), pinned = rulesTxt !== SECURE_RULES;
   const step = (n, title, body, done)=>`<div class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 ${done?"border-[#0D904F]":"border-[#EA8600]"}"><p class="font-bold text-sm mb-1">${done?"✅":"⬜"} Step ${n}: ${title}</p>${body}</div>`;
   const res = secUi.results;
-  return `<button onclick="setView('overview')" class="text-sm text-[#0D904F] font-bold mb-2">← Back</button>
-    <h2 class="font-bold text-gray-800 mb-1">🔒 Security setup (need-to-know data access)</h2>
-    <p class="text-[11px] text-gray-500 mb-3">App mein har role ko sirf uske kaam ka data milta hai (technician: apne allotted customers; surveyor: apne survey; telecaller: diye gaye customers + leads + feedback; store: stock; customer: sirf apna status). Admin ko sab kuch. Live website par ise server par pakka karne ke liye ye 3 step ek baar kijiye.</p>
+  return `<h2 class="font-bold text-gray-800 mb-1">🔒 Security setup (need-to-know data access)</h2>
+    <p class="text-[11px] text-gray-500 mb-3">App mein har role ko sirf uske kaam ka data milta hai (technician: apne allotted customers; surveyor: apne survey; telecaller: diye gaye customers + leads + feedback; store: stock; customer: sirf apna status). Admin ko sab kuch. Ye console sirf developer ke paas hai. Live website par ise server par pakka karne ke liye ye 3 step ek baar kijiye.</p>
     <div class="bg-gray-50 rounded-lg p-3 mb-3 text-xs">
-      <p>Abhi login: <b class="${secure?"text-green-700":"text-orange-700"}">${!live ? "Trial (claude.ai) — yahan secure login ki zarurat nahi" : secure ? "🔒 Secure (Firebase account)" : "⚠️ Purana tareeka (password database se)"}</b></p>
+      <p>Abhi login: <b class="${secure?"text-green-700":"text-orange-700"}">${!live ? "Trial (claude.ai) — yahan secure login ki zarurat nahi" : secure ? "🔒 Developer (apna Firebase account)" : "⚠️ Secure login nahi"}</b></p>
       ${live ? `<p>Secure accounts: <b>${withAcc} / ${list.length}</b> employees</p>` : ""}
+      ${live && secUi.loadErr ? `<p class="text-red-600">Employees ki list nahi mili (${wzEsc(secUi.loadErr)}) — server ke rules mein abhi aapka developer ID nahi hai. Pehle Step 3 ke rules publish kijiye, phir <button onclick="secDevReload()" class="underline font-bold">↻ dobara load karein</button>.</p>` : ""}
       ${secUi.check ? `<p>Rules check: <b class="${secUi.check.ok?"text-green-700":"text-red-600"}">${wzEsc(secUi.check.text)}</b></p>` : ""}
       ${(secUi.roleTest||[]).map(r=>`<p>${wzEsc(r.role)}${r.user ? " (" + wzEsc(r.user) + ")" : ""}: <b class="${r.ok?"text-green-700":"text-red-600"}">${wzEsc(r.text)}</b></p>`).join("")}
       ${secUi.msg ? `<p class="text-blue-700 mt-1">${wzEsc(secUi.msg)}</p>` : ""}
@@ -11793,20 +11808,21 @@ function renderSecuritySetup(){
       <div class="mt-2 space-y-1">${list.map(u=>{ const r = res && res.find(x=>x.username===u.username);
         return `<div class="flex justify-between gap-2 text-[11px] border-b border-gray-100 py-1"><span>${wzEsc(u.name||u.username)} <span class="text-gray-400">(${wzEsc(u.username)} • ${wzEsc(u.role)})</span></span>
           <span class="${r && r.err ? "text-red-600" : (u.uid ? "text-green-700" : "text-gray-400")} font-bold">${r ? (r.err ? "❌ " + wzEsc(r.err) : "✅ " + wzEsc(r.pass||"")) : (u.uid ? "✅ account hai" : "— abhi nahi")}</span></div>`; }).join("")}</div>
-      ${res && res.some(r=>r.pass) ? `<button onclick="secCredPdf()" class="w-full bg-[#1b365d] text-white text-xs font-bold py-2 rounded mt-2">⬇ Naye login details (PDF) — employees ko dein</button>` : ""}`, list.length>0 && withAcc===list.length)}
+      ${res && res.some(r=>r.pass) ? `<button onclick="secCredPdf()" class="w-full bg-[#1b365d] text-white text-xs font-bold py-2 rounded mt-2">⬇ Naye login details (PDF) — admin ko dein</button>` : ""}`, list.length>0 && withAcc===list.length)}
     ${step(3, "Security rules publish karein", `<p class="text-[11px] text-gray-600 mb-1">Step 2 poora hone ke <b>baad</b>: console → Firestore Database → <b>Rules</b> → purana text hata kar neeche wala poora text paste → <b>Publish</b>.</p>
+      <p class="text-[11px] ${pinned ? "text-green-700" : "text-orange-700"} mb-1">${pinned ? "✅ In rules mein aapka developer account ID likha hai — sirf aapka account ye console chala sakta hai (admin bhi nahi)." : "⚠️ Developer account ID nahi mila — developer login se ye page kholiye."}</p>
       <button onclick="secCopyRules()" class="w-full bg-[#1b365d] text-white text-xs font-bold py-2 rounded mb-1">📋 Rules copy karein</button>
-      <textarea id="secRulesBox" class="ff-input text-[10px] font-mono" rows="8" readonly>${wzEsc(SECURE_RULES)}</textarea>
+      <textarea id="secRulesBox" class="ff-input text-[10px] font-mono" rows="8" readonly>${wzEsc(rulesTxt)}</textarea>
       <button onclick="secCheckRules()" class="w-full bg-[#1a73e8] text-white text-xs font-bold py-2 rounded mt-2">🧪 Rules check karein</button>
-      <p class="text-[10px] text-gray-500 mt-2">Kuch galat ho jaye to wapas purane rules (sirf emergency): <button onclick="secCopyRollback()" class="underline font-bold">purane rules copy</button></p>`, !!(secUi.check && secUi.check.ok))}
-    <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-1">🔑 Admin ka apna password</p>
-      <input id="secMyPass" type="text" class="ff-input text-xs mb-2" placeholder="Naya password (kam se kam 8 character)">
-      <button onclick="secChangeMyPassword()" class="w-full bg-[#8430CE] text-white text-xs font-bold py-2 rounded">💾 Apna password badlein</button></div>`}`;
+      <p class="text-[10px] text-gray-500 mt-2">Kuch galat ho jaye to wapas purane rules (sirf emergency): <button onclick="secCopyRollback()" class="underline font-bold">purane rules copy</button></p>`, !!(secUi.check && secUi.check.ok))}`}`;
 }
 async function secCreateAccounts(){
-  if(!currentUser || currentUser.role!=="admin" || secUi.busy) return;
+  if(!currentUser || currentUser.role!=="developer" || secUi.busy) return;
   if(AUTH_KIND!=="firebase"){ alert("Ye live website (Firebase) par hi chalta hai."); return; }
-  const list = secUsersList(); if(!list.length){ alert("Employees ki list abhi load nahi hui."); return; }
+  const list = secUsersList(); if(!list.length){ alert("Employees ki list abhi load nahi hui." + (secUi.loadErr ? " Pehle Step 3 ke rules publish kijiye." : "")); return; }
+  // the server must let this console write the login records before any account is touched (else the passwords would go out of step)
+  try{ await rawDb.collection("staff").limit(1).get(); }
+  catch(e){ if(e && e.code==="permission-denied"){ alert("Server ke rules abhi developer ko employee accounts likhne nahi dete — pehle Step 3 ke rules (aapke developer ID ke saath) publish kijiye, phir ye step."); return; } }
   if(!confirm(`${list.length} employees ke secure login accounts banane / update karne hain?${secUi.fresh ? "\n\nSabke NAYE password banenge — naye password list / PDF employees ko dene honge." : ""}`)) return;
   secUi.busy = true; secUi.results = []; secUi.msg = ""; renderMain();
   let au = null; try{ au = await secAppAuth(); }catch(e){ console.error(e); secUi.busy = false; alert("Firebase login module load nahi hua."); renderMain(); return; }
@@ -11838,21 +11854,13 @@ async function secCreateAccounts(){
     }
     secUi.results.push(r); renderMain();
   }
-  // this admin switches to the secure login straight away
-  const mine = secUi.results.find(r=>r.username===currentUser.username && r.pass);
-  if(mine){
-    try{
-      await firebase.auth().signInWithEmailAndPassword(staffEmail(mine.username), mine.pass);
-      try{ localStorage.setItem("png_user", JSON.stringify({...currentUser, secure:true})); }catch(e){}
-      dataStop(); await dataStart();
-      secUi.msg = "Aap ab secure login se hain. Ab Step 3 (rules) kijiye.";
-    }catch(e){ console.error(e); secUi.msg = "Accounts ban gaye — ek baar logout karke naye password se login kijiye."; }
-  }
+  const made = secUi.results.filter(r=>r.pass), adm = made.filter(r=>r.role==="admin");
+  if(made.length) secUi.msg = `${made.length} accounts tayyar. Naye login details ki PDF admin ko dein; phir Step 3 (rules) kijiye.`;
   secUi.busy = false; renderMain();
-  if(mine) alert(`Aapka (admin) login: ${mine.username} / ${mine.pass}\n\nIse abhi likh lijiye. (Bhool jaayein to Firebase console → Firestore Database → users → ${mine.username} → password mein dikhega.)\n\nBaaki employees ke naye password neeche list aur PDF mein hain.`);
+  if(adm.length) alert(`Accounts ban gaye.\n\nAdmin ka login: ${adm.map(r=>r.username + " / " + r.pass).join("  •  ")}\n\nSabke naye login details "⬇ Naye login details (PDF)" se download karke admin ko dein — wo har employee ko sirf uska apna username / password dega. Purane password ab nahi chalenge.`);
   if(secUi.results.some(r=>r.err)) alert("Kuch accounts nahi bane — list mein ❌ dekhiye.");
 }
-async function secCopyRules(){ try{ await navigator.clipboard.writeText(SECURE_RULES); showToast("Rules copy ho gaye — Firebase console mein paste karein."); }catch(e){ const b = document.getElementById("secRulesBox"); if(b && b.select){ b.select(); } alert("Rules box ka poora text select karke copy kijiye."); } }
+async function secCopyRules(){ try{ await navigator.clipboard.writeText(secRulesText()); showToast("Rules copy ho gaye — Firebase console mein paste karein."); }catch(e){ const b = document.getElementById("secRulesBox"); if(b && b.select){ b.select(); } alert("Rules box ka poora text select karke copy kijiye."); } }
 async function secCopyRollback(){ if(!confirm("Purane (khule) rules sirf emergency ke liye hain — inse har koi data padh sakta hai. Copy karein?")) return; try{ await navigator.clipboard.writeText(OPEN_RULES_ROLLBACK); showToast("Purane rules copy ho gaye."); }catch(e){ prompt("Ye text copy karein:", OPEN_RULES_ROLLBACK); } }
 async function secCheckRules(){
   if(AUTH_KIND!=="firebase") return;
@@ -11865,14 +11873,21 @@ async function secCheckRules(){
     let open = true;
     try{ await a.firestore().collection("users").limit(1).get(); }catch(e){ open = !(e && e.code==="permission-denied"); }
     try{ if(au.currentUser) await au.currentUser.delete(); }catch(e){ try{ await au.signOut(); }catch(e2){} }
-    secUi.check = open ? {ok:false, text:"❌ Rules abhi purane hain — koi bhi data padh sakta hai. Step 3 kijiye."} : {ok:true, text:"✅ Secure rules chalu hain — bahar wala koi data nahi padh sakta."};
+    // the developer himself: the login records yes (this console), the customers no
+    let devUsers = true, devCust = true;
+    try{ await rawDb.collection("users").limit(1).get(); }catch(e){ devUsers = !(e && e.code==="permission-denied"); }
+    try{ await rawDb.collection("customers").limit(1).get(); }catch(e){ devCust = !(e && e.code==="permission-denied"); }
+    secUi.check = open ? {ok:false, text:"❌ Rules abhi purane hain — koi bhi data padh sakta hai. Step 3 kijiye."}
+      : !devUsers ? {ok:false, text:"❌ Secure rules chalu hain, par unmein aapka developer ID nahi hai — Step 3 ka text dobara copy karke publish kijiye."}
+      : devCust ? {ok:false, text:"❌ Rules sahi nahi — developer ko customers ka data mil raha hai. Step 3 ke rules dobara publish kijiye."}
+      : {ok:true, text:"✅ Secure rules chalu hain — bahar wala koi data nahi padh sakta; developer ko sirf employee accounts + chat."};
   }catch(e){ console.error(e); secUi.check = {ok:false, text:"Check nahi ho paya: " + ((e && e.code) || "internet")}; }
   renderMain();
   if(secUi.check && secUi.check.ok) await secRoleTest();
 }
 // each role's own app queries, run as one employee of that role (his saved login): every role must get its data, and nothing more
 async function secRoleTest(){
-  if(AUTH_KIND!=="firebase" || !currentUser || currentUser.role!=="admin") return;
+  if(AUTH_KIND!=="firebase" || !currentUser || currentUser.role!=="developer") return;
   const out = [], name = "pngRoleTest", day = todayISO();
   const a = (firebase.apps||[]).find(x=>x.name===name) || firebase.initializeApp(firebaseConfig, name), au = a.auth(), fs = a.firestore();
   try{ await au.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e){}
@@ -11933,7 +11948,7 @@ async function secCredPdf(){
   pdf.setFont("helvetica","bold"); pdf.text("Name", 16, y); pdf.text("Role", 76, y); pdf.text("Username", 110, y); pdf.text("Password", 152, y); y += 3; pdf.line(14, y, 196, y); y += 6;
   pdf.setFont("helvetica","normal");
   rows.forEach(r=>{ const u = allUsers.find(x=>x.username===r.username) || {}; pdf.text(String(u.name||r.username).slice(0,30), 16, y); pdf.text(String(r.role||""), 76, y); pdf.text(String(r.username), 110, y); pdf.text(String(r.pass), 152, y); y += 8; });
-  y += 6; pdf.setFontSize(9); pdf.text(pdf.splitTextToSize("Har employee ko sirf uska apna username / password dein. Login: website kholein -> apna role chunein -> username + password -> LOGIN.", 180), 16, y);
+  y += 6; pdf.setFontSize(9); pdf.text(pdf.splitTextToSize("Har employee ko sirf uska apna username / password dein. Login: website kholein -> apna username + password -> LOGIN (role apne aap pata chalta hai).", 180), 16, y);
   hideToast(tt);
   await savePdfFile(pdf, `PNG_Login_Details_${localISODate()}.pdf`);
 }
@@ -11951,7 +11966,7 @@ async function secCreateOne(u){   // a new employee after Security setup: his Fi
     await rawDb.doc("staff/" + uid).set({username:u.username, role:u.role, name:u.name||u.username, active:true});
     await rawDb.doc("users/" + u.username).update({uid, authAt:new Date().toISOString()});
     return uid;
-  }catch(e){ console.error(e); alert("Employee add ho gaya, par secure account nahi bana (" + ((e && e.code) || "error") + "). Admin → Security setup → Step 2 dobara chalaiye."); return ""; }
+  }catch(e){ console.error(e); alert("Employee add ho gaya, par secure account nahi bana (" + ((e && e.code) || "error") + "). Developer ko 💬 se bataiye — wo Security setup → Step 2 dobara chalayenge."); return ""; }
 }
 
 /* ---------- v52: new functions from the overrides file ---------- */
@@ -11977,16 +11992,20 @@ async function wizGaugeThumb(c, k, imgId){
 
 /* ============ SESSION RESTORE (runs last) ============ */
 
-/* ===================== v55 — developer login (his own, outside the admin's employee list) + "Developer se baat" chat on every login =====================
-   Developer: username dev.support. Live site: a Firebase account he creates himself with the one-time setup code — the admin can
-   neither see, reset nor delete it (only the Firebase project owner can, in the console). Trial: a salted hash in devAccess.
-   He sees only the problem messages (devChat) — no customers, bills or employee records.
+/* ===================== v55/v56 — developer login (his own, outside the admin's employee list) + "Developer se baat" chat on every login =====================
+   Developer: username dev.support, on the same login form as everybody. Live site: his own Firebase account, made on his first
+   login with the password given to him (only its salted hash is in the app) — the admin can neither see, reset nor delete it
+   (only the Firebase project owner can, in the console). Trial: a salted hash in devAccess.
+   He sees the problem messages (devChat) and runs the Security setup console (employee login accounts + server rules) —
+   no customers, bills or stock.
    Every employee: a 💬 button; topic chips with quick tips (chatbot style); each message carries the app version, screen and the
    last errors on the phone so the developer can find the cause. Each employee reads only his own thread. */
-const APP_VERSION = "v55 · 18.10.2026";
+const APP_VERSION = "v56 · 18.10.2026";
 const DEV_USER = "dev.support";                       // employee usernames are letters + digits only, so no employee can get this one
-const DEV_SETUP_SALT = "png-dev-setup|v1|";
-const DEV_SETUP_HASH = "b7d4b7ed1251ae932e8c08e2839fdf62e03427d359ebf1bb2926b2068170e5a6";   // SHA-256 of the one-time setup code (the code is not in the app)
+// the first password (given to the developer, not in the app — only its salted SHA-256): his first login makes his own account
+const DEV_INIT_SALT = "png-dev-init|v1|";
+const DEV_INIT_HASH = "46b6f4830204f8ed5796fb701de1a452c66f094db619ad375eee09cbcc7bfe94";
+const DEV_EMAIL_OFF = "Firebase mein Email/Password login band hai — Firebase console → Authentication → Sign-in method → Email/Password → Enable.";
 const devEmail = ()=>staffEmail(DEV_USER);
 let chatMsgs = [], chatErr = "", chatOpen = false, devAll = [], devErr = "";
 let chatUi = {topic:"", bot:[]};
@@ -12004,30 +12023,7 @@ const chatByAt = (a, b)=>String(a.at||"").localeCompare(String(b.at||""));
 // a new message is always later than the thread's last one (two quick messages never share a time, so the order stays right)
 const chatNextAt = msgs=>{ const last = (msgs || []).reduce((m, x)=>{ const t = Date.parse(x.at || "") || 0; return t > m ? t : m; }, 0); return new Date(Math.max(Date.now(), last + 1)).toISOString(); };
 
-/* ---------- developer login ---------- */
-function devLoginOpen(setup){
-  let ov = document.getElementById("devLoginOverlay");
-  if(!ov){ ov = document.createElement("div"); ov.id = "devLoginOverlay"; document.body.appendChild(ov); }
-  ov.style.cssText = "position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:16px;";
-  ov.innerHTML = `<div class="bg-white rounded-xl shadow-lg p-5 w-full max-w-sm">
-    <div class="flex items-center justify-between mb-2"><p class="font-bold text-gray-800">🧑‍💻 Developer ${setup ? "— pehli baar setup" : "login"}</p><button onclick="devLoginClose()" class="text-2xl leading-none text-gray-400 px-2">×</button></div>
-    <p class="text-[11px] text-gray-500 mb-3">Ye ID employees se alag hai. Iska password sirf developer ke paas rehta hai — admin ise na dekh sakta hai, na badal sakta hai.</p>
-    <p class="text-xs text-gray-600 mb-2">Username: <b>${DEV_USER}</b></p>
-    ${setup ? `
-      <input id="devCode" class="ff-input mb-2" placeholder="Setup code (DEV-XXXX-XXXX-XXXX)" autocomplete="off" autocapitalize="characters">
-      <input id="devNew1" type="password" class="ff-input mb-2" placeholder="Naya password (kam se kam 8 character)" autocomplete="new-password">
-      <input id="devNew2" type="password" class="ff-input mb-2" placeholder="Password dobara" autocomplete="new-password">
-      <p id="devErr" class="text-red-600 text-xs mb-2 hidden"></p>
-      <button id="devGo" onclick="devSetup()" class="w-full bg-[#1a237e] text-white font-bold py-2.5 rounded-lg">Account banayein + login</button>
-      <button onclick="devLoginOpen(false)" class="w-full text-xs text-[#1a237e] underline mt-2">← Login par wapas</button>` : `
-      <input id="devPass" type="password" class="ff-input mb-2" placeholder="Developer password" autocomplete="current-password" onkeydown="if(event.key==='Enter') devLogin()">
-      <p id="devErr" class="text-red-600 text-xs mb-2 hidden"></p>
-      <button id="devGo" onclick="devLogin()" class="w-full bg-[#1a237e] text-white font-bold py-2.5 rounded-lg">Login</button>
-      <button onclick="devLoginOpen(true)" class="w-full text-xs text-[#1a237e] underline mt-2">Pehli baar? Setup code se apna password banayein</button>`}
-  </div>`;
-}
-function devLoginClose(){ const ov = document.getElementById("devLoginOverlay"); if(ov) ov.remove(); }
-function devErrShow(msg){ const el = document.getElementById("devErr"); if(el){ el.textContent = msg; el.classList.remove("hidden"); } const b = document.getElementById("devGo"); if(b) b.disabled = false; return false; }
+/* ---------- developer login (the same login form as everybody) ---------- */
 const devVal = id=>String((document.getElementById(id) || {}).value || "");
 async function devAccessGet(){ if(!rawDb) return null; try{ const s = await rawDb.doc("devAccess/" + DEV_USER).get(); return s && s.exists ? (s.data() || null) : null; }catch(e){ return null; } }
 function devRandHex(n){
@@ -12035,57 +12031,47 @@ function devRandHex(n){
   try{ ((typeof window!=="undefined" && window.crypto) || crypto).getRandomValues(a); }catch(e){ for(let i=0;i<n;i++) a[i] = Math.floor(Math.random()*256); }
   return Array.from(a).map(x=>x.toString(16).padStart(2, "0")).join("");
 }
-async function devLogin(){
-  const b = document.getElementById("devGo"); if(b) b.disabled = true;
-  const pass = devVal("devPass");
-  if(!pass) return devErrShow("Password daliye.");
-  await dbConnect(); if(!db) return devErrShow("Server se connect nahi ho pa raha — internet check karein.");
+const devIsFirstPass = async p=>(await sha256hex(DEV_INIT_SALT + String(p || ""))) === DEV_INIT_HASH;
+// true = he is the developer (and signed in); otherwise the message for the login screen
+async function devLoginCheck(pass){
+  pass = String(pass || "");
+  if(!pass) return t("login_error");
+  const first = await devIsFirstPass(pass);
   if(AUTH_KIND==="firebase"){
-    try{ await firebase.auth().signInWithEmailAndPassword(devEmail(), pass); }
-    catch(e){
-      try{ await authEnsureAnon(); }catch(e2){}
-      const c = (e && e.code) || "";
-      return devErrShow(c==="auth/user-not-found" ? "Developer account abhi bana nahi — 'Pehli baar' se setup karein."
-        : c==="auth/operation-not-allowed" ? "Firebase mein Email/Password login band hai (Admin → Security setup → Step 1)."
-        : c==="auth/network-request-failed" ? "Internet nahi hai — dobara try karein." : "Password galat hai.");
+    let c = "";
+    try{ await firebase.auth().signInWithEmailAndPassword(devEmail(), pass); return true; }
+    catch(e){ c = (e && e.code) || ""; }
+    if(c==="auth/network-request-failed") return "Internet nahi hai — dobara try karein.";
+    if(c==="auth/operation-not-allowed") return DEV_EMAIL_OFF;
+    if(c==="auth/too-many-requests") return "Bahut baar galat password — thodi der baad try karein.";
+    if(c==="auth/user-disabled") return "Developer account Firebase console mein band (disabled) hai.";
+    if(first){                       // his first login: his own Firebase account is made now (nobody else holds its password)
+      try{ await firebase.auth().createUserWithEmailAndPassword(devEmail(), pass); return true; }
+      catch(e){
+        const c2 = (e && e.code) || "";
+        try{ await authEnsureAnon(); }catch(e2){}
+        if(c2==="auth/email-already-in-use") return `Developer ka password pehle hi badla ja chuka hai — apna naya password daliye. (Bhool gaye? Firebase console → Authentication → Users mein ${devEmail()} delete karke isi pehle password se login karein, phir 🔒 Security → Step 3 ke rules dobara publish karein.)`;
+        if(c2==="auth/operation-not-allowed") return DEV_EMAIL_OFF;
+        return "Developer account nahi bana: " + (c2 || "error");
+      }
     }
-  } else {
-    const d = await devAccessGet();
-    if(!d) return devErrShow("Developer account abhi bana nahi — 'Pehli baar' se setup karein.");
-    if(await sha256hex(d.salt + "|" + pass) !== d.hash) return devErrShow("Password galat hai.");
+    try{ await authEnsureAnon(); }catch(e){}
+    return t("login_error");
   }
-  devEnter();
-  return true;
-}
-async function devSetup(){
-  const b = document.getElementById("devGo"); if(b) b.disabled = true;
-  const code = devVal("devCode").trim().toUpperCase(), p1 = devVal("devNew1"), p2 = devVal("devNew2");
-  if(await sha256hex(DEV_SETUP_SALT + code) !== DEV_SETUP_HASH) return devErrShow("Setup code galat hai.");
-  if(p1.length < 8) return devErrShow("Password kam se kam 8 character ka rakhiye.");
-  if(p1 !== p2) return devErrShow("Dono password ek jaise nahi hain.");
-  await dbConnect(); if(!db) return devErrShow("Server se connect nahi ho pa raha — internet check karein.");
-  if(AUTH_KIND==="firebase"){
-    try{ await firebase.auth().createUserWithEmailAndPassword(devEmail(), p1); }
-    catch(e){
-      try{ await authEnsureAnon(); }catch(e2){}
-      const c = (e && e.code) || "";
-      return devErrShow(c==="auth/email-already-in-use" ? `Developer account pehle se bana hua hai — login karein. (Agar aapne nahi banaya: Firebase console → Authentication → Users me ${devEmail()} delete karke dobara setup karein.)`
-        : c==="auth/operation-not-allowed" ? "Firebase mein Email/Password login band hai (Admin → Security setup → Step 1)."
-        : c==="auth/weak-password" ? "Password kamzor hai — lamba rakhiye." : "Account nahi bana: " + (c || "error"));
-    }
-  } else {
-    if(await devAccessGet()) return devErrShow("Developer account pehle se bana hua hai — login karein.");
+  const d = await devAccessGet();
+  if(!d){
+    if(!first) return t("login_error");
     const salt = devRandHex(16);
-    try{ await rawDb.doc("devAccess/" + DEV_USER).set({salt, hash:await sha256hex(salt + "|" + p1), at:new Date().toISOString()}); }
-    catch(e){ return devErrShow("Save nahi hua — internet check karein."); }
+    try{ await rawDb.doc("devAccess/" + DEV_USER).set({salt, hash:await sha256hex(salt + "|" + pass), at:new Date().toISOString()}); }
+    catch(e){ return "Save nahi hua — internet check karein."; }
+    return true;
   }
-  devEnter();
-  return true;
+  return (await sha256hex(d.salt + "|" + pass)) === d.hash ? true : t("login_error");
 }
 function devEnter(){
   currentUser = {username:DEV_USER, role:"developer", name:"Developer", ...(AUTH_KIND==="firebase" ? {secure:true} : {})};
   try{ localStorage.setItem("png_user", JSON.stringify(currentUser)); }catch(e){}
-  devLoginClose(); devUi = {thread:null, filter:"open"};
+  devUi = {thread:null, filter:"open"};
   showApp();
 }
 // the saved developer session is still his (live: the Firebase account itself; trial: the account record exists)
@@ -12095,13 +12081,14 @@ async function devSessionOk(){
     if(!u || u.isAnonymous || String(u.email || "").toLowerCase() !== devEmail()){ doLogout("Developer session khatam — dobara login karein."); return false; }
     return true;
   }
-  if(!(await devAccessGet())){ doLogout("Developer account nahi mila — 'Pehli baar' se setup karein."); return false; }
+  if(!(await devAccessGet())){ doLogout("Developer account nahi mila — dobara login karein."); return false; }
   return true;
 }
 async function devChangePassword(){
-  const old = devVal("devOld"), np = devVal("devNewA"), np2 = devVal("devNewB");
+  const old = devVal("devOld").trim(), np = devVal("devNewA").trim(), np2 = devVal("devNewB").trim();     // the login form trims too
   if(np.length < 8){ alert("Naya password kam se kam 8 character ka rakhiye."); return; }
   if(np !== np2){ alert("Dono naye password ek jaise nahi hain."); return; }
+  if(np === old || await devIsFirstPass(np)){ alert("Naya password purane / pehli baar wale password se alag rakhiye."); return; }
   try{
     if(AUTH_KIND==="firebase"){
       const cred = await firebase.auth().signInWithEmailAndPassword(devEmail(), old);     // proves the old password (fresh login)
@@ -12116,7 +12103,7 @@ async function devChangePassword(){
     alert("Password badal gaya. Agli baar naye password se login kijiye.");
   }catch(e){
     const c = (e && e.code) || "";
-    alert(c==="auth/wrong-password" || c==="auth/invalid-credential" ? "Purana password galat hai." : c==="auth/weak-password" ? "Naya password kamzor hai." : "Password nahi badla: " + (c || "error"));
+    alert(c==="auth/wrong-password" || c==="auth/invalid-credential" || c==="auth/invalid-login-credentials" || /INVALID_LOGIN_CREDENTIALS/.test(String((e && e.message) || "")) ? "Purana password galat hai." : c==="auth/weak-password" ? "Naya password kamzor hai." : "Password nahi badla: " + (c || "error"));
   }
 }
 
@@ -12179,7 +12166,7 @@ function chatRender(){
   ov.innerHTML = `
     <div class="bg-[#1a237e] text-white p-3 flex items-center gap-3" style="padding-top:calc(.75rem + var(--safe-top, 0px))"><button onclick="chatClose()" class="text-2xl font-bold">←</button>
       <div class="flex-1"><p class="font-bold text-sm">🧑‍💻 Developer se baat</p><p class="text-[10px] text-blue-100">App ki koi bhi problem yahan likhiye • ${wzEsc(APP_VERSION)}</p></div></div>
-    <div id="chatList" class="flex-1 overflow-y-auto p-3">${chatErr ? `<p class="text-[11px] bg-orange-50 text-orange-700 rounded p-2 mb-2">Chat abhi server se nahi judi (${wzEsc(chatErr)}). Admin ko bataiye — "Security setup" me naye rules publish karne hain.</p>` : ""}${items.map(bubble).join("")}</div>
+    <div id="chatList" class="flex-1 overflow-y-auto p-3">${chatErr ? `<p class="text-[11px] bg-orange-50 text-orange-700 rounded p-2 mb-2">Chat abhi server se nahi judi (${wzEsc(chatErr)}). Developer ko phone par bataiye — unhe 🔒 Security setup mein naye rules publish karne hain.</p>` : ""}${items.map(bubble).join("")}</div>
     <div class="bg-white border-t p-2" style="padding-bottom:calc(.5rem + var(--safe-bottom, 0px))">
       <div class="flex gap-1 overflow-x-auto pb-2">${CHAT_TOPICS.map(([k, l])=>`<button onclick="chatTopic('${k}')" class="shrink-0 text-[11px] px-2 py-1 rounded-full border ${chatUi.topic===k ? "bg-[#1a237e] text-white border-[#1a237e]" : "bg-white text-gray-700"}">${l}</button>`).join("")}</div>
       <div class="flex gap-2 items-end"><textarea id="chatInput" rows="2" class="flex-1 border rounded-lg px-2 py-1 text-sm" placeholder="Apni problem likhiye…"></textarea>
@@ -12244,8 +12231,8 @@ function devThreads(){
 function renderDevInbox(){
   const all = devThreads(), list = all.filter(t=>devUi.filter==="all" || !t.resolved);
   return `<h2 class="font-bold text-gray-800 mb-1">💬 Problems — inbox</h2>
-    <p class="text-[11px] text-gray-500 mb-2">Har employee ka apna thread; naye message par laal number. Aapko sirf ye messages dikhte hain — customers / bills ka data nahi.</p>
-    ${devErr ? `<p class="text-[11px] bg-orange-50 text-orange-700 rounded p-2 mb-2">Messages nahi aa rahe (${wzEsc(devErr)}) — admin "Security setup" me naye rules publish kare.</p>` : ""}
+    <p class="text-[11px] text-gray-500 mb-2">Har employee ka apna thread; naye message par laal number. Aapko ye messages aur 🔒 Security setup milte hain — customers / bills ka data nahi.</p>
+    ${devErr ? `<p class="text-[11px] bg-orange-50 text-orange-700 rounded p-2 mb-2">Messages nahi aa rahe (${wzEsc(devErr)}) — 🔒 Security → Step 3 ke rules Firebase console mein publish kijiye.</p>` : ""}
     <div class="flex gap-2 mb-3"><button onclick="devUi.filter='open'; renderMain()" class="flex-1 text-xs font-bold py-1.5 rounded ${devUi.filter!=="all" ? "bg-[#1a237e] text-white" : "bg-white border"}">Khule (${all.filter(t=>!t.resolved).length})</button>
       <button onclick="devUi.filter='all'; renderMain()" class="flex-1 text-xs font-bold py-1.5 rounded ${devUi.filter==="all" ? "bg-[#1a237e] text-white" : "bg-white border"}">Sab (${all.length})</button></div>
     ${list.length ? list.map(t=>`<button data-t="${wzEsc(t.id)}" onclick="devOpenThread(this.dataset.t)" class="w-full text-left bg-white rounded-lg shadow p-3 mb-2 ${t.unread ? "border-l-4 border-[#d93025]" : ""}">
@@ -12288,7 +12275,8 @@ function renderDevSettings(){
   return `<h2 class="font-bold text-gray-800 mb-2">⚙️ Developer</h2>
     <div class="bg-white rounded-lg shadow p-3 mb-3 text-xs"><p>Login: <b>${DEV_USER}</b> ${AUTH_KIND==="firebase" ? "— apna Firebase account (admin ise na dekh sakta, na badal sakta)" : "— trial"}</p>
       <p>App version: <b>${wzEsc(APP_VERSION)}</b></p>
-      <p class="text-gray-500 mt-1">Aapko sirf employees ke "Developer se baat" messages dikhte hain — customers, bills, employees ka data nahi.</p></div>
+      <p class="text-gray-500 mt-1">Aapke paas: employees ke "Developer se baat" messages + 🔒 Security setup (employee login accounts, server rules). Customers, bills, stock ka data nahi.</p>
+      <p class="text-orange-700 mt-1">Pehli baar diya gaya password turant badal dijiye (neeche).</p></div>
     <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-2">🔑 Apna password badlein</p>
       <input id="devOld" type="password" class="ff-input mb-2" placeholder="Purana password" autocomplete="current-password">
       <input id="devNewA" type="password" class="ff-input mb-2" placeholder="Naya password (kam se kam 8)" autocomplete="new-password">
