@@ -522,10 +522,10 @@ async function doLogin(){
   if(!db){ fail("Server se connect nahi ho pa raha — internet check karke dobara try karein."); return; }
   if(user===DEV_USER){                     // the developer: his own account, never the employee records
     const r = await devLoginCheck(pass);
-    if(r!==true){ fail(r || t("login_error")); return; }
+    if(r!=="fb" && r!=="rec"){ fail(r || t("login_error")); return; }
     if(btn) btn.disabled = false;
     document.getElementById("loginPass").value = "";
-    devEnter(); return;
+    devEnter(r); return;
   }
   let found = null, secure = false;
   if(AUTH_KIND==="firebase"){
@@ -11787,21 +11787,23 @@ function renderSecuritySetup(){
   if(!currentUser || currentUser.role!=="developer") return "";
   secDevLoad();
   const live = AUTH_KIND==="firebase", secure = authSecure(), list = secUsersList(), withAcc = list.filter(u=>u.uid).length;
-  const rulesTxt = secRulesText(), pinned = rulesTxt !== SECURE_RULES;
+  const rulesTxt = secRulesText(), pinned = rulesTxt !== SECURE_RULES, devRec = live && !secure;
   const step = (n, title, body, done)=>`<div class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 ${done?"border-[#0D904F]":"border-[#EA8600]"}"><p class="font-bold text-sm mb-1">${done?"✅":"⬜"} Step ${n}: ${title}</p>${body}</div>`;
   const res = secUi.results;
   return `<h2 class="font-bold text-gray-800 mb-1">🔒 Security setup (need-to-know data access)</h2>
     <p class="text-[11px] text-gray-500 mb-3">App mein har role ko sirf uske kaam ka data milta hai (technician: apne allotted customers; surveyor: apne survey; telecaller: diye gaye customers + leads + feedback; store: stock; customer: sirf apna status). Admin ko sab kuch. Ye console sirf developer ke paas hai. Live website par ise server par pakka karne ke liye ye 3 step ek baar kijiye.</p>
     <div class="bg-gray-50 rounded-lg p-3 mb-3 text-xs">
-      <p>Abhi login: <b class="${secure?"text-green-700":"text-orange-700"}">${!live ? "Trial (claude.ai) — yahan secure login ki zarurat nahi" : secure ? "🔒 Developer (apna Firebase account)" : "⚠️ Secure login nahi"}</b></p>
+      <p>Abhi login: <b class="${secure?"text-green-700":"text-orange-700"}">${!live ? "Trial (claude.ai) — yahan secure login ki zarurat nahi" : secure ? "🔒 Developer (apna Firebase account)" : "⚠️ Developer apne record se (Firebase account abhi nahi)"}</b></p>
       ${live ? `<p>Secure accounts: <b>${withAcc} / ${list.length}</b> employees</p>` : ""}
       ${live && secUi.loadErr ? `<p class="text-red-600">Employees ki list nahi mili (${wzEsc(secUi.loadErr)}) — server ke rules mein abhi aapka developer ID nahi hai. Pehle Step 3 ke rules publish kijiye, phir <button onclick="secDevReload()" class="underline font-bold">↻ dobara load karein</button>.</p>` : ""}
       ${secUi.check ? `<p>Rules check: <b class="${secUi.check.ok?"text-green-700":"text-red-600"}">${wzEsc(secUi.check.text)}</b></p>` : ""}
       ${(secUi.roleTest||[]).map(r=>`<p>${wzEsc(r.role)}${r.user ? " (" + wzEsc(r.user) + ")" : ""}: <b class="${r.ok?"text-green-700":"text-red-600"}">${wzEsc(r.text)}</b></p>`).join("")}
       ${secUi.msg ? `<p class="text-blue-700 mt-1">${wzEsc(secUi.msg)}</p>` : ""}
     </div>
+    ${devRec ? `<div class="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3 text-xs text-orange-800"><p class="font-bold">Firebase mein Email/Password ka switch abhi band hai — isliye aap apne record se login hain. Inbox, chat aur Settings poore chalte hain.</p>
+      <p class="mt-1">Secure login (Step 2, 3) ke liye ye switch on hona zaroori hai. Ye switch Google sirf Firebase console se on karne deta hai — koi website ise khud on nahi kar sakti. Step 1 karke Logout → dobara login: aapka apna Firebase account isi password se apne aap ban jayega.</p></div>` : ""}
     ${!live ? `<p class="text-xs bg-yellow-50 rounded p-2">Ye trial version hai — yahan data claude.ai par hai aur role-wise data pehle se alag-alag dikh raha hai. Secure login + rules live website (Firebase) par lagte hain.</p>` : `
-    ${step(1, "Firebase console mein Email/Password login chalu karein", `<p class="text-[11px] text-gray-600">console.firebase.google.com → project <b>${wzEsc(firebaseConfig.projectId)}</b> → Authentication → Sign-in method → <b>Email/Password</b> → Enable → Save. (<b>Anonymous</b> bhi Enabled rehna chahiye — QR form aur customer status page ke liye.)</p>`, withAcc>0)}
+    ${step(1, "Firebase console mein Email/Password login chalu karein", `<p class="text-[11px] text-gray-600">console.firebase.google.com → project <b>${wzEsc(firebaseConfig.projectId)}</b> → Authentication (menu mein Security / Build ke andar) → Sign-in method → <b>Email/Password</b> → Enable → Save. (<b>Anonymous</b> bhi Enabled rehna chahiye — QR form aur customer status page ke liye.)${devRec ? " Phir Logout → dobara login kijiye." : ""}</p>`, secure || withAcc>0)}
     ${step(2, "Sabke secure login accounts banayein", `<p class="text-[11px] text-gray-600 mb-2">Har employee ka Firebase account isi username se banega. Purane password app ke code mein the (public), isliye naye password banana behtar hai.</p>
       <label class="flex items-center gap-2 text-xs mb-2"><input type="checkbox" ${secUi.fresh?"checked":""} onchange="secUi.fresh=this.checked" class="w-4 h-4 accent-[#0D904F]"> Sabke naye password banayein (recommended)</label>
       <button onclick="secCreateAccounts()" class="w-full bg-[#0D904F] text-white text-xs font-bold py-2.5 rounded ${secUi.busy?"opacity-50":""}">${secUi.busy ? "Ban rahe hain…" : "🔐 Secure accounts banayein / update karein"}</button>
@@ -11809,7 +11811,7 @@ function renderSecuritySetup(){
         return `<div class="flex justify-between gap-2 text-[11px] border-b border-gray-100 py-1"><span>${wzEsc(u.name||u.username)} <span class="text-gray-400">(${wzEsc(u.username)} • ${wzEsc(u.role)})</span></span>
           <span class="${r && r.err ? "text-red-600" : (u.uid ? "text-green-700" : "text-gray-400")} font-bold">${r ? (r.err ? "❌ " + wzEsc(r.err) : "✅ " + wzEsc(r.pass||"")) : (u.uid ? "✅ account hai" : "— abhi nahi")}</span></div>`; }).join("")}</div>
       ${res && res.some(r=>r.pass) ? `<button onclick="secCredPdf()" class="w-full bg-[#1b365d] text-white text-xs font-bold py-2 rounded mt-2">⬇ Naye login details (PDF) — admin ko dein</button>` : ""}`, list.length>0 && withAcc===list.length)}
-    ${step(3, "Security rules publish karein", `<p class="text-[11px] text-gray-600 mb-1">Step 2 poora hone ke <b>baad</b>: console → Firestore Database → <b>Rules</b> → purana text hata kar neeche wala poora text paste → <b>Publish</b>.</p>
+    ${step(3, "Security rules publish karein", devRec ? `<p class="text-[11px] text-gray-600">Pehle Step 1 + Step 2. Rules yahan tab milenge jab aap apne Firebase account se login honge (unmein aapka account ID judta hai).</p>` : `<p class="text-[11px] text-gray-600 mb-1">Step 2 poora hone ke <b>baad</b>: console → Firestore Database → <b>Rules</b> → purana text hata kar neeche wala poora text paste → <b>Publish</b>.</p>
       <p class="text-[11px] ${pinned ? "text-green-700" : "text-orange-700"} mb-1">${pinned ? "✅ In rules mein aapka developer account ID likha hai — sirf aapka account ye console chala sakta hai (admin bhi nahi)." : "⚠️ Developer account ID nahi mila — developer login se ye page kholiye."}</p>
       <button onclick="secCopyRules()" class="w-full bg-[#1b365d] text-white text-xs font-bold py-2 rounded mb-1">📋 Rules copy karein</button>
       <textarea id="secRulesBox" class="ff-input text-[10px] font-mono" rows="8" readonly>${wzEsc(rulesTxt)}</textarea>
@@ -11819,6 +11821,7 @@ function renderSecuritySetup(){
 async function secCreateAccounts(){
   if(!currentUser || currentUser.role!=="developer" || secUi.busy) return;
   if(AUTH_KIND!=="firebase"){ alert("Ye live website (Firebase) par hi chalta hai."); return; }
+  if(!authSecure()){ alert("Aap abhi apne record se login hain (Firebase ka Email/Password switch band hai). Pehle Step 1 ka switch on kijiye, phir Logout → dobara login — uske baad ye step chalega."); return; }
   const list = secUsersList(); if(!list.length){ alert("Employees ki list abhi load nahi hui." + (secUi.loadErr ? " Pehle Step 3 ke rules publish kijiye." : "")); return; }
   // the server must let this console write the login records before any account is touched (else the passwords would go out of step)
   try{ await rawDb.collection("staff").limit(1).get(); }
@@ -11995,17 +11998,18 @@ async function wizGaugeThumb(c, k, imgId){
 /* ===================== v55/v56 — developer login (his own, outside the admin's employee list) + "Developer se baat" chat on every login =====================
    Developer: username dev.support, on the same login form as everybody. Live site: his own Firebase account, made on his first
    login with the password given to him (only its salted hash is in the app) — the admin can neither see, reset nor delete it
-   (only the Firebase project owner can, in the console). Trial: a salted hash in devAccess.
+   (only the Firebase project owner can, in the console). While Firebase's Email/Password switch is off (and on the trial) he
+   logs in through his own record (devAccess: salt + PBKDF2 hash); once the switch is on, his next login makes the Firebase account.
    He sees the problem messages (devChat) and runs the Security setup console (employee login accounts + server rules) —
    no customers, bills or stock.
    Every employee: a 💬 button; topic chips with quick tips (chatbot style); each message carries the app version, screen and the
    last errors on the phone so the developer can find the cause. Each employee reads only his own thread. */
-const APP_VERSION = "v56 · 18.10.2026";
+const APP_VERSION = "v57 · 18.10.2026";
 const DEV_USER = "dev.support";                       // employee usernames are letters + digits only, so no employee can get this one
 // the first password (given to the developer, not in the app — only its salted SHA-256): his first login makes his own account
 const DEV_INIT_SALT = "png-dev-init|v1|";
 const DEV_INIT_HASH = "46b6f4830204f8ed5796fb701de1a452c66f094db619ad375eee09cbcc7bfe94";
-const DEV_EMAIL_OFF = "Firebase mein Email/Password login band hai — Firebase console → Authentication → Sign-in method → Email/Password → Enable.";
+const DEV_KDF_ITER = 150000;        // PBKDF2 rounds for his record (slow on purpose: the stored hash cannot be guessed back)
 const devEmail = ()=>staffEmail(DEV_USER);
 let chatMsgs = [], chatErr = "", chatOpen = false, devAll = [], devErr = "";
 let chatUi = {topic:"", bot:[]};
@@ -12032,53 +12036,79 @@ function devRandHex(n){
   return Array.from(a).map(x=>x.toString(16).padStart(2, "0")).join("");
 }
 const devIsFirstPass = async p=>(await sha256hex(DEV_INIT_SALT + String(p || ""))) === DEV_INIT_HASH;
-// true = he is the developer (and signed in); otherwise the message for the login screen
+async function devKdf(salt, pass, iter){
+  try{
+    const C = (typeof window!=="undefined" && window.crypto) || (typeof crypto!=="undefined" ? crypto : null);
+    if(!C || !C.subtle || typeof TextEncoder==="undefined") return "";
+    const enc = new TextEncoder();
+    const key = await C.subtle.importKey("raw", enc.encode(String(pass)), "PBKDF2", false, ["deriveBits"]);
+    const bits = await C.subtle.deriveBits({name:"PBKDF2", hash:"SHA-256", salt:enc.encode(String(salt)), iterations:Number(iter) || DEV_KDF_ITER}, key, 256);
+    return Array.from(new Uint8Array(bits)).map(x=>x.toString(16).padStart(2, "0")).join("");
+  }catch(e){ return ""; }
+}
+async function devHashMake(pass){
+  const salt = devRandHex(16), k = await devKdf(salt, pass, DEV_KDF_ITER);
+  return {salt, ...(k ? {kdf:"pbkdf2", iter:DEV_KDF_ITER, hash:k} : {hash:await sha256hex(salt + "|" + pass)}), at:new Date().toISOString()};
+}
+async function devHashOk(d, pass){
+  if(!d || !d.salt || !d.hash) return false;
+  if(d.kdf==="pbkdf2"){ const k = await devKdf(d.salt, pass, d.iter); return !!k && k===d.hash; }
+  return (await sha256hex(d.salt + "|" + pass)) === d.hash;
+}
+// his record's password — or, before he has a record, the first password: "rec" | "first" | ""
+async function devRecCheck(pass){
+  const d = await devAccessGet();
+  if(d) return (await devHashOk(d, pass)) ? "rec" : "";
+  return (await devIsFirstPass(pass)) ? "first" : "";
+}
+// login through his record (the trial, or the live site while Email/Password is off in Firebase)
+async function devRecLogin(pass){
+  const r = await devRecCheck(pass);
+  if(!r) return t("login_error");
+  if(r==="first"){
+    try{ await rawDb.doc("devAccess/" + DEV_USER).set(await devHashMake(pass)); }
+    catch(e){ return "Save nahi hua — internet check karein."; }
+  }
+  return "rec";
+}
+// "fb" = his own Firebase account, "rec" = his record; anything else is the message for the login screen
 async function devLoginCheck(pass){
   pass = String(pass || "");
   if(!pass) return t("login_error");
-  const first = await devIsFirstPass(pass);
-  if(AUTH_KIND==="firebase"){
-    let c = "";
-    try{ await firebase.auth().signInWithEmailAndPassword(devEmail(), pass); return true; }
-    catch(e){ c = (e && e.code) || ""; }
-    if(c==="auth/network-request-failed") return "Internet nahi hai — dobara try karein.";
-    if(c==="auth/operation-not-allowed") return DEV_EMAIL_OFF;
-    if(c==="auth/too-many-requests") return "Bahut baar galat password — thodi der baad try karein.";
-    if(c==="auth/user-disabled") return "Developer account Firebase console mein band (disabled) hai.";
-    if(first){                       // his first login: his own Firebase account is made now (nobody else holds its password)
-      try{ await firebase.auth().createUserWithEmailAndPassword(devEmail(), pass); return true; }
-      catch(e){
-        const c2 = (e && e.code) || "";
-        try{ await authEnsureAnon(); }catch(e2){}
-        if(c2==="auth/email-already-in-use") return `Developer ka password pehle hi badla ja chuka hai — apna naya password daliye. (Bhool gaye? Firebase console → Authentication → Users mein ${devEmail()} delete karke isi pehle password se login karein, phir 🔒 Security → Step 3 ke rules dobara publish karein.)`;
-        if(c2==="auth/operation-not-allowed") return DEV_EMAIL_OFF;
-        return "Developer account nahi bana: " + (c2 || "error");
-      }
-    }
-    try{ await authEnsureAnon(); }catch(e){}
-    return t("login_error");
+  if(AUTH_KIND!=="firebase") return await devRecLogin(pass);
+  let c = "";
+  try{ await firebase.auth().signInWithEmailAndPassword(devEmail(), pass); return "fb"; }
+  catch(e){ c = (e && e.code) || ""; }
+  if(c==="auth/network-request-failed") return "Internet nahi hai — dobara try karein.";
+  if(c==="auth/too-many-requests") return "Bahut baar galat password — thodi der baad try karein.";
+  if(c==="auth/user-disabled") return "Developer account Firebase console mein band (disabled) hai.";
+  if(c==="auth/operation-not-allowed"){ try{ await authEnsureAnon(); }catch(e){} return await devRecLogin(pass); }   // Email/Password switch off
+  const r = await devRecCheck(pass);
+  if(!r){ try{ await authEnsureAnon(); }catch(e){} return t("login_error"); }
+  try{                               // no Firebase account yet: made now with this password (nobody else holds it)
+    await firebase.auth().createUserWithEmailAndPassword(devEmail(), pass);
+    if(r==="rec"){ try{ await rawDb.doc("devAccess/" + DEV_USER).delete(); }catch(e){} }   // his record is not needed any more
+    return "fb";
+  }catch(e){
+    const c2 = (e && e.code) || "";
+    try{ await authEnsureAnon(); }catch(e2){}
+    if(c2==="auth/operation-not-allowed") return await devRecLogin(pass);
+    if(c2==="auth/email-already-in-use") return `Developer ka password pehle hi badla ja chuka hai — apna naya password daliye. (Bhool gaye? Firebase console → Authentication → Users mein ${devEmail()} delete karke isi pehle password se login karein, phir 🔒 Security → Step 3 ke rules dobara publish karein.)`;
+    if(c2==="auth/admin-restricted-operation") return "Firebase mein naye account banana band hai — Firebase console → Authentication → Settings → User actions → 'Enable create (sign-up)' on karein.";
+    return "Developer account nahi bana: " + (c2 || "error");
   }
-  const d = await devAccessGet();
-  if(!d){
-    if(!first) return t("login_error");
-    const salt = devRandHex(16);
-    try{ await rawDb.doc("devAccess/" + DEV_USER).set({salt, hash:await sha256hex(salt + "|" + pass), at:new Date().toISOString()}); }
-    catch(e){ return "Save nahi hua — internet check karein."; }
-    return true;
-  }
-  return (await sha256hex(d.salt + "|" + pass)) === d.hash ? true : t("login_error");
 }
-function devEnter(){
-  currentUser = {username:DEV_USER, role:"developer", name:"Developer", ...(AUTH_KIND==="firebase" ? {secure:true} : {})};
+function devEnter(mode){
+  currentUser = {username:DEV_USER, role:"developer", name:"Developer", ...(mode==="fb" ? {secure:true} : {})};
   try{ localStorage.setItem("png_user", JSON.stringify(currentUser)); }catch(e){}
   devUi = {thread:null, filter:"open"};
   showApp();
 }
-// the saved developer session is still his (live: the Firebase account itself; trial: the account record exists)
+// the saved developer session is still his (his Firebase account itself; or, logged in through his record, the record exists)
 async function devSessionOk(){
-  if(AUTH_KIND==="firebase"){
+  if(currentUser.secure){
     const u = authUser();
-    if(!u || u.isAnonymous || String(u.email || "").toLowerCase() !== devEmail()){ doLogout("Developer session khatam — dobara login karein."); return false; }
+    if(AUTH_KIND!=="firebase" || !u || u.isAnonymous || String(u.email || "").toLowerCase() !== devEmail()){ doLogout("Developer session khatam — dobara login karein."); return false; }
     return true;
   }
   if(!(await devAccessGet())){ doLogout("Developer account nahi mila — dobara login karein."); return false; }
@@ -12090,14 +12120,12 @@ async function devChangePassword(){
   if(np !== np2){ alert("Dono naye password ek jaise nahi hain."); return; }
   if(np === old || await devIsFirstPass(np)){ alert("Naya password purane / pehli baar wale password se alag rakhiye."); return; }
   try{
-    if(AUTH_KIND==="firebase"){
+    if(currentUser && currentUser.secure && AUTH_KIND==="firebase"){
       const cred = await firebase.auth().signInWithEmailAndPassword(devEmail(), old);     // proves the old password (fresh login)
       await cred.user.updatePassword(np);
     } else {
-      const d = await devAccessGet();
-      if(!d || await sha256hex(d.salt + "|" + old) !== d.hash){ alert("Purana password galat hai."); return; }
-      const salt = devRandHex(16);
-      await rawDb.doc("devAccess/" + DEV_USER).set({salt, hash:await sha256hex(salt + "|" + np), at:new Date().toISOString()});
+      if(!(await devHashOk(await devAccessGet(), old))){ alert("Purana password galat hai."); return; }
+      await rawDb.doc("devAccess/" + DEV_USER).set(await devHashMake(np));
     }
     ["devOld","devNewA","devNewB"].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ""; });
     alert("Password badal gaya. Agli baar naye password se login kijiye.");
@@ -12273,7 +12301,7 @@ async function devReplySend(resolved){
 }
 function renderDevSettings(){
   return `<h2 class="font-bold text-gray-800 mb-2">⚙️ Developer</h2>
-    <div class="bg-white rounded-lg shadow p-3 mb-3 text-xs"><p>Login: <b>${DEV_USER}</b> ${AUTH_KIND==="firebase" ? "— apna Firebase account (admin ise na dekh sakta, na badal sakta)" : "— trial"}</p>
+    <div class="bg-white rounded-lg shadow p-3 mb-3 text-xs"><p>Login: <b>${DEV_USER}</b> ${currentUser.secure ? "— apna Firebase account (admin ise na dekh sakta, na badal sakta)" : AUTH_KIND==="firebase" ? "— apna record (Firebase ka Email/Password switch abhi band hai; on hone ke baad agla login apna Firebase account bana dega)" : "— trial"}</p>
       <p>App version: <b>${wzEsc(APP_VERSION)}</b></p>
       <p class="text-gray-500 mt-1">Aapke paas: employees ke "Developer se baat" messages + 🔒 Security setup (employee login accounts, server rules). Customers, bills, stock ka data nahi.</p>
       <p class="text-orange-700 mt-1">Pehli baar diya gaya password turant badal dijiye (neeche).</p></div>
