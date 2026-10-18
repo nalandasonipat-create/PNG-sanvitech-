@@ -79,6 +79,7 @@
     </div>
     <button onclick="openPublicLeadForm(false)" class="w-full mt-4 bg-white/15 text-white font-bold py-3 rounded-xl text-sm">📝 Naya PNG connection chahiye? Yahan apni details bharein</button>
     <button onclick="openPortal()" class="w-full mt-2 bg-white/15 text-white font-bold py-3 rounded-xl text-sm">📱 Apne connection ke kaam ka status dekhein</button>
+    <button onclick="devLoginOpen(false)" class="w-full mt-4 text-[11px] text-green-100 underline">🧑‍💻 Developer login</button>
   </div>
 </div>
 
@@ -98,7 +99,7 @@
     </div>
   </header>
 
-  <main id="mainContent" class="flex-1 overflow-y-auto p-4"></main>
+  <main id="mainContent" class="flex-1 overflow-y-auto p-4" style="padding-bottom:72px"></main>
 
   <footer id="bottomNav" class="bg-white border-t p-2 flex justify-around shadow-inner shrink-0"></footer>
 </div>
@@ -360,7 +361,7 @@ function applyHeaderLang(){
   const logoutBtn = document.getElementById("logoutBtn"); if(logoutBtn) logoutBtn.textContent = t("logout_btn");
   if(currentUser){
     const titleEl = document.getElementById("headerTitle");
-    if(titleEl) titleEl.textContent = t(ROLE_HEADER_KEY[currentUser.role] || "header_technician");
+    if(titleEl) titleEl.textContent = currentUser.role==="developer" ? "PNG ENTERPRISE — DEVELOPER" : t(ROLE_HEADER_KEY[currentUser.role] || "header_technician");
   }
 }
 function setLang(l){
@@ -577,6 +578,7 @@ async function doLogin(){
 }
 
 function doLogout(msg){
+  try{ chatUnmount(); devLoginClose(); }catch(e){}
   try{ if(typeof mediaVideoClose === "function") mediaVideoClose(); }catch(e){}
   dataStop(); dataReset();
   try{ localStorage.removeItem("png_user"); }catch(e){}
@@ -775,7 +777,7 @@ async function showApp(){
     if(currentUser.role==="admin" && !migrationsDone){ migrationsDone = true; await adminMigrations(); }
     dbReady = true;
     applyHeaderLang();
-    setupBottomNav();
+    setupBottomNav(); chatMount();
     await dataStart();
     renderMain();
     markAttendanceIfNeeded();
@@ -788,7 +790,7 @@ async function restoreSession(){
   if(isPublicFormUrl()){ openPublicLeadForm(false); return; }      // QR link: the customer's form, no login
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem("png_user")||"null"); }catch(e){}
-  if(!saved || !saved.username || !STAFF_ROLES.includes(saved.role)) return;
+  if(!saved || !saved.username || !(STAFF_ROLES.includes(saved.role) || saved.role==="developer")) return;
   currentUser = {username:saved.username, role:saved.role, name:saved.name||saved.username, ...(saved.secure ? {secure:true} : {})};
   showApp();
 }
@@ -800,7 +802,13 @@ function setupBottomNav(){
   custFilter = {stage:"", state:"", status:"", area:"", tech:"", q:""}; allotUi = {tech:"", stages:[], overwrite:false};
   const nav = document.getElementById("bottomNav");
   const title = document.getElementById("headerTitle");
-  if(currentUser.role === "store"){
+  if(currentUser.role === "developer"){
+    title.textContent = "PNG ENTERPRISE — DEVELOPER";
+    nav.innerHTML = `
+      <button onclick="devUi.thread=null; setView('devInbox')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">💬</span>Inbox<span id="navBadge_dev" class="nav-badge hidden"></span></button>
+      <button onclick="setView('devSettings')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">⚙️</span>Settings</button>`;
+    currentView = "devInbox";
+  } else if(currentUser.role === "store"){
     title.textContent = t("header_store");
     nav.innerHTML = `
       <button onclick="setView('inventory')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>${t("nav_inventory")}</button>
@@ -877,9 +885,10 @@ function highlightNav(){
 function updateNavBadges(){
   const set = (id, n)=>{ const el = document.getElementById(id); if(!el || !el.classList) return; el.textContent = n > 99 ? "99+" : String(n||""); el.classList.toggle("hidden", !n); };
   if(currentUser.role==="telecaller"){ set("navBadge_leads", leadNewCount()); set("navBadge_tcwork", tcMine().filter(tcNeedsReply).length); set("navBadge_newcall", cfbNewCount()); }
+  if(currentUser.role==="developer") set("navBadge_dev", devThreads().reduce((n,t)=>n + t.unread, 0));
   if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount() + svyNewCount() + cfbFwdCount());
 }
-const FORM_KEEP_VIEWS = ["addCustomer", "trackA", "storereport", "employees", "security", "inventory", "issue"];
+const FORM_KEEP_VIEWS = ["addCustomer", "trackA", "storereport", "employees", "security", "inventory", "issue", "devThread", "devSettings"];
 let lastMainView = null;
 function formSnap(root){
   const out = {vals:{}, focus:null};
@@ -903,6 +912,7 @@ function renderMainInner(){
   if(!currentUser) return;
   try{ updateNavBadges(); }catch(e){ console.error(e); }
   const el = document.getElementById("mainContent");
+  if(currentUser.role === "developer"){ el.innerHTML = (currentView==="devThread" && devUi.thread) ? renderDevThread() : currentView==="devSettings" ? renderDevSettings() : renderDevInbox(); return; }
 
   // Safety-kit gate: technicians must submit today's selfie + full-body PPE photos before anything else
   if(currentUser.role === "technician" && !hasSafetyCheckToday(currentUser.username)){
@@ -1192,7 +1202,7 @@ async function reverseGeocode(lat, lng){
   }catch(e){ return null; } // best-effort only — coordinates are shown either way
 }
 async function markAttendanceIfNeeded(){
-  if(!currentUser) return;
+  if(!currentUser || currentUser.role==="developer") return;
   try{
     const today = new Date().toISOString().slice(0,10);
     if(db){
@@ -11264,7 +11274,7 @@ async function dbConnect(){
 }
 // a brand-new database has no users at all: the first person who logs in on the Admin tab becomes the admin
 async function bootstrapFirstAdmin(user, pass){
-  if(loginRole!=="admin" || !rawDb) return null;
+  if(loginRole!=="admin" || !rawDb || String(user||"").trim().toLowerCase()===DEV_USER) return null;
   try{ const any = await rawDb.collection("users").limit(1).get(); if(!any.empty) return null; }catch(e){ return null; }
   if(String(pass).length < 6){ alert("Naye admin ka password kam se kam 6 character ka rakhiye."); return null; }
   if(!confirm(`Database mein abhi koi user nahi hai.\n"${user}" ko pehla ADMIN banayein (isi password ke saath)?`)) return null;
@@ -11275,6 +11285,7 @@ async function bootstrapFirstAdmin(user, pass){
 // is the saved login still valid? (secure: Firebase account + staff record; older login: the user record)
 async function sessionCheck(){
   if(!currentUser || !rawDb) return true;
+  if(currentUser.role==="developer") return await devSessionOk();
   try{
     if(authSecure()){
       const sd = await rawDb.doc("staff/" + authUser().uid).get();
@@ -11379,6 +11390,8 @@ async function dataStart(){
   const me = currentUser.username, role = currentUser.role; dataRole = role;
   const C = n=>rawDb.collection(n), cust = ()=>db.collection("customers");
   const into = fn=>snap=>{ fn(docsOf(snap)); renderSoon(); };
+  if(role==="developer"){ devListen(); return; }                  // the developer: problem messages only, no business data
+  chatListen();
   // employees: names + mobile numbers for every role; the login records (with passwords) only for the admin
   listen(C("staffPublic"), snap=>{ const m = {}; ((snap && snap.docs)||[]).forEach(d=>{ m[d.id] = d.data(); }); staffDir = m; if(currentUser && currentUser.role!=="admin") allUsers = staffDirList(); renderSoon(); }, "staffPublic");
   await loadSettings(role);
@@ -11627,6 +11640,8 @@ service cloud.firestore {
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
     // the customer is allotted to this technician: main job, or any one stage (exact matches, so his queries are always allowed)
     function techOwns() { return resource.data.assignedTechnician == me() || resource.data.alSL == me() || resource.data.alGI == me() || resource.data.alNG == me() || resource.data.alREST == me(); }
+    // the developer: his own Firebase login (not an employee record, so the admin cannot change it)
+    function isDev() { return signedIn() && request.auth.token.email == 'dev.support@pngpro-7b98e.firebaseapp.com'; }
 
     // Admin: full access to every record
     match /{document=**} {
@@ -11709,6 +11724,14 @@ service cloud.firestore {
       allow get: if true;
       allow create, update, delete: if isStaff();
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fb']);
+    }
+    // "Developer se baat": every employee only his own thread, the developer all threads (and nothing else)
+    match /devChat/{id} {
+      allow read, update: if isDev();
+      allow create: if isDev() && request.resource.data.from == 'dev';
+      allow read: if isStaff() && resource.data.threadId == me();
+      allow create: if isStaff() && request.resource.data.threadId == me() && request.resource.data.from == 'user';
+      allow update: if isStaff() && resource.data.threadId == me() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readByUser']);
     }
     // public QR form, status-page feedback and PIN requests: anyone may send, only the team reads
     match /leads/{id} {
@@ -11859,7 +11882,7 @@ async function secRoleTest(){
       ["NG ke customers", C("customers").where("alNG","==",u), true], ["Restoration ke customers", C("customers").where("alREST","==",u), true],
       ["apna material", C("issues").where("technicianUsername","==",u), true], ["apne forms", C("submissions").where("technicianUsername","==",u), true],
       ["aaj ka safety check", C("safety_checks").where("username","==",u).where("date","==",day), true], ["stock list", C("inventory"), true], ["team list", C("staffPublic"), true],
-      ["forms ki fixed details", fs.doc("settings/formDefaults"), true], ["invoice / bank details (nahi milne chahiye)", fs.doc("settings/invoiceCfg"), false],
+      ["forms ki fixed details", fs.doc("settings/formDefaults"), true], ["invoice / bank details (nahi milne chahiye)", fs.doc("settings/invoiceCfg"), false], ["developer chat (apna)", C("devChat").where("threadId","==",u), true],
       ["login records (nahi milne chahiye)", C("users").limit(1), false], ["sab customers (nahi milne chahiye)", C("customers").limit(1), false]],
     surveyor: u=>[["apne add kiye customers", C("customers").where("addedBy","==",u), true], ["diye gaye survey", C("customers").where("surveyAssigned","==",u), true], ["stock list", C("inventory"), true],
       ["leads (nahi milne chahiye)", C("leads").limit(1), false]],
@@ -11953,6 +11976,326 @@ async function wizGaugeThumb(c, k, imgId){
 }
 
 /* ============ SESSION RESTORE (runs last) ============ */
+
+/* ===================== v55 — developer login (his own, outside the admin's employee list) + "Developer se baat" chat on every login =====================
+   Developer: username dev.support. Live site: a Firebase account he creates himself with the one-time setup code — the admin can
+   neither see, reset nor delete it (only the Firebase project owner can, in the console). Trial: a salted hash in devAccess.
+   He sees only the problem messages (devChat) — no customers, bills or employee records.
+   Every employee: a 💬 button; topic chips with quick tips (chatbot style); each message carries the app version, screen and the
+   last errors on the phone so the developer can find the cause. Each employee reads only his own thread. */
+const APP_VERSION = "v55 · 18.10.2026";
+const DEV_USER = "dev.support";                       // employee usernames are letters + digits only, so no employee can get this one
+const DEV_SETUP_SALT = "png-dev-setup|v1|";
+const DEV_SETUP_HASH = "b7d4b7ed1251ae932e8c08e2839fdf62e03427d359ebf1bb2926b2068170e5a6";   // SHA-256 of the one-time setup code (the code is not in the app)
+const devEmail = ()=>staffEmail(DEV_USER);
+let chatMsgs = [], chatErr = "", chatOpen = false, devAll = [], devErr = "";
+let chatUi = {topic:"", bot:[]};
+let devUi = {thread:null, filter:"open"};
+const appErrors = [];                                  // the last JS errors on this phone (sent with a problem report)
+(function(){
+  const push = x=>{ appErrors.push({at:new Date().toISOString(), ...x}); if(appErrors.length > 8) appErrors.shift(); };
+  try{
+    window.addEventListener("error", e=>push({m:String((e && e.message) || "").slice(0, 200), s:String((e && e.filename) || "").split("/").pop() + ":" + ((e && e.lineno) || "")}));
+    window.addEventListener("unhandledrejection", e=>{ const r = e && e.reason; push({m:String((r && (r.message || r.code)) || r || "").slice(0, 200)}); });
+  }catch(e){}
+})();
+const chatTime = iso=>{ if(!iso) return ""; const d = new Date(iso); if(isNaN(d)) return ""; const p = n=>String(n).padStart(2, "0"); return `${p(d.getDate())}.${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+const chatByAt = (a, b)=>String(a.at||"").localeCompare(String(b.at||""));
+// a new message is always later than the thread's last one (two quick messages never share a time, so the order stays right)
+const chatNextAt = msgs=>{ const last = (msgs || []).reduce((m, x)=>{ const t = Date.parse(x.at || "") || 0; return t > m ? t : m; }, 0); return new Date(Math.max(Date.now(), last + 1)).toISOString(); };
+
+/* ---------- developer login ---------- */
+function devLoginOpen(setup){
+  let ov = document.getElementById("devLoginOverlay");
+  if(!ov){ ov = document.createElement("div"); ov.id = "devLoginOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:16px;";
+  ov.innerHTML = `<div class="bg-white rounded-xl shadow-lg p-5 w-full max-w-sm">
+    <div class="flex items-center justify-between mb-2"><p class="font-bold text-gray-800">🧑‍💻 Developer ${setup ? "— pehli baar setup" : "login"}</p><button onclick="devLoginClose()" class="text-2xl leading-none text-gray-400 px-2">×</button></div>
+    <p class="text-[11px] text-gray-500 mb-3">Ye ID employees se alag hai. Iska password sirf developer ke paas rehta hai — admin ise na dekh sakta hai, na badal sakta hai.</p>
+    <p class="text-xs text-gray-600 mb-2">Username: <b>${DEV_USER}</b></p>
+    ${setup ? `
+      <input id="devCode" class="ff-input mb-2" placeholder="Setup code (DEV-XXXX-XXXX-XXXX)" autocomplete="off" autocapitalize="characters">
+      <input id="devNew1" type="password" class="ff-input mb-2" placeholder="Naya password (kam se kam 8 character)" autocomplete="new-password">
+      <input id="devNew2" type="password" class="ff-input mb-2" placeholder="Password dobara" autocomplete="new-password">
+      <p id="devErr" class="text-red-600 text-xs mb-2 hidden"></p>
+      <button id="devGo" onclick="devSetup()" class="w-full bg-[#1a237e] text-white font-bold py-2.5 rounded-lg">Account banayein + login</button>
+      <button onclick="devLoginOpen(false)" class="w-full text-xs text-[#1a237e] underline mt-2">← Login par wapas</button>` : `
+      <input id="devPass" type="password" class="ff-input mb-2" placeholder="Developer password" autocomplete="current-password" onkeydown="if(event.key==='Enter') devLogin()">
+      <p id="devErr" class="text-red-600 text-xs mb-2 hidden"></p>
+      <button id="devGo" onclick="devLogin()" class="w-full bg-[#1a237e] text-white font-bold py-2.5 rounded-lg">Login</button>
+      <button onclick="devLoginOpen(true)" class="w-full text-xs text-[#1a237e] underline mt-2">Pehli baar? Setup code se apna password banayein</button>`}
+  </div>`;
+}
+function devLoginClose(){ const ov = document.getElementById("devLoginOverlay"); if(ov) ov.remove(); }
+function devErrShow(msg){ const el = document.getElementById("devErr"); if(el){ el.textContent = msg; el.classList.remove("hidden"); } const b = document.getElementById("devGo"); if(b) b.disabled = false; return false; }
+const devVal = id=>String((document.getElementById(id) || {}).value || "");
+async function devAccessGet(){ if(!rawDb) return null; try{ const s = await rawDb.doc("devAccess/" + DEV_USER).get(); return s && s.exists ? (s.data() || null) : null; }catch(e){ return null; } }
+function devRandHex(n){
+  const a = new Uint8Array(n);
+  try{ ((typeof window!=="undefined" && window.crypto) || crypto).getRandomValues(a); }catch(e){ for(let i=0;i<n;i++) a[i] = Math.floor(Math.random()*256); }
+  return Array.from(a).map(x=>x.toString(16).padStart(2, "0")).join("");
+}
+async function devLogin(){
+  const b = document.getElementById("devGo"); if(b) b.disabled = true;
+  const pass = devVal("devPass");
+  if(!pass) return devErrShow("Password daliye.");
+  await dbConnect(); if(!db) return devErrShow("Server se connect nahi ho pa raha — internet check karein.");
+  if(AUTH_KIND==="firebase"){
+    try{ await firebase.auth().signInWithEmailAndPassword(devEmail(), pass); }
+    catch(e){
+      try{ await authEnsureAnon(); }catch(e2){}
+      const c = (e && e.code) || "";
+      return devErrShow(c==="auth/user-not-found" ? "Developer account abhi bana nahi — 'Pehli baar' se setup karein."
+        : c==="auth/operation-not-allowed" ? "Firebase mein Email/Password login band hai (Admin → Security setup → Step 1)."
+        : c==="auth/network-request-failed" ? "Internet nahi hai — dobara try karein." : "Password galat hai.");
+    }
+  } else {
+    const d = await devAccessGet();
+    if(!d) return devErrShow("Developer account abhi bana nahi — 'Pehli baar' se setup karein.");
+    if(await sha256hex(d.salt + "|" + pass) !== d.hash) return devErrShow("Password galat hai.");
+  }
+  devEnter();
+  return true;
+}
+async function devSetup(){
+  const b = document.getElementById("devGo"); if(b) b.disabled = true;
+  const code = devVal("devCode").trim().toUpperCase(), p1 = devVal("devNew1"), p2 = devVal("devNew2");
+  if(await sha256hex(DEV_SETUP_SALT + code) !== DEV_SETUP_HASH) return devErrShow("Setup code galat hai.");
+  if(p1.length < 8) return devErrShow("Password kam se kam 8 character ka rakhiye.");
+  if(p1 !== p2) return devErrShow("Dono password ek jaise nahi hain.");
+  await dbConnect(); if(!db) return devErrShow("Server se connect nahi ho pa raha — internet check karein.");
+  if(AUTH_KIND==="firebase"){
+    try{ await firebase.auth().createUserWithEmailAndPassword(devEmail(), p1); }
+    catch(e){
+      try{ await authEnsureAnon(); }catch(e2){}
+      const c = (e && e.code) || "";
+      return devErrShow(c==="auth/email-already-in-use" ? `Developer account pehle se bana hua hai — login karein. (Agar aapne nahi banaya: Firebase console → Authentication → Users me ${devEmail()} delete karke dobara setup karein.)`
+        : c==="auth/operation-not-allowed" ? "Firebase mein Email/Password login band hai (Admin → Security setup → Step 1)."
+        : c==="auth/weak-password" ? "Password kamzor hai — lamba rakhiye." : "Account nahi bana: " + (c || "error"));
+    }
+  } else {
+    if(await devAccessGet()) return devErrShow("Developer account pehle se bana hua hai — login karein.");
+    const salt = devRandHex(16);
+    try{ await rawDb.doc("devAccess/" + DEV_USER).set({salt, hash:await sha256hex(salt + "|" + p1), at:new Date().toISOString()}); }
+    catch(e){ return devErrShow("Save nahi hua — internet check karein."); }
+  }
+  devEnter();
+  return true;
+}
+function devEnter(){
+  currentUser = {username:DEV_USER, role:"developer", name:"Developer", ...(AUTH_KIND==="firebase" ? {secure:true} : {})};
+  try{ localStorage.setItem("png_user", JSON.stringify(currentUser)); }catch(e){}
+  devLoginClose(); devUi = {thread:null, filter:"open"};
+  showApp();
+}
+// the saved developer session is still his (live: the Firebase account itself; trial: the account record exists)
+async function devSessionOk(){
+  if(AUTH_KIND==="firebase"){
+    const u = authUser();
+    if(!u || u.isAnonymous || String(u.email || "").toLowerCase() !== devEmail()){ doLogout("Developer session khatam — dobara login karein."); return false; }
+    return true;
+  }
+  if(!(await devAccessGet())){ doLogout("Developer account nahi mila — 'Pehli baar' se setup karein."); return false; }
+  return true;
+}
+async function devChangePassword(){
+  const old = devVal("devOld"), np = devVal("devNewA"), np2 = devVal("devNewB");
+  if(np.length < 8){ alert("Naya password kam se kam 8 character ka rakhiye."); return; }
+  if(np !== np2){ alert("Dono naye password ek jaise nahi hain."); return; }
+  try{
+    if(AUTH_KIND==="firebase"){
+      const cred = await firebase.auth().signInWithEmailAndPassword(devEmail(), old);     // proves the old password (fresh login)
+      await cred.user.updatePassword(np);
+    } else {
+      const d = await devAccessGet();
+      if(!d || await sha256hex(d.salt + "|" + old) !== d.hash){ alert("Purana password galat hai."); return; }
+      const salt = devRandHex(16);
+      await rawDb.doc("devAccess/" + DEV_USER).set({salt, hash:await sha256hex(salt + "|" + np), at:new Date().toISOString()});
+    }
+    ["devOld","devNewA","devNewB"].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ""; });
+    alert("Password badal gaya. Agli baar naye password se login kijiye.");
+  }catch(e){
+    const c = (e && e.code) || "";
+    alert(c==="auth/wrong-password" || c==="auth/invalid-credential" ? "Purana password galat hai." : c==="auth/weak-password" ? "Naya password kamzor hai." : "Password nahi badla: " + (c || "error"));
+  }
+}
+
+/* ---------- "Developer se baat": every employee's chat button ---------- */
+const CHAT_TOPICS = [
+  ["login", "🔐 Login / password", "Password bhool gaye ya login nahi ho raha? Admin aapko naya password de sakta hai (Employees me). Phir bhi problem ho to neeche likh kar bhejiye."],
+  ["data", "📋 Data / customer nahi dikh raha", "Internet check karke app ek baar band karke kholiye. Technician ko sirf uske allot hue customer dikhte hain — allotment admin karta hai. Phir bhi na dikhe to customer ka naam / BP likhiye."],
+  ["form", "📝 Form / PDF", "Form save karte waqt internet chalu rakhiye. Download hui PDF phone ke Files / Downloads me milti hai. Kaunsa form aur kya hua — likhiye."],
+  ["bill", "🧾 Bill / Excel", "RA bill Master Sheet se banta hai; jo kaam bill me nahi aaya uski wajah 'Bill preview' me likhi hoti hai. Kya galat lag raha hai — likhiye."],
+  ["photo", "📷 Photo / location", "Phone settings → Browser / App → Camera aur Location ko 'Allow' kijiye, phir dobara try kijiye. Problem rahe to likhiye."],
+  ["other", "💬 Kuch aur", "Apni problem likhiye — kaunsi screen thi, kya dabaya aur kya hua. Developer jaldi jawab dega."]
+];
+const chatTopicLabel = k=>{ const t = CHAT_TOPICS.find(x=>x[0]===k); return t ? t[1] : k; };
+function chatUnread(){ return chatMsgs.filter(m=>m.from==="dev" && !m.readByUser).length; }
+function chatMount(){
+  if(!currentUser || currentUser.role==="developer" || !document.body) return;
+  let b = document.getElementById("chatFab");
+  if(!b){ b = document.createElement("button"); b.id = "chatFab"; b.setAttribute("aria-label", "Developer se baat"); b.setAttribute("onclick", "chatOpenPanel()"); document.body.appendChild(b); }
+  b.style.cssText = "position:fixed;right:12px;bottom:calc(78px + var(--safe-bottom, 0px));z-index:55;width:46px;height:46px;border-radius:9999px;background:#1a237e;color:#fff;font-size:21px;box-shadow:0 4px 12px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;border:2px solid #fff;";
+  chatBadge();
+}
+function chatUnmount(){
+  ["chatFab", "chatOverlay"].forEach(id=>{ const el = document.getElementById(id); if(el) el.remove(); });
+  chatOpen = false; chatMsgs = []; chatErr = ""; devAll = []; devErr = ""; chatUi = {topic:"", bot:[]};
+}
+function chatBadge(){
+  const b = document.getElementById("chatFab"); if(!b) return;
+  const n = chatUnread();
+  b.innerHTML = `💬${n ? `<span style="position:absolute;top:-5px;right:-5px;background:#d93025;color:#fff;border-radius:9999px;font-size:10px;font-weight:700;min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 4px">${n > 9 ? "9+" : n}</span>` : ""}`;
+}
+function chatListen(){
+  if(!rawDb || !currentUser || currentUser.role==="developer") return;
+  try{
+    const u = rawDb.collection("devChat").where("threadId", "==", currentUser.username).onSnapshot(snap=>{
+      chatErr = ""; chatMsgs = docsOf(snap).sort(chatByAt); chatBadge();
+      if(chatOpen){ chatRender(); chatMarkRead(); }
+    }, e=>{ chatErr = (e && e.code) || "error"; console.warn("devChat", e); if(chatOpen) chatRender(); });
+    if(typeof u==="function") dataSubs.push(u);
+  }catch(e){ chatErr = "error"; }
+}
+function chatOpenPanel(){
+  if(!currentUser) return;
+  chatOpen = true;
+  if(!chatUi.bot.length) chatUi.bot = [{at:"", text:`Namaste ${currentUser.name || ""}! 👋 App me koi bhi problem ho to yahan likhiye — aapka message seedha developer ke paas jayega. Neeche se topic chuniye ya seedha likhiye.`}];
+  chatRender(); chatMarkRead();
+}
+function chatClose(){ chatOpen = false; const ov = document.getElementById("chatOverlay"); if(ov) ov.remove(); chatBadge(); }
+function chatRender(){
+  if(!chatOpen || !currentUser) return;
+  let ov = document.getElementById("chatOverlay");
+  const draft = (document.getElementById("chatInput") || {}).value || "";
+  if(!ov){ ov = document.createElement("div"); ov.id = "chatOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:97;background:#f3f4f6;display:flex;flex-direction:column;";
+  const items = [...chatUi.bot.map(b=>({...b, from:"bot"})), ...chatMsgs].sort(chatByAt);
+  const bubble = m=>{
+    if(m.from==="bot") return `<div class="flex gap-2 mb-2"><div class="text-lg">🤖</div><div class="bg-white rounded-xl px-3 py-2 text-sm text-gray-700 shadow-sm" style="max-width:80%">${wzEsc(m.text)}</div></div>`;
+    if(m.from==="dev") return `<div class="flex gap-2 mb-2"><div class="text-lg">🧑‍💻</div><div class="bg-[#e8eaf6] rounded-xl px-3 py-2 text-sm text-gray-800 shadow-sm" style="max-width:80%">${m.kind==="resolved" ? "✅ " : ""}${wzEsc(m.text)}<p class="text-[9px] text-gray-500 mt-1">Developer • ${chatTime(m.at)}</p></div></div>`;
+    return `<div class="flex justify-end mb-2"><div class="bg-[#0D904F] text-white rounded-xl px-3 py-2 text-sm shadow-sm" style="max-width:80%">${m.topic ? `<p class="text-[10px] text-green-100">${wzEsc(chatTopicLabel(m.topic))}</p>` : ""}${wzEsc(m.text)}<p class="text-[9px] text-green-100 mt-1">${chatTime(m.at)}${m.failed ? " • ❌ nahi gaya" : m.pending ? " • bhej rahe…" : m.readByDev ? " • ✓✓ developer ne padha" : " • ✓ bheja"}</p></div></div>`;
+  };
+  ov.innerHTML = `
+    <div class="bg-[#1a237e] text-white p-3 flex items-center gap-3" style="padding-top:calc(.75rem + var(--safe-top, 0px))"><button onclick="chatClose()" class="text-2xl font-bold">←</button>
+      <div class="flex-1"><p class="font-bold text-sm">🧑‍💻 Developer se baat</p><p class="text-[10px] text-blue-100">App ki koi bhi problem yahan likhiye • ${wzEsc(APP_VERSION)}</p></div></div>
+    <div id="chatList" class="flex-1 overflow-y-auto p-3">${chatErr ? `<p class="text-[11px] bg-orange-50 text-orange-700 rounded p-2 mb-2">Chat abhi server se nahi judi (${wzEsc(chatErr)}). Admin ko bataiye — "Security setup" me naye rules publish karne hain.</p>` : ""}${items.map(bubble).join("")}</div>
+    <div class="bg-white border-t p-2" style="padding-bottom:calc(.5rem + var(--safe-bottom, 0px))">
+      <div class="flex gap-1 overflow-x-auto pb-2">${CHAT_TOPICS.map(([k, l])=>`<button onclick="chatTopic('${k}')" class="shrink-0 text-[11px] px-2 py-1 rounded-full border ${chatUi.topic===k ? "bg-[#1a237e] text-white border-[#1a237e]" : "bg-white text-gray-700"}">${l}</button>`).join("")}</div>
+      <div class="flex gap-2 items-end"><textarea id="chatInput" rows="2" class="flex-1 border rounded-lg px-2 py-1 text-sm" placeholder="Apni problem likhiye…"></textarea>
+        <button id="chatSendBtn" onclick="chatSendFromInput()" class="bg-[#0D904F] text-white font-bold rounded-lg px-4 py-2 text-sm">Bhejein</button></div>
+    </div>`;
+  if(draft){ const i = document.getElementById("chatInput"); if(i) i.value = draft; }
+  const L = document.getElementById("chatList"); if(L) L.scrollTop = L.scrollHeight;
+}
+function chatTopic(k){
+  const t = CHAT_TOPICS.find(x=>x[0]===k); if(!t) return;
+  chatUi.topic = k; chatUi.bot.push({at:new Date().toISOString(), text:t[2]});
+  chatRender();
+  const i = document.getElementById("chatInput"); if(i && i.focus){ try{ i.focus(); }catch(e){} }
+}
+function chatSendFromInput(){ const i = document.getElementById("chatInput"); const v = i ? i.value : ""; if(i) i.value = ""; return chatSend(v); }
+// what the developer needs to find the cause (no customer data)
+function chatDiag(){
+  let ua = "", scr = "", online = null;
+  try{ ua = String(navigator.userAgent || "").slice(0, 160); online = ("onLine" in navigator) ? !!navigator.onLine : null; }catch(e){}
+  try{ scr = innerWidth + "x" + innerHeight; }catch(e){}
+  return {ver:APP_VERSION, view:String(currentView || ""), screen:scr, online, mode:AUTH_KIND + (authSecure() ? "/secure" : ""), ua,
+    loaded:{customers:customers.length, submissions:submissions.length, inventory:inventory.length}, note:String(dataNote || "").slice(0, 200), errors:appErrors.slice(-5)};
+}
+async function chatSend(text){
+  text = String(text || "").trim(); if(!text || !currentUser) return false;
+  if(!rawDb){ alert("Server se connect nahi — internet check karein."); return false; }
+  const msg = {threadId:currentUser.username, from:"user", username:currentUser.username, name:currentUser.name || currentUser.username, role:currentUser.role,
+    text:text.slice(0, 2000), topic:chatUi.topic || "", at:chatNextAt(chatMsgs), readByDev:false, readByUser:true, diag:chatDiag()};
+  const tmp = {id:"tmp_" + Date.now(), ...msg, pending:true};
+  chatMsgs.push(tmp); chatUi.topic = ""; chatRender();
+  let ok = true;
+  try{
+    await rawDb.collection("devChat").add(msg);
+    chatMsgs = chatMsgs.filter(m=>m!==tmp);
+    if(!chatMsgs.some(m=>m.at===msg.at && m.text===msg.text)) chatMsgs.push({id:"sent_" + Date.now(), ...msg});
+    chatUi.bot.push({at:new Date(Date.now() + 1).toISOString(), text:"✅ Developer ko bhej diya. Unka jawab yahin aayega — 💬 button par number dikhega."});
+  }catch(e){ console.error("devChat", e); tmp.pending = false; tmp.failed = true; ok = false; }
+  chatMsgs.sort(chatByAt); chatRender(); chatBadge();
+  return ok;
+}
+async function chatMarkRead(){
+  const un = chatMsgs.filter(m=>m.from==="dev" && !m.readByUser && m.id && !/^(tmp|sent)_/.test(String(m.id)));
+  for(const m of un){ m.readByUser = true; try{ await rawDb.doc("devChat/" + m.id).update({readByUser:true}); }catch(e){ console.warn("devChat read", e); } }
+  chatBadge();
+}
+
+/* ---------- the developer's screens: inbox, one thread, settings ---------- */
+function devListen(){
+  if(!rawDb) return;
+  try{
+    const u = rawDb.collection("devChat").onSnapshot(snap=>{ devErr = ""; devAll = docsOf(snap).sort(chatByAt); renderSoon(); if(currentView==="devThread" && devUi.thread) devMarkRead(devUi.thread); },
+      e=>{ devErr = (e && e.code) || "error"; console.warn("devChat", e); renderSoon(); });
+    if(typeof u==="function") dataSubs.push(u);
+  }catch(e){ devErr = "error"; }
+}
+function devThreads(){
+  const by = {};
+  devAll.forEach(m=>{ const t = by[m.threadId] || (by[m.threadId] = {id:m.threadId, name:"", role:"", unread:0, last:null, n:0});
+    t.n++; if(m.from==="user"){ t.name = m.name || t.name; t.role = m.role || t.role; if(!m.readByDev) t.unread++; } t.last = m; });
+  return Object.values(by).map(t=>({...t, resolved:!!(t.last && t.last.from==="dev" && t.last.kind==="resolved")})).sort((a,b)=>String(b.last.at||"").localeCompare(String(a.last.at||"")));
+}
+function renderDevInbox(){
+  const all = devThreads(), list = all.filter(t=>devUi.filter==="all" || !t.resolved);
+  return `<h2 class="font-bold text-gray-800 mb-1">💬 Problems — inbox</h2>
+    <p class="text-[11px] text-gray-500 mb-2">Har employee ka apna thread; naye message par laal number. Aapko sirf ye messages dikhte hain — customers / bills ka data nahi.</p>
+    ${devErr ? `<p class="text-[11px] bg-orange-50 text-orange-700 rounded p-2 mb-2">Messages nahi aa rahe (${wzEsc(devErr)}) — admin "Security setup" me naye rules publish kare.</p>` : ""}
+    <div class="flex gap-2 mb-3"><button onclick="devUi.filter='open'; renderMain()" class="flex-1 text-xs font-bold py-1.5 rounded ${devUi.filter!=="all" ? "bg-[#1a237e] text-white" : "bg-white border"}">Khule (${all.filter(t=>!t.resolved).length})</button>
+      <button onclick="devUi.filter='all'; renderMain()" class="flex-1 text-xs font-bold py-1.5 rounded ${devUi.filter==="all" ? "bg-[#1a237e] text-white" : "bg-white border"}">Sab (${all.length})</button></div>
+    ${list.length ? list.map(t=>`<button data-t="${wzEsc(t.id)}" onclick="devOpenThread(this.dataset.t)" class="w-full text-left bg-white rounded-lg shadow p-3 mb-2 ${t.unread ? "border-l-4 border-[#d93025]" : ""}">
+        <div class="flex justify-between gap-2"><b class="text-sm">${wzEsc(t.name || t.id)}</b><span class="text-[10px] text-gray-400">${chatTime(t.last.at)}</span></div>
+        <p class="text-[11px] text-gray-500">${wzEsc(t.role)} • ${wzEsc(t.id)}${t.resolved ? " • ✅ solved" : ""}</p>
+        <p class="text-xs text-gray-700 mt-1 truncate">${t.last.from==="dev" ? "Aap: " : ""}${wzEsc(String(t.last.text || "").slice(0, 90))}</p>
+        ${t.unread ? `<span class="inline-block mt-1 text-[10px] font-bold bg-[#d93025] text-white rounded-full px-2">${t.unread} naye</span>` : ""}</button>`).join("")
+      : `<p class="text-center text-gray-400 text-sm mt-8">Abhi koi ${devUi.filter==="all" ? "" : "khula "}message nahi.</p>`}`;
+}
+function devOpenThread(id){ devUi.thread = id; setView("devThread"); devMarkRead(id); }
+async function devMarkRead(id){
+  const un = devAll.filter(m=>m.threadId===id && m.from==="user" && !m.readByDev);
+  for(const m of un){ m.readByDev = true; try{ await rawDb.doc("devChat/" + m.id).update({readByDev:true}); }catch(e){ console.warn("devChat read", e); } }
+}
+function renderDevThread(){
+  const id = devUi.thread, msgs = devAll.filter(m=>m.threadId===id), who = msgs.find(m=>m.from==="user") || {};
+  const diag = d=>!d ? "" : `<details class="mt-1 text-[10px] text-gray-500"><summary>ℹ️ ${wzEsc(d.ver || "")} • ${wzEsc(d.view || "")} • ${wzEsc(d.screen || "")} • ${d.online===false ? "offline" : "online"}${(d.errors || []).length ? ` • ⚠ ${d.errors.length} error` : ""}</summary>
+      <p>Mode: ${wzEsc(d.mode || "")} • Load: ${wzEsc(JSON.stringify(d.loaded || {}))}</p>${d.note ? `<p>Note: ${wzEsc(d.note)}</p>` : ""}
+      ${(d.errors || []).map(e=>`<p class="text-red-600">${wzEsc(String(e.at || "").slice(11, 19))} ${wzEsc(e.m || "")} ${wzEsc(e.s || "")}</p>`).join("")}<p class="break-all">${wzEsc(d.ua || "")}</p></details>`;
+  return `<button onclick="devUi.thread=null; setView('devInbox')" class="text-sm text-[#1a237e] font-bold mb-2">← Inbox</button>
+    <h2 class="font-bold text-gray-800">${wzEsc(who.name || id)}</h2><p class="text-[11px] text-gray-500 mb-3">${wzEsc(who.role || "")} • ${wzEsc(id || "")}</p>
+    <div class="mb-3">${msgs.map(m=>m.from==="dev"
+      ? `<div class="flex justify-end mb-2"><div class="bg-[#1a237e] text-white rounded-xl px-3 py-2 text-sm" style="max-width:85%">${m.kind==="resolved" ? "✅ " : ""}${wzEsc(m.text)}<p class="text-[9px] text-blue-100 mt-1">${chatTime(m.at)}${m.readByUser ? " • ✓✓ padh liya" : ""}</p></div></div>`
+      : `<div class="mb-2"><div class="bg-white rounded-xl px-3 py-2 text-sm shadow-sm" style="max-width:92%">${m.topic ? `<p class="text-[10px] text-[#1a237e] font-bold">${wzEsc(chatTopicLabel(m.topic))}</p>` : ""}${wzEsc(m.text)}<p class="text-[9px] text-gray-400 mt-1">${chatTime(m.at)}</p>${diag(m.diag)}</div></div>`).join("")}</div>
+    <textarea id="devReply" rows="3" class="ff-input mb-2" placeholder="Jawab likhiye…"></textarea>
+    <div class="flex gap-2"><button onclick="devReplySend(false)" class="flex-1 bg-[#1a237e] text-white font-bold py-2.5 rounded-lg">Bhejein</button>
+      <button onclick="devReplySend(true)" class="flex-1 bg-[#0D904F] text-white font-bold py-2.5 rounded-lg">✅ Solved — bhejein</button></div>`;
+}
+async function devReplySend(resolved){
+  const id = devUi.thread; if(!id || !rawDb) return false;
+  const el = document.getElementById("devReply"); let text = String((el || {}).value || "").trim();
+  if(!text && !resolved) return false;
+  if(!text) text = "Aapki problem solve ho gayi hai. Phir se kuch ho to yahin likhiye.";
+  const msg = {threadId:id, from:"dev", name:"Developer", text:text.slice(0, 2000), at:chatNextAt(devAll.filter(m=>m.threadId===id)), readByDev:true, readByUser:false, ...(resolved ? {kind:"resolved"} : {})};
+  devAll.push({id:"tmp_" + Date.now(), ...msg}); devAll.sort(chatByAt);              // shown at once; the live listener replaces it
+  try{ await rawDb.collection("devChat").add(msg); if(el) el.value = ""; renderSoon(); return true; }
+  catch(e){ console.error(e); alert("Jawab nahi gaya — internet check karein."); return false; }
+}
+function renderDevSettings(){
+  return `<h2 class="font-bold text-gray-800 mb-2">⚙️ Developer</h2>
+    <div class="bg-white rounded-lg shadow p-3 mb-3 text-xs"><p>Login: <b>${DEV_USER}</b> ${AUTH_KIND==="firebase" ? "— apna Firebase account (admin ise na dekh sakta, na badal sakta)" : "— trial"}</p>
+      <p>App version: <b>${wzEsc(APP_VERSION)}</b></p>
+      <p class="text-gray-500 mt-1">Aapko sirf employees ke "Developer se baat" messages dikhte hain — customers, bills, employees ka data nahi.</p></div>
+    <div class="bg-white rounded-lg shadow p-3 mb-3"><p class="font-bold text-sm mb-2">🔑 Apna password badlein</p>
+      <input id="devOld" type="password" class="ff-input mb-2" placeholder="Purana password" autocomplete="current-password">
+      <input id="devNewA" type="password" class="ff-input mb-2" placeholder="Naya password (kam se kam 8)" autocomplete="new-password">
+      <input id="devNewB" type="password" class="ff-input mb-2" placeholder="Naya password dobara" autocomplete="new-password">
+      <button onclick="devChangePassword()" class="w-full bg-[#8430CE] text-white font-bold py-2 rounded">Password badlein</button></div>`;
+}
+
 applyLoginLang();
 restoreSession();
 
