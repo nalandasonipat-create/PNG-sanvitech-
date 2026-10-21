@@ -838,6 +838,7 @@ function setupBottomNav(){
     title.textContent = "PNG ENTERPRISE — DEVELOPER";
     nav.innerHTML = `
       <button onclick="devUi.thread=null; setView('devInbox')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">💬</span>Inbox<span id="navBadge_dev" class="nav-badge hidden"></span></button>
+      <button onclick="setView('devDelete')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">🗑</span>Delete<span id="navBadge_devdel" class="nav-badge hidden"></span></button>
       <button onclick="setView('security')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🔒</span>Security</button>
       <button onclick="setView('devSettings')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">⚙️</span>Settings</button>`;
     currentView = "devInbox";
@@ -918,10 +919,10 @@ function highlightNav(){
 function updateNavBadges(){
   const set = (id, n)=>{ const el = document.getElementById(id); if(!el || !el.classList) return; el.textContent = n > 99 ? "99+" : String(n||""); el.classList.toggle("hidden", !n); };
   if(currentUser.role==="telecaller"){ set("navBadge_leads", leadNewCount()); set("navBadge_tcwork", tcMine().filter(tcNeedsReply).length); set("navBadge_newcall", cfbNewCount()); }
-  if(currentUser.role==="developer") set("navBadge_dev", devThreads().reduce((n,t)=>n + t.unread, 0));
+  if(currentUser.role==="developer"){ set("navBadge_dev", devThreads().reduce((n,t)=>n + t.unread, 0)); set("navBadge_devdel", devDelPending().length); }
   if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount() + svyNewCount() + cfbFwdCount());
 }
-const FORM_KEEP_VIEWS = ["addCustomer", "trackA", "storereport", "employees", "security", "inventory", "issue", "devThread", "devSettings"];
+const FORM_KEEP_VIEWS = ["addCustomer", "trackA", "storereport", "employees", "security", "inventory", "issue", "devThread", "devSettings", "customers"];
 let lastMainView = null;
 function formSnap(root){
   const out = {vals:{}, focus:null};
@@ -945,7 +946,7 @@ function renderMainInner(){
   if(!currentUser) return;
   try{ updateNavBadges(); }catch(e){ console.error(e); }
   const el = document.getElementById("mainContent");
-  if(currentUser.role === "developer"){ el.innerHTML = (currentView==="devThread" && devUi.thread) ? renderDevThread() : currentView==="devSettings" ? renderDevSettings() : currentView==="security" ? renderSecuritySetup() : renderDevInbox(); return; }
+  if(currentUser.role === "developer"){ el.innerHTML = (currentView==="devThread" && devUi.thread) ? renderDevThread() : currentView==="devSettings" ? renderDevSettings() : currentView==="security" ? renderSecuritySetup() : currentView==="devDelete" ? renderDevDelete() : renderDevInbox(); return; }
 
   // Safety-kit gate: technicians must submit today's selfie + full-body PPE photos before anything else
   if(currentUser.role === "technician" && !hasSafetyCheckToday(currentUser.username)){
@@ -1576,6 +1577,7 @@ function renderTechCustomers(){
               <p class="text-xs text-gray-500">${c.address||""}</p>
               <p class="text-xs text-gray-400">📞 ${c.phone||"—"}</p>
               ${(!isSurveyor && wsTabsFor(c).length) ? `<p class="text-[11px] mt-1"><span class="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold">Aapka kaam: ${wsTabsFor(c).map(x=>x==="REST"?"Restoration":x).join(", ")}</span></p>` : ""}
+              ${!isSurveyor ? `<p class="text-[11px] mt-1 text-amber-800">🔧 Customer ka kaam: <b>${wzEsc(scopeTag(c))}</b>${scopeGiTest(c) ? " — GI pehle se lagi hai: sirf testing (isometric + 6 forms bharein)" : ""}</p>` : ""}
             </div>
             ${statusBadge}
           </div>
@@ -4355,116 +4357,124 @@ function applyTelecallerPayoutFilter(){
 /* ============ ADMIN: CUSTOMER MANAGEMENT ============ */
 function renderAdminCustomers(){
   const flt = cfList();
-  const pending = flt.filter(c=>c.status==="pending");
-  const others = flt.filter(c=>c.status!=="pending");
-  const sortedOthers = [...others].sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+  const newest = (a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")) || (Number(a.sn)||99999)-(Number(b.sn)||99999);   // just added first
+  const pending = flt.filter(c=>c.status==="pending").sort(newest);
+  const others = flt.filter(c=>c.status!=="pending").sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+  if(!custUi.tab) custUi.tab = pending.length ? "pending" : "all";
+  const tab = custUi.tab, list = tab==="pending" ? pending : others, shown = list.slice(0, custUi.show);
+  const fActive = Object.keys(custFilter).filter(k=>custFilter[k]);
+  const tabBtn = (k, label, n)=>`<button onclick="custUi.tab='${k}'; custUi.show=40; renderMain()" class="flex-1 text-xs font-bold py-2 rounded-lg ${tab===k ? "bg-[#0D904F] text-white" : "bg-white text-gray-600 border"}">${label} (${n})</button>`;
   return `
-    ${renderCustFilterBar({count:flt.length})}
-    ${renderAllotPanel()}
-    ${renderTcAssignPanel()}
-    <button onclick="setView('bulkWhatsapp')" class="w-full bg-green-600 text-white font-bold py-2.5 rounded-lg mb-2">📢 Bulk Call / WhatsApp Bhejein</button>
-    <button onclick="exportCustomerMasterReport()" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Export Customer Master Report (Excel)</button>
-    <button onclick="exportWorkTrackerReport()" class="w-full bg-[#8430CE] text-white font-bold py-2.5 rounded-lg mb-2">⬇ Export Work Tracker Report (SL/GI/NG/Restore)</button>
-    <button onclick="exportTejasavMasterWorkbook()" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-4">⬇ Export TEJASAV Master Workbook (all sheets + Summary)</button>
-
-    <div class="bg-white rounded-lg shadow p-4 mb-4">
-      <h2 class="font-bold text-gray-800 mb-3">➕ Add Customer (Admin)</h2>
-      <label class="ff-label">Pending Work</label>
-      ${renderCheckboxGroup("admPW", PENDING_WORK_OPTIONS)}
-      <label class="ff-label mt-2">Connection Type</label>
-      ${renderCheckboxGroup("admCT", CONNECTION_TYPE_OPTIONS)}
-      <div class="mt-3"></div>
-      <input id="admCustName" class="ff-input mb-2" placeholder="Customer Name">
-      <input id="admCustFather" class="ff-input mb-2" placeholder="Father/Husband Name">
-      <div class="grid grid-cols-2 gap-2 mb-2">
-        <input id="admCustStartAt" type="date" class="ff-input" placeholder="Start At">
-        <input id="admCustFormNo" class="ff-input" placeholder="Form No.">
-      </div>
-      <input id="admCustPhone" class="ff-input mb-2" placeholder="Phone">
-      <textarea id="admCustAddress" class="ff-input mb-2" rows="2" placeholder="Address"></textarea>
-      <input id="admCustBp" class="ff-input mb-2" placeholder="B.P No (optional)">
-      <label class="ff-label">Payment Plan</label>
-      <select id="admCustPlan" class="ff-input mb-2">
-        <option value="">-- Select --</option>
-        ${PAYMENT_PLAN_OPTIONS.map(p=>`<option value="${p}">${p}</option>`).join("")}
+    ${renderDelReqBar()}
+    <div class="flex gap-2 mb-2">
+      <button onclick="custUi.add=!custUi.add; renderMain()" class="flex-1 ${custUi.add ? "bg-gray-600" : "bg-[#0D904F]"} text-white text-xs font-bold py-2.5 rounded-lg">${custUi.add ? "✖ Form band karein" : "➕ Naya customer"}</button>
+      <select class="flex-1 ff-input text-xs font-bold" onchange="const v=this.value; this.value=''; custTool(v)">
+        <option value="">⬇ Excel / Tools ▾</option>
+        <option value="tw">⬇ TEJASAV Master Workbook (saari sheets)</option>
+        <option value="wt">⬇ Work Tracker Report (SL/GI/NG/Restore)</option>
+        <option value="cm">⬇ Customer Master Report</option>
+        <option value="wa">📢 Bulk Call / WhatsApp</option>
       </select>
-      <div class="grid grid-cols-2 gap-2 mb-2">
-        <input id="admCustAgency" class="ff-input" placeholder="Agency Name">
-        <input id="admCustSd" type="number" class="ff-input" placeholder="SD Amount (Rs)">
-      </div>
-      <label class="ff-label">Assign to Technician (optional now)</label>
-      <select id="admCustAssign" class="ff-input mb-3">
-        <option value="">-- Leave unassigned --</option>
-        ${activeTechnicianList().map(t=>`<option value="${t.username}">${t.name}</option>`).join("")}
-      </select>
-      <button onclick="adminAddCustomer()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Add Customer</button>
     </div>
-
-    <h2 class="font-bold text-gray-800 mb-2">🕓 Pending Assignment (${pending.length})</h2>
-    <div class="space-y-2 mb-5">
-      ${pending.length===0 ? '<p class="text-xs text-gray-400">Koi pending customer nahi hai.</p>' : pending.map(c=>`
-        <div class="bg-white rounded-lg shadow p-3">
-          <p class="font-bold text-sm">${c.name}</p>
-          <p class="text-xs text-gray-500">${c.address}</p>
-          <p class="text-xs text-gray-400">📞 ${c.phone||"—"} • Survey by: ${techName(c.addedBy)} ${c.geotag?`• 📍 ${c.geotag.lat.toFixed(5)}, ${c.geotag.lng.toFixed(5)}`:""}</p>
-          ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-xs mt-1"><span class="font-bold">Pending:</span> ${c.pendingWork.join(", ")}</p>` : ""}
-          ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
-          ${srcChip(c)}${svyChip(c)}${tcChip(c)}
-          ${wsBtn(c)}
-          ${svyAssignRow(c)}${tcAssignRow(c)}${portalPinBtn(c)}
-          <div class="mt-2 space-y-2">
-            <p class="text-[11px] text-gray-500">👷 Technician ko kaam:</p>
-            <select id="assignSel_${c.id}" class="ff-input w-full text-xs">
-              ${activeTechnicianList().map(t=>`<option value="${t.username}">${t.name}</option>`).join("")}
-            </select>
-            <p class="text-xs text-gray-400">🗓️ Kaam ki tareekh (optional — WhatsApp message isi tareekh ke sath jayega):</p>
-            <div class="flex gap-2">
-              <input type="date" id="assignDate_${c.id}" class="ff-input flex-1 text-xs">
-              <button onclick="assignCustomer('${c.id}')" class="bg-[#EA8600] text-white text-xs font-bold px-4 py-1.5 rounded">Assign</button>
-            </div>
-          </div>
-        </div>`).join("")}
+    ${custUi.add ? renderAdminAddCustomer() : ""}
+    <details class="mb-2" ${custUi.filterOpen || fActive.length ? "open" : ""} ontoggle="custUi.filterOpen=this.open">
+      <summary class="bg-white rounded-lg shadow px-3 py-2 text-xs font-bold text-gray-700">🔎 Filter / dhoondhein ${fActive.length ? `<span class="text-[#0D904F]">• ${fActive.length} laga hai</span>` : ""} <span class="font-normal text-gray-500">• ${flt.length} / ${customers.length}</span></summary>
+      <div class="mt-2">${renderCustFilterBar({count:flt.length})}</div>
+    </details>
+    <details class="mb-2" ${custUi.allotOpen ? "open" : ""} ontoggle="custUi.allotOpen=this.open">
+      <summary class="bg-white rounded-lg shadow px-3 py-2 text-xs font-bold text-gray-700">👷 Kaam allot / 📞 telecaller ko dein (filter ke customers)</summary>
+      <div class="mt-2">${renderAllotPanel()}${renderTcAssignPanel()}</div>
+    </details>
+    <div class="flex gap-2 mb-2">${tabBtn("pending", "🕓 Pending", pending.length)}${tabBtn("all", "📋 Assigned / Done", others.length)}</div>
+    <p class="text-[10px] text-gray-500 mb-1">Customer par tap karein — details, 🔧 kaam / bill, assign, WhatsApp, delete. 🔧 = hamein kaunsa kaam karna hai (📝 = GI sheet ke remark se, final baaki).</p>
+    <div>
+      ${shown.map(c=>custRow(c, tab)).join("") || '<p class="text-xs text-gray-400">Is list me koi customer nahi.</p>'}
     </div>
-
-    <h2 class="font-bold text-gray-800 mb-2">📋 All Customers (${others.length})</h2>
-    <div class="space-y-2">
-      ${sortedOthers.map(c=>{
-        const filled = submissions.filter(s=>s.customerId===c.id).length;
-        return `<div class="bg-white rounded-lg shadow p-3">
-          <div class="flex justify-between items-center">
-            <p class="font-bold text-sm">${c.name}</p>
-            <span class="text-xs ${c.status==='completed'?'bg-green-100 text-green-700':'bg-blue-100 text-blue-700'} px-2 py-1 rounded font-bold">${c.status}</span>
-          </div>
-          <p class="text-xs text-gray-500">${c.address}</p>
-          <p class="text-xs text-gray-400">Technician: ${techName(c.assignedTechnician)} • Forms filled: ${filled}/6</p>
-          ${c.scheduledWorkDate ? `<p class="text-xs mt-1">🗓️ Kaam ki tareekh: <b>${formatWorkDateForMessage(c.scheduledWorkDate,true)}</b></p>` : ""}
-          <p class="text-xs mt-1"><span class="font-bold">Work Status:</span> <span class="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">${c.workStatus||"Pending"}</span></p>
-          <p class="text-xs mt-1 flex flex-wrap gap-1">
-            <span class="bg-gray-100 px-1.5 py-0.5 rounded">SL: ${c.slWork||"-"}/${c.slPaper||"-"}</span>
-            <span class="bg-gray-100 px-1.5 py-0.5 rounded">GI: ${c.giWork||"-"}/${c.giPaper||"-"}</span>
-            <span class="bg-gray-100 px-1.5 py-0.5 rounded">NG: ${c.ngWork||"-"}/${c.ngPaper||"-"}</span>
-            <span class="bg-gray-100 px-1.5 py-0.5 rounded">Restore: ${c.restoreWork||"-"}/${c.restorePaper||"-"}</span>
-            <span class="bg-gray-100 px-1.5 py-0.5 rounded">JMR: ${c.jmrStatus||"-"}</span>
-          </p>
-          ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-xs mt-1"><span class="font-bold">Pending:</span> ${c.pendingWork.join(", ")}</p>` : ""}
-          ${(c.connectionType&&c.connectionType.length) ? `<p class="text-xs"><span class="font-bold">Type:</span> ${c.connectionType.join(", ")}</p>` : ""}
-          ${srcChip(c)}${svyChip(c)}${tcChip(c)}
-          ${wsBtn(c)}
-          ${tcAssignRow(c)}${portalPinBtn(c)}
-          <div class="mt-2 space-y-2">
-            <select id="reassignSel_${c.id}" class="ff-input w-full text-xs">
-              ${activeTechnicianList().map(t=>`<option value="${t.username}" ${c.assignedTechnician===t.username?"selected":""}>${t.name}</option>`).join("")}
-            </select>
-            <div class="flex gap-2">
-              <input type="date" id="reassignDate_${c.id}" class="ff-input flex-1 text-xs" value="${c.scheduledWorkDate||''}">
-              <button onclick="reassignCustomer('${c.id}')" class="bg-[#8430CE] text-white text-xs font-bold px-4 py-1.5 rounded">🔁 Transfer</button>
-            </div>
-            ${c.phone ? `<button onclick='showScheduleContactModal(${JSON.stringify({id:c.id,name:c.name,phone:c.phone,address:c.address||""}).replace(/'/g,"&#39;")}, "${c.assignedTechnician||''}", "${c.scheduledWorkDate||''}")' class="w-full text-xs bg-green-50 text-green-700 font-bold py-1.5 rounded">💬 Is customer ko WhatsApp bhejein</button>` : ""}
-          </div>
-        </div>`;
-      }).join("") || '<p class="text-xs text-gray-400">Koi customer nahi.</p>'}
-    </div>
+    ${list.length > shown.length ? `<button onclick="custUi.show += 40; renderMain()" class="w-full bg-white border text-xs font-bold py-2 rounded-lg mt-1">⬇ Aur dikhayein (${list.length - shown.length} baaki)</button>` : ""}
     <div id="quickContactModal"></div>`;
+}
+let custUi = {tab:"", add:false, open:{}, more:{}, show:40, filterOpen:false, allotOpen:false};
+function custTool(v){
+  if(v==="wa") setView("bulkWhatsapp");
+  else if(v==="cm") exportCustomerMasterReport();
+  else if(v==="wt") exportWorkTrackerReport();
+  else if(v==="tw") exportTejasavMasterWorkbook();
+}
+function custToggle(id){ custUi.open[id] = !custUi.open[id]; renderMain(); }
+// the stages we do for this customer (per the 🔧 Kaam choice), ✓ when done
+function custStageDots(c){
+  const S = scopeOf(c).i, s = stageLive(c);
+  const dot = (show, done, label)=>show ? `<span class="px-1 rounded text-[9px] font-bold ${done ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}">${label}${done ? "✓" : ""}</span>` : "";
+  const giTest = S.gi==="test" || S.gi==="riser";
+  return dot(S.sl || s.already, s.SL || s.already, "SL") + dot(S.gi!=="none", giTest ? (s.giTested || s.gasIn) : s.GI, giTest ? "TEST" : "GI") + dot(S.ng, s.NG || s.gasIn, "NG") + dot(S.rest, s.REST, "R");
+}
+function custRow(c, kind){
+  const open = !!custUi.open[c.id], S = scopeOf(c), tech = c.assignedTechnician ? techName(c.assignedTechnician) : "";
+  return `<div class="bg-white rounded-lg shadow mb-1.5 ${open ? "ring-1 ring-[#0D904F]" : ""}">
+    <button id="crow_${c.id}" onclick="custToggle('${c.id}')" class="w-full text-left px-2.5 py-2 flex items-center gap-2">
+      <span class="text-[10px] text-gray-400 w-7 text-right shrink-0">${wzEsc(c.sn||"")}</span>
+      <span class="flex-1 min-w-0">
+        <span class="block text-[13px] font-bold text-gray-800 truncate">${wzEsc(c.name||"—")}<span class="font-normal text-[10px] text-gray-500"> • ${wzEsc(c.area||"")}</span></span>
+        <span class="block text-[10px] text-gray-500 truncate">🔧 ${wzEsc(scopeTagOf(S, c))}${S.src==="remark" ? " 📝" : ""}${tech ? " • 👷 " + wzEsc(tech) : ""}${c.bpNo ? " • BP " + wzEsc(c.bpNo) : ""}${c.source==="qr" ? " • 📥 QR" : ""}</span>
+      </span>
+      <span class="flex gap-0.5 shrink-0">${custStageDots(c)}</span>
+      <span class="text-gray-400 text-xs shrink-0">${open ? "▴" : "▾"}</span>
+    </button>
+    ${open ? `<div class="px-3 pb-3 border-t">${custDetail(c, kind)}</div>` : ""}
+  </div>`;
+}
+function custDetail(c, kind){
+  const filled = submissions.filter(s=>s.customerId===c.id).length, techs = activeTechnicianList();
+  const wa = c.phone ? `<button onclick='showScheduleContactModal(${JSON.stringify({id:c.id,name:c.name,phone:c.phone,address:c.address||""}).replace(/'/g,"&#39;")}, "${c.assignedTechnician||''}", "${c.scheduledWorkDate||''}")' class="w-full text-xs bg-green-50 text-green-700 font-bold py-1.5 rounded mt-1">💬 Is customer ko WhatsApp bhejein</button>` : "";
+  const chip = (t, v)=>`<span class="bg-gray-100 px-1.5 py-0.5 rounded">${t}: ${wzEsc(v||"-")}</span>`;
+  const assign = c.status==="pending" ? `
+      <p class="text-[11px] text-gray-500 mt-2">👷 Technician ko kaam (tareekh optional — WhatsApp isi tareekh ke saath):</p>
+      <div class="flex gap-1 mt-1"><select id="assignSel_${c.id}" class="ff-input text-xs flex-1">${techs.map(t=>`<option value="${t.username}">${wzEsc(t.name)}</option>`).join("")}</select>
+        <input type="date" id="assignDate_${c.id}" class="ff-input text-xs" style="width:130px">
+        <button onclick="assignCustomer('${c.id}')" class="bg-[#EA8600] text-white text-xs font-bold px-3 rounded">Assign</button></div>` : `
+      <p class="text-[11px] text-gray-500 mt-2">👷 ${wzEsc(techName(c.assignedTechnician))} ${c.scheduledWorkDate ? "• 🗓️ " + formatWorkDateForMessage(c.scheduledWorkDate, true) : ""} — badalna ho to:</p>
+      <div class="flex gap-1 mt-1"><select id="reassignSel_${c.id}" class="ff-input text-xs flex-1">${techs.map(t=>`<option value="${t.username}" ${c.assignedTechnician===t.username?"selected":""}>${wzEsc(t.name)}</option>`).join("")}</select>
+        <input type="date" id="reassignDate_${c.id}" class="ff-input text-xs" style="width:130px" value="${c.scheduledWorkDate||''}">
+        <button onclick="reassignCustomer('${c.id}')" class="bg-[#8430CE] text-white text-xs font-bold px-3 rounded">🔁</button></div>`;
+  return `
+    <p class="text-[11px] text-gray-600 mt-2">📍 ${wzEsc(c.address||"—")}</p>
+    <p class="text-[11px] text-gray-500">📞 ${wzEsc(c.phone||"—")} • ${wzEsc(c.status||"")} • Forms ${filled}/6 • Survey: ${wzEsc(techName(c.addedBy))}${c.geotag && typeof c.geotag.lat==="number" ? ` • 📍 ${c.geotag.lat.toFixed(5)}, ${c.geotag.lng.toFixed(5)}` : ""}</p>
+    <p class="text-[10px] mt-1 flex flex-wrap gap-1">${chip("Work", c.workStatus||"Pending")}${chip("SL", `${c.slWork||"-"}/${c.slPaper||"-"}`)}${chip("GI", `${c.giWork||"-"}/${c.giPaper||"-"}`)}${chip("NG", `${c.ngWork||"-"}/${c.ngPaper||"-"}`)}${chip("Restore", `${c.restoreWork||"-"}/${c.restorePaper||"-"}`)}${chip("JMR", c.jmrStatus)}</p>
+    ${(c.pendingWork&&c.pendingWork.length) ? `<p class="text-[11px] mt-1"><b>Pending:</b> ${wzEsc(c.pendingWork.join(", "))}</p>` : ""}
+    ${(c.connectionType&&c.connectionType.length) ? `<p class="text-[11px]"><b>Type:</b> ${wzEsc(c.connectionType.join(", "))}</p>` : ""}
+    ${srcChip(c)}${svyChip(c)}${tcChip(c)}
+    ${scopeBox(c)}
+    ${wsBtn(c)}
+    ${assign}
+    ${c.status==="pending" ? svyAssignRow(c) + tcAssignRow(c) : ""}
+    <details class="mt-2" ${custUi.more[c.id] ? "open" : ""} ontoggle="custUi.more['${c.id}']=this.open">
+      <summary class="text-[11px] font-bold text-gray-700 py-1">⚙️ Aur options — ${c.status==="pending" ? "" : "telecaller, "}PIN, WhatsApp, delete ▾</summary>
+      ${c.status==="pending" ? "" : tcAssignRow(c)}${portalPinBtn(c)}${wa}
+      <button onclick="delReqOpen('${c.id}')" class="w-full text-xs bg-red-50 text-red-700 font-bold py-1.5 rounded mt-2">🗑 Delete request (developer approval)</button>
+    </details>`;
+}
+function renderAdminAddCustomer(){
+  return `<div class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 border-[#0D904F]">
+      <h2 class="font-bold text-gray-800 mb-2 text-sm">➕ Add Customer (Admin)</h2>
+      <div class="grid grid-cols-2 gap-2">
+        <input id="admCustName" class="ff-input text-sm col-span-2" placeholder="Customer Name *">
+        <input id="admCustFather" class="ff-input text-sm" placeholder="Father/Husband Name">
+        <input id="admCustPhone" class="ff-input text-sm" placeholder="Phone">
+        <textarea id="admCustAddress" class="ff-input text-sm col-span-2" rows="2" placeholder="Address *"></textarea>
+        <input id="admCustBp" class="ff-input text-sm" placeholder="B.P No (optional)">
+        <input id="admCustFormNo" class="ff-input text-sm" placeholder="Form No.">
+        <div><label class="ff-label">Start At</label><input id="admCustStartAt" type="date" class="ff-input text-sm"></div>
+        <div><label class="ff-label">Payment Plan</label><select id="admCustPlan" class="ff-input text-sm"><option value="">-- Select --</option>${PAYMENT_PLAN_OPTIONS.map(p=>`<option value="${p}">${p}</option>`).join("")}</select></div>
+        <input id="admCustAgency" class="ff-input text-sm" placeholder="Agency Name">
+        <input id="admCustSd" type="number" class="ff-input text-sm" placeholder="SD Amount (Rs)">
+      </div>
+      <details class="mt-2"><summary class="text-[11px] font-bold text-gray-700">Pending work / connection type ▾</summary>
+        <label class="ff-label mt-1">Pending Work</label>${renderCheckboxGroup("admPW", PENDING_WORK_OPTIONS)}
+        <label class="ff-label mt-2">Connection Type</label>${renderCheckboxGroup("admCT", CONNECTION_TYPE_OPTIONS)}</details>
+      <label class="ff-label mt-2">Assign to Technician (optional now)</label>
+      <select id="admCustAssign" class="ff-input text-sm mb-2"><option value="">-- Leave unassigned --</option>${activeTechnicianList().map(t=>`<option value="${t.username}">${wzEsc(t.name)}</option>`).join("")}</select>
+      <button onclick="adminAddCustomer()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold text-sm">Add Customer</button>
+    </div>`;
 }
 
 async function reassignCustomer(customerId){
@@ -4904,6 +4914,8 @@ async function exportWorkTrackerReport(){
       "RESTORE PAPER": L.restPaper,
       "JMR": L.jmr,
       "REMARK": c.remark || "",
+      "KAAM (WORK SCOPE)": scopeTag(c),
+      "BILL REMARK": (S0=>scopeIsNew(S0) ? "" : S0.remark)(scopeOf(c)),
       "S.NO": c.sn || "",
       "SL DATE": d(s.dSL), "GI DATE": d(s.dGI), "NG DATE": d(s.dNG), "RESTORE DATE": d(s.dRS),
       "WORK STATUS": L.workStatus,
@@ -5599,6 +5611,148 @@ const LOA_SOR = [ // code, description, unit, LOA quantity, milestone rates (₹
 ];
 LOA_SOR.forEach(it=>{ it.rate = Math.round(it.ms.reduce((t,x)=>t+x,0)*100)/100; });   // full (100%) rate = sum of milestones
 const LOA_RATE = {}; LOA_SOR.forEach(it=>{ LOA_RATE[it.code] = it; });
+/* ---------- v59: "Kaam / Bill" — which work WE do for a customer and what is claimed from GAIL. The admin chooses and
+   finalises it (✅); until then the GI sheet's REMARK written by M/S TEJASAV (e.g. "SL,TESTING,NG") gives the choice.
+   GI laid earlier (old connection, RFC never done): only its testing is claimed — LOA 7.5 a, per metre of that GI pipe —
+   with SL and NG; its isometric and all 6 forms are still filled. New GI is claimed in 2 stages: installation (70%), then
+   RFC: testing (5%) + gas-in / meter / conversion (20%); closure (5%) in the final bill. ---------- */
+const SCOPE_GI = {new:"🆕 Naya GI pipe (7.1.1) — installation + RFC", test:"🔁 GI pehle se — sirf testing (7.5 a)", riser:"🔁 ½\" pehle se (testing 7.5 a) + ¾\" riser naya (7.1.1)", none:"✖ GI ka koi kaam nahi"};
+const SCOPE_ITEMS = [["reg","📝 Registration (9)"], ["sl","🛣️ SL — service line (1.1)"], ["meter","📟 Meter lagana (7.3 a)"], ["regulator","⚙️ Regulator (7.7 b)"],
+  ["valves","🔴 Valves IV / AV (7.4)"], ["plate","🟨 Warning plate (1.8 iii)"], ["ng","🔥 NG conversion (7.3 b)"], ["rest","🧱 Restoration (1.2)"]];
+const SCOPE_PRESETS = {
+  new:    {l:"🆕 Sab naya — SL + GI + NG (+ Restoration)", remark:"", i:{reg:1, sl:1, gi:"new", meter:1, regulator:1, valves:1, plate:1, ng:1, rest:1}},
+  gitest: {l:"🔁 GI pehle se — SL + Testing + NG", remark:"SL,TESTING,NG — GI pehle se, sirf testing claim (7.5 a)", i:{reg:0, sl:1, gi:"test", meter:0, regulator:0, valves:0, plate:0, ng:1, rest:1}},
+  test:   {l:"🔁 SL + GI pehle se — sirf Testing + NG", remark:"TESTING,NG — SL + GI pehle se (7.5 a)", i:{reg:0, sl:0, gi:"test", meter:0, regulator:0, valves:0, plate:0, ng:1, rest:0}},
+  regch:  {l:"🔧 Testing + NG + Regulator change / Riser / IV", remark:"TESTING, NG, REG. CHANGE / RISER / IV", i:{reg:0, sl:0, gi:"riser", meter:0, regulator:1, valves:1, plate:0, ng:1, rest:0}},
+  custom: {l:"✏️ Custom — khud chunein", remark:"", i:null},
+};
+// the GI sheet's REMARK column (M/S TEJASAV's own words) -> the starting choice
+function scopeGuess(c){
+  const r = String((giRowFor(c)||[])[48] || "").toUpperCase().replace(/\s+/g, " ").trim();
+  if(!r) return "new";
+  if(/TESTING/.test(r) && /RISER|IV INSTAL|REG\.? ?CHANGE/.test(r)) return "regch";
+  if(/SL ?, ?TESTING ?, ?NG/.test(r)) return "gitest";
+  if(/T SE AAGE|^TESTING ?,? ?NG\b/.test(r)) return "test";
+  return "new";
+}
+function scopeOf(c){
+  const s = c && c.scope;
+  if(s && SCOPE_PRESETS[s.p]){
+    const base = SCOPE_PRESETS[s.p].i || SCOPE_PRESETS.new.i;
+    return {p:s.p, i:{...base, ...(s.p==="custom" ? (s.i||{}) : {})}, remark:String(s.note||"").trim() || SCOPE_PRESETS[s.p].remark, src:"admin", by:s.by||"", at:s.at||""};
+  }
+  const g = c ? scopeGuess(c) : "new", P = SCOPE_PRESETS[g], i = {...P.i};
+  if(g !== "new"){          // the work sheets say what we did ourselves: an SL we laid (not ALREADY), a restoration entry
+    const sl = slRowFor(c) || [];
+    if(!i.sl && !slAlready(sl) && (bnum(sl,6) > 0 || bnum(sl,7) > 0 || /^done$/i.test(String(sl[2]||"")))) i.sl = 1;
+    if(scopeRestHas(c)) i.rest = 1;
+  }
+  return {p:g, i, remark:P.remark, src: g==="new" ? "default" : "remark"};
+}
+// REST shows when restoration is part of it: every new connection, or a customer whose restoration sheet has an entry
+const scopeRestHas = c=>!!c && (c.restoreWork==="Done" || (restRowFor(c)||[]).some(v=>v!==null && v!==undefined && v!==""));
+function scopeTagOf(S, c){
+  const i = S.i, out = [];
+  if(i.sl) out.push("SL");
+  if(i.gi==="new") out.push("GI"); else if(i.gi==="test") out.push("TESTING"); else if(i.gi==="riser") out.push("TESTING", "RISER");
+  if(i.regulator && i.gi!=="new") out.push("REG");
+  if(i.ng) out.push("NG");
+  if(i.rest && (!c || S.p==="new" || scopeRestHas(c))) out.push("REST");
+  return out.join(" • ") || "—";
+}
+function scopeTag(c){ return scopeTagOf(scopeOf(c), c); }
+const scopeIsNew = S=>S.i.gi==="new" && !!(S.i.sl && S.i.ng && S.i.reg && S.i.meter && S.i.regulator && S.i.valves && S.i.plate && S.i.rest);
+const scopeGiTest = c=>{ const g = scopeOf(c).i.gi; return g==="test" || g==="riser"; };
+// which LOA items the choice lets us claim (the GI pipe items themselves are worked out by scopeGiPut)
+function scopeAllows(i, code){
+  if(code==="9") return !!i.reg;
+  const st = raStageOf(code);
+  if(st==="SL") return !!i.sl;
+  if(st==="REST") return !!i.rest;
+  if(code==="7.3 b") return !!i.ng;
+  if(code==="7.3 a") return !!i.meter;
+  if(code==="7.7 a" || code==="7.7 b") return !!i.regulator;
+  if(/^7\.4 /.test(code)) return !!i.valves;
+  if(code==="1.8 iii") return !!i.plate;
+  return true;
+}
+// GI pipe of the master sheet -> LOA items: new pipe (7.1.1, claimed in 2 stages) or testing of the earlier pipe (7.5 a)
+function scopeGiPut(i, gi, put){
+  const p12 = bnum(gi,5) + bnum(gi,7), p34 = bnum(gi,6) + bnum(gi,8);
+  const c12 = billCfg.gi12==="contractor" ? "7.1.1 a" : "7.1.1 b", c34 = billCfg.gi34==="contractor" ? "7.1.1 c" : "7.1.1 d";
+  if(i.gi==="new"){ put(c12, p12); put(c34, p34); }
+  else if(i.gi==="test") put("7.5 a", bround(p12 + p34));
+  else if(i.gi==="riser"){ put("7.5 a", p12); put(c34, p34); }
+}
+// one line: what goes in the bill
+function scopeBillTxt(S){
+  const i = S.i, out = [];
+  if(i.reg) out.push("Registration");
+  if(i.sl) out.push("SL (1.1)");
+  if(i.gi==="new") out.push("GI pipe 7.1.1 (2 stage)"); else if(i.gi==="test") out.push("GI testing 7.5 a"); else if(i.gi==="riser") out.push("GI testing 7.5 a + ¾\" riser 7.1.1");
+  if(i.meter) out.push("meter"); if(i.regulator) out.push("regulator"); if(i.valves) out.push("valves"); if(i.plate) out.push("warning plate");
+  if(i.ng) out.push("NG (7.3 b)"); if(i.rest) out.push("restoration");
+  return out.join(" • ") || "kuch nahi";
+}
+// ---- admin: choose / finalise ----
+let scopeUiState = {};                 // customer id -> preset being edited (before Save)
+function scopeBox(c){
+  const S = scopeOf(c), id = c.id, p = scopeUiState[id] || S.p, i = p==="custom" ? (S.p==="custom" ? S.i : {...S.i}) : (SCOPE_PRESETS[p].i || S.i);
+  const src = S.src==="admin" ? `✅ final — ${wzEsc(techName(S.by))}${S.at ? ", " + fpDate(String(S.at).slice(0,10)) : ""}` : S.src==="remark" ? "📝 GI sheet ke remark se — ✅ final karein" : "🆕 default (sab naya)";
+  const note = S.src==="admin" ? String((c.scope||{}).note||"") : S.remark;
+  return `<div class="bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+    <p class="text-[11px] font-bold text-amber-900">🔧 Hamein kaunsa kaam karna hai / bill kya karna hai</p>
+    <p class="text-[10px] text-amber-700 mb-1">${src}</p>
+    <select id="scP_${id}" class="ff-input text-xs" onchange="scopeUiState['${id}']=this.value; const n=document.getElementById('scN_${id}'); if(n) n.value=(SCOPE_PRESETS[this.value]||{}).remark||''; renderMain()">${Object.keys(SCOPE_PRESETS).map(k=>`<option value="${k}" ${p===k?"selected":""}>${SCOPE_PRESETS[k].l}</option>`).join("")}</select>
+    ${p==="custom" ? `<select id="scG_${id}" class="ff-input text-xs mt-1">${Object.keys(SCOPE_GI).map(k=>`<option value="${k}" ${i.gi===k?"selected":""}>${SCOPE_GI[k]}</option>`).join("")}</select>
+      <div class="grid grid-cols-2 gap-x-2 mt-1">${SCOPE_ITEMS.map(([k, l])=>`<label class="text-[11px] flex items-center gap-1"><input type="checkbox" id="scI_${id}_${k}" ${i[k]?"checked":""}> ${l}</label>`).join("")}</div>` : ""}
+    <input id="scN_${id}" class="ff-input text-xs mt-1" placeholder="Remark (bill aur sheets me jayega)" value="${wzEsc(p===S.p ? note : (SCOPE_PRESETS[p].remark||""))}">
+    <p class="text-[10px] text-gray-600 mt-1">🧾 Bill me: ${wzEsc(scopeBillTxt({i: p==="custom" ? i : (SCOPE_PRESETS[p].i||i)}))}</p>
+    <button onclick="scopeSaveUi('${id}')" class="w-full bg-amber-600 text-white text-xs font-bold py-1.5 rounded mt-1">✅ Final karein</button>
+  </div>`;
+}
+async function scopeSave(cid, p, items, note){
+  if(!currentUser || currentUser.role!=="admin" || !SCOPE_PRESETS[p]) return false;
+  const c = customers.find(x=>x.id===cid); if(!c) return false;
+  const rec = {p, note:String(note||"").trim(), by:currentUser.username, at:new Date().toISOString(), ...(p==="custom" ? {i:items} : {})};
+  if(!(await saveJobField(cid, {scope:rec}))) return false;
+  Object.assign(customers.find(x=>x.id===cid) || {}, {scope:rec});
+  delete scopeUiState[cid];
+  return true;
+}
+async function scopeSaveUi(cid){
+  const el = id=>document.getElementById(id), p = (el("scP_" + cid)||{}).value || "new";
+  let items = null;
+  if(p==="custom"){ items = {gi:(el("scG_" + cid)||{}).value || "new"}; SCOPE_ITEMS.forEach(([k])=>{ items[k] = (el(`scI_${cid}_${k}`)||{}).checked ? 1 : 0; }); }
+  if(await scopeSave(cid, p, items, (el("scN_" + cid)||{}).value || "")){ showToast("✅ Kaam / bill final: " + scopeTag(customers.find(x=>x.id===cid) || {})); renderMain(); }
+}
+// the RA bill screen: every customer whose work is not "sab naya", and the GI sheet suggestions still to finalise
+async function scopeFinalAll(){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const list = customers.filter(c=>scopeOf(c).src==="remark");
+  if(!list.length) return;
+  if(!confirm(`${list.length} customers ka kaam GI sheet ke remark ke hisaab se final karein?`)) return;
+  let ok = 0;
+  for(const c of list){ const S = scopeOf(c); if(await scopeSave(c.id, S.p, null, S.remark)) ok++; }
+  showToast(`✅ ${ok} customers final ho gaye.`); renderMain();
+}
+let scopeOpenId = null;
+function renderScopePanel(){
+  const list = customers.filter(c=>!scopeIsNew(scopeOf(c))).sort((a,b)=>(Number(a.sn)||9999)-(Number(b.sn)||9999));
+  const pend = list.filter(c=>scopeOf(c).src==="remark");
+  const m75 = bround(list.reduce((t,c)=>{ const S = scopeOf(c), gi = giRowFor(c)||[]; let q = 0; scopeGiPut(S.i, gi, (code, v)=>{ if(code==="7.5 a") q += Number(v)||0; }); return t + q; }, 0));
+  return `<details class="bg-white rounded-lg shadow p-3 mb-3" ${pend.length ? "open" : ""}><summary class="font-bold text-sm text-gray-800">🔧 Kaam ke hisaab se bill — GI pehle se / sirf testing (${list.length})${pend.length ? ` <span class="text-orange-600">• ${pend.length} final baaki</span>` : ""}</summary>
+    <p class="text-[11px] text-gray-500 my-2">Jinki GI pehle se lagi hai (RFC nahi hua): SL ke baad line charge karke sirf testing claim — LOA 7.5 a (${m75} m) + SL + NG. Isometric aur saare 6 forms phir bhi bharein. Naya GI 2 stage me claim hota hai: installation (70%) aur RFC / gas-in (baaki). Jo yahan chunenge wahi RA bill, master workbook aur saari sheets me remark ke saath jayega.</p>
+    ${pend.length ? `<button onclick="scopeFinalAll()" class="w-full bg-amber-600 text-white text-xs font-bold py-2 rounded mb-2">✅ GI sheet ke remark wale ${pend.length} customers final karein</button>` : ""}
+    <div class="space-y-1">${list.map(c=>{ const S = scopeOf(c), open = scopeOpenId===c.id;
+      return `<div class="border rounded ${S.src==="remark" ? "border-orange-300 bg-orange-50" : "border-gray-200"}">
+        <button onclick="scopeOpenId = scopeOpenId==='${c.id}' ? null : '${c.id}'; renderMain()" class="w-full text-left px-2 py-1.5 text-[11px] flex justify-between gap-2">
+          <span><b>${wzEsc(c.sn||"")}</b> ${wzEsc(c.name||"")} <span class="text-gray-500">• ${wzEsc(scopeTagOf(S, c))}</span></span><span>${S.src==="remark" ? "📝" : "✅"} ${open ? "▴" : "▾"}</span></button>
+        ${open ? `<div class="px-2 pb-2">${scopeBox(c)}</div>` : ""}</div>`; }).join("") || `<p class="text-[11px] text-gray-400">Sab customers "sab naya" hain.</p>`}</div>
+    <p class="text-[10px] text-gray-500 mt-2">Kisi aur customer ka kaam badalna ho: 🧾 Customers → customer kholein → 🔧 Kaam / Bill.</p>
+  </details>`;
+}
+
 const LOA_CHK = [ // "Check-list for Domestic Connection" (GAIL annexure) + 3 checks the LOA 5600008408 payment terms ask for
   "Availability of As-built drawings (hard & soft copy)",
   "Restoration properly done & NOC obtained from society",
@@ -5644,8 +5798,8 @@ function billMsOk(c, kind){
   return true;
 }
 function billLines(c){
-  const sl = slRowFor(c)||[], gi = giRowFor(c)||[], ng = ngRowFor(c)||[], rs = restRowFor(c)||[], L = [];
-  const add = (code, qty, extra)=>{ qty = bround(qty); const it = LOA_RATE[code]; if(!(qty>0) || !it) return;
+  const sl = slRowFor(c)||[], gi = giRowFor(c)||[], ng = ngRowFor(c)||[], rs = restRowFor(c)||[], L = [], K = scopeOf(c).i;
+  const add = (code, qty, extra)=>{ qty = bround(qty); const it = LOA_RATE[code]; if(!(qty>0) || !it || (!extra && !scopeAllows(K, code))) return;
     const crate = bround(it.ms.reduce((t,r,i)=>t + (billMsOk(c, it.mk[i]) ? r : 0), 0));
     L.push({code, desc:it.desc, unit:it.unit, qty, rate:it.rate, crate, pct:it.rate ? Math.round(crate/it.rate*1000)/10 : 0, amount:bround(qty*crate), full:bround(qty*it.rate), extra:!!extra}); };
   add("9", 1);
@@ -5654,8 +5808,7 @@ function billLines(c){
   const restDone = stageDone(c,"REST") || String(rs[0]||"").toUpperCase()==="DONE";
   if(restDone){ add("1.2.a", bnum(rs,7)+bnum(rs,8)); add("1.2.b", bnum(rs,3)+bnum(rs,4)); add("1.2.c", bnum(rs,5)); add("1.2.d", bnum(rs,6)); }
   if(/^done$/i.test(String(gi[41]||""))) add("1.8 iii", 1);
-  add(billCfg.gi12==="contractor" ? "7.1.1 a" : "7.1.1 b", bnum(gi,5)+bnum(gi,7));
-  add(billCfg.gi34==="contractor" ? "7.1.1 c" : "7.1.1 d", bnum(gi,6)+bnum(gi,8));
+  scopeGiPut(K, gi, (code, v)=>add(code, v));
   if(gi[2] || c.meterSerialNumber) add("7.3 a", 1);
   if(/^done$/i.test(String(ng[2]||""))) add("7.3 b", 1);
   add("7.4 a", bnum(gi,27)); add("7.4 b", bnum(gi,28)); add("7.4 d", bnum(gi,25));
@@ -6046,6 +6199,7 @@ function raStatus(c){
     slDone: stageDone(c,"SL") || /^done$/i.test(String(sl[2]||"")),
     slTested: ffOk(sl[32]) || (((c.slTesting||{}).readings)||[]).length>0,
     giDone: stageDone(c,"GI") || ((bnum(gi,5)+bnum(gi,6)+bnum(gi,7)+bnum(gi,8))>0 && giTested),
+    giInst: stageDone(c,"GI") || (bnum(gi,5)+bnum(gi,6)+bnum(gi,7)+bnum(gi,8))>0 || [9,10,11,12,13,14,15,16,17,18,23,24,25,26,27,28,29,30,31].some(i=>bnum(gi,i)>0) || /INSTAL|REPLAC/i.test(String(gi[38]||"")),
     giTested, gasIn: /GAS\s*IN/i.test(String(gi[46]||"")), ngDone, ngTested: /PRESS/i.test(String(ng[7]||"")),
     meterIn: !!(gi[2] || c.meterSerialNumber),
     restDone: stageDone(c,"REST") || String(rs[0]||"").toUpperCase()==="DONE",
@@ -6059,15 +6213,14 @@ function raStatus(c){
 // LOA 1.1.b (20 MM beyond 4 m): the SL sheet's "AFTER 4 M" column when it is filled, else the 20 MM pipe minus the free 4 m
 function slAfter4(sl){ const a = bnum(sl, 8); return a > 0 ? a : Math.max(0, bnum(sl, 7) - 4); }
 function raQty(c, s){
-  const sl = slRowFor(c)||[], gi = giRowFor(c)||[], rs = restRowFor(c)||[], q = {};
-  const put = (code, v, extra)=>{ v = bround(Number(v)||0); if(v>0 && LOA_RATE[code]) q[code] = {q:v, extra:!!extra}; };
+  const sl = slRowFor(c)||[], gi = giRowFor(c)||[], rs = restRowFor(c)||[], q = {}, K = scopeOf(c).i;      // K: the work we do here (🔧 Kaam / Bill)
+  const put = (code, v, extra)=>{ v = bround(Number(v)||0); if(v>0 && LOA_RATE[code] && (extra || scopeAllows(K, code))) q[code] = {q:v, extra:!!extra}; };
   put("9", 1);
   if((s.slDone || bnum(sl,7)>0) && !slAlready(sl)) put("1.1.a", 1);      // ₹3,115 per connection, first 4 m of pipe included
   put("1.1.b", slAfter4(sl)); put("1.1.c", bnum(sl,6));
   put("1.2.a", bnum(rs,7)+bnum(rs,8)); put("1.2.b", bnum(rs,3)+bnum(rs,4)); put("1.2.c", bnum(rs,5)); put("1.2.d", bnum(rs,6));
   if(/^done$/i.test(String(gi[41]||""))) put("1.8 iii", 1);
-  put(billCfg.gi12==="contractor" ? "7.1.1 a" : "7.1.1 b", bnum(gi,5)+bnum(gi,7));   // GI PIPE + EXTRA PIPE (same total as the forms)
-  put(billCfg.gi34==="contractor" ? "7.1.1 c" : "7.1.1 d", bnum(gi,6)+bnum(gi,8));
+  scopeGiPut(K, gi, put);          // GI PIPE + EXTRA PIPE (same total as the forms): new pipe 7.1.1 — or, GI laid earlier, its testing 7.5 a
   if(s.meterIn) put("7.3 a", 1);
   if(s.ngDone) put("7.3 b", 1);
   put("7.4 a", bnum(gi,27)); put("7.4 b", bnum(gi,28)); put("7.4 d", bnum(gi,25));
@@ -6096,9 +6249,12 @@ function raReached(c, code, kind, s, extra){
     return kind==="work" ? w : kind==="noc" ? w && s.noc && commOK : kind==="close" ? w && fin : false; }
   if(st==="NG"){ const w = s.ngDone && doc(s.fNG) && on(s.dNG);
     return kind==="work" ? w : kind==="test" ? w && (s.ngTested || s.gasIn || s.giTested) : kind==="close" ? w && fin : false; }
-  const w = s.giDone && doc(s.fGI) && on(s.dGI);                            // GI pipe, valves, meter, regulator, warning plate …
+  if(code==="7.5 a"){ const t = (s.giTested || s.gasIn) && doc(s.fGI) && on(s.dGI || s.dNG);   // GI laid earlier: its testing, commissioning & integration (RFC)
+    return (kind==="work" || kind==="test") ? t : kind==="close" ? t && fin : false; }
+  // new GI in 2 stages: (1) installed — pipe, valves, meter, regulator, warning plate …; (2) RFC — tested, then gas-in / meter / conversion
+  const w = s.giInst && doc(s.fGI) && on(s.dGI);
   if(code==="7.3 a") return kind==="work" ? w && s.meterIn : kind==="test" ? w && s.meterIn && (s.giTested || s.gasIn) : kind==="close" ? w && fin : false;
-  return (kind==="supply" || kind==="work") ? w : kind==="test" ? w && s.giTested : kind==="comm" ? w && commOK : kind==="close" ? w && fin : false;
+  return (kind==="supply" || kind==="work") ? w : kind==="test" ? w && s.giTested : kind==="comm" ? w && s.giTested && commOK : kind==="close" ? w && fin : false;
 }
 function raCustLines(c){
   const s = raStatus(c), lines = [], over = [], held = [];
@@ -6340,6 +6496,7 @@ function renderRaBill(){
       ${raDlHtml(null)}
       <button onclick="raSubmit()" ${d.rows.length?"":"disabled"} class="w-full ${d.rows.length?"bg-[#1a237e] text-white":"bg-gray-200 text-gray-400"} font-bold py-3 rounded-lg mt-2">✅ Updated to GAIL — ${d.no} lock karein</button>
     </div>
+    ${renderScopePanel()}
     ${(()=>{ const hold = raCfg.hold||[], codes = [...new Set([...Object.values(d.abs).map(a=>a.code), ...d.held.map(x=>x.code), ...hold])].sort((a,b)=>raLoaIdx(a)-raLoaIdx(b));
       const amt = code=>bround(Object.values(d.abs).filter(a=>a.code===code).reduce((t,a)=>t+a.amount,0));
       return `<details class="bg-white rounded-lg shadow p-3 mb-3" ${hold.length?"open":""}><summary class="font-bold text-sm text-gray-800">⏸ Item hold — bill me na lein (${hold.length})</summary>
@@ -6722,9 +6879,10 @@ function xbRA(m){
       const lines = Math.max(1, Math.ceil(String(it.desc).length / (amt ? 95 : 72)));
       const dv = (m.dev||[]).find(x=>x.code===it.code);
       const ir = r;
-      const rmk = dv ? "Excess " + dv.excess + " over LOA qty - deviation approval reqd." : "", rl = rmk ? Math.ceil(rmk.length / (amt ? 13 : 11)) : 0;
+      const nRt = it.code==="7.5 a" ? new Set(m.rows.filter(x=>x.lines.some(l=>l.code==="7.5 a")).map(x=>x.c.id)).size : 0;
+      const rmk = (dv ? "Excess " + dv.excess + " over LOA qty - deviation approval reqd." : "") + (nRt ? (dv ? " " : "") + "GI laid earlier - testing only: " + nRt + " connections" : ""), rl = rmk ? Math.ceil(rmk.length / (amt ? 13 : 11)) : 0;
       XT.row(s, 34, r, {A:n+1, B:it.desc, C:it.code, D:it.unit, E:it.qty, F:it.rate, G:xf(`E${r}*F${r}`, bround(it.qty*it.rate))}, {h:Math.max(30, 15*lines + 6, 15*rl + 6)});
-      if(dv){ XT.set(s, r, amt ? "P" : "M", rmk); XT.wrap(s, r, amt ? "P" : "M"); }
+      if(rmk){ XT.set(s, r, amt ? "P" : "M", rmk); XT.wrap(s, r, amt ? "P" : "M"); }
       r++;
       it.mk.forEach((kind, i)=>{
         const key = it.code + "|" + kind, a = m.abs[key] || {qty:0, amount:0}, p = m.prev[key] || {qty:0, amount:0};
@@ -6762,12 +6920,13 @@ function xbRA(m){
     const codes = {Q:"7.1.1 b", R:"7.1.1 d", S:"7.1.1 a", T:"7.1.1 c", U:"7.2 A", V:"7.3 a", W:null, X:"7.7 b", Y:"7.4 a", Z:"7.4 b", AA:"7.4 d", AB:"7.5 a", AC:null, AD:null, AE:null, AF:null, AG:null, AH:null, AI:null, AJ:null, AK:"1.8 iii"};
     Object.keys(codes).forEach(c=>XT.set(s, 9, c, codes[c]));
     const list = xbRowsOf(m, "GI"); let r = 11;
-    list.forEach((x, i)=>{ const c = x.c, w = rowOf(c);
-      XT.row(s, 11, r, {A:i+1, B:c.bpNo||"", E:c.name||"", F:[c.houseNo, c.street].filter(Boolean).join(", ") || c.address || "", G:c.society || "", H:c.area || "", J:fpPhone(c.phone)||"", K:1, L:xbIR(c, i),
+    list.forEach((x, i)=>{ const c = x.c, w = rowOf(c), K = scopeOf(c).i, p12 = bnum(w.gi,5)+bnum(w.gi,7), p34 = bnum(w.gi,6)+bnum(w.gi,8);
+      const n12 = K.gi==="new" ? p12 : 0, n34 = (K.gi==="new" || K.gi==="riser") ? p34 : 0, rt = K.gi==="test" ? bround(p12 + p34) : K.gi==="riser" ? p12 : 0, mtr = !!(w.gi[2] || c.meterSerialNumber);
+      XT.row(s, 11, r, {A:i+1, B:c.bpNo||"", C:rt ? (c.bpNo||"") : null, D:K.gi==="test" ? "RETESTING" : K.gi==="riser" ? "RISER + RETESTING" : null, P:(mtr && !K.meter) ? "OLD METER" : null, AB:xn(rt), E:c.name||"", F:[c.houseNo, c.street].filter(Boolean).join(", ") || c.address || "", G:c.society || "", H:c.area || "", J:fpPhone(c.phone)||"", K:1, L:xbIR(c, i),
         M:xd(w.gi[1]), N:xd(w.gi[47]||w.gi[1]), O:xd(w.ng[8]||w.gi[47]),
-        Q:own12 ? xn(bnum(w.gi,5)+bnum(w.gi,7)) : null, R:own34 ? xn(bnum(w.gi,6)+bnum(w.gi,8)) : null, S:own12 ? null : xn(bnum(w.gi,5)+bnum(w.gi,7)), T:own34 ? null : xn(bnum(w.gi,6)+bnum(w.gi,8)),
-        V:(w.gi[2] || c.meterSerialNumber) ? (c.meterSerialNumber || 1) : null, X:/INSTAL|REPLAC/i.test(String(w.gi[38]||"")) ? 1 : null,
-        Y:xn(w.gi[27]), Z:xn(w.gi[28]), AA:xn(w.gi[25]), AK:/^done$/i.test(String(w.gi[41]||"")) ? 1 : null}, {blank:true});
+        Q:own12 ? xn(n12) : null, R:own34 ? xn(n34) : null, S:own12 ? null : xn(n12), T:own34 ? null : xn(n34),
+        V:(mtr && K.meter) ? (c.meterSerialNumber || 1) : null, X:(K.regulator && /INSTAL|REPLAC/i.test(String(w.gi[38]||""))) ? 1 : null,
+        Y:K.valves ? xn(w.gi[27]) : null, Z:K.valves ? xn(w.gi[28]) : null, AA:K.valves ? xn(w.gi[25]) : null, AK:(K.plate && /^done$/i.test(String(w.gi[41]||""))) ? 1 : null}, {blank:true});
       r++; });
     const last = Math.max(11, r - 1), tr = r;
     XT.shrink(s, 11, last); XT.showIfUsed(s, ["S","T"], 11, last);
@@ -6890,15 +7049,15 @@ function xbRA(m){
     XT.set(s, 3, "A", hdrLines.proj); XT.set(s, 4, "A", hdrLines.client); XT.set(s, 5, "A", hdrLines.cmc); XT.set(s, 6, "A", hdrLines.ctr); XT.set(s, 7, "A", hdrLines.foa); XT.set(s, 8, "A", hdrLines.loa);
     XT.set(s, 4, "J", "MEASUREMENT PERIOD " + H.period); XT.set(s, 5, "J", "INVOICE NO. :-   " + H.inv); XT.set(s, 6, "J", "BILL SUBMISSION DATE-" + H.date); XT.set(s, 7, "J", "VENDOR CODE :- " + H.vendor);
     for(let c=1;c<=23;c++){ XT.set(s, 9, c, null); XT.set(s, 10, c, null); }
-    ["S.N","Customer","BP No.","SOR","Description","Milestone","Qty","Rate (Rs.)","Amount (Rs.)"].forEach((t,i)=>XT.set(s, 10, i+1, t));
+    ["S.N","Customer","BP No.","SOR","Description","Milestone","Qty","Rate (Rs.)","Amount (Rs.)","Remark"].forEach((t,i)=>XT.set(s, 10, i+1, t));
     let r = 11;
-    R.forEach((x, i)=>x.lines.forEach(l=>{ const ds = (LOA_RATE[l.code]||{}).desc || "", ms = raPct(l.code,l.kind) + "% - " + xbMsText(l.code, l.kind);
-      XT.row(s, 11, r, {A:x.c.sn || i+1, B:x.c.name || "", C:x.c.bpNo || "", D:l.code, E:ds, F:ms, G:l.qty, H:l.rate, I:xf(`G${r}*H${r}`, l.amount)},
+    R.forEach((x, i)=>x.lines.forEach((l, k)=>{ const ds = (LOA_RATE[l.code]||{}).desc || "", ms = raPct(l.code,l.kind) + "% - " + xbMsText(l.code, l.kind), S0 = scopeOf(x.c), rk = k===0 && !scopeIsNew(S0) ? S0.remark : null;
+      XT.row(s, 11, r, {A:x.c.sn || i+1, B:x.c.name || "", C:x.c.bpNo || "", D:l.code, E:ds, F:ms, G:l.qty, H:l.rate, I:xf(`G${r}*H${r}`, l.amount), J:rk},
         {blank:true, h:Math.max(18, 15*Math.max(Math.ceil(ds.length/48), Math.ceil(ms.length/48)) + 4)});
-      XT.shrink(s, r, r); XT.wrap(s, r, "E"); XT.wrap(s, r, "F"); r++; }));
+      XT.shrink(s, r, r); XT.wrap(s, r, "E"); XT.wrap(s, r, "F"); if(rk) XT.wrap(s, r, "J"); r++; }));
     const last = Math.max(11, r - 1);
     XT.row(s, 12, r, {H:"TOTAL", I:xf(`SUM(I11:I${last})`, m.sub)}, {blank:true});
-    XT.trim(s, 9, r, 9); XT.trim(s, 4, 8, 15); [3,4,5,6,7,8].forEach(x=>XT.fit(s, x, "A")); [4,5,6,7].forEach(x=>XT.fit(s, x, "J"));
+    XT.trim(s, 9, r, 10); XT.trim(s, 4, 8, 15); [3,4,5,6,7,8].forEach(x=>XT.fit(s, x, "A")); [4,5,6,7].forEach(x=>XT.fit(s, x, "J"));
   }
   return bk;
 }
@@ -7344,9 +7503,9 @@ function renderMasterSheet(){
     <button onclick="exportTejasavMasterWorkbook()" class="w-full bg-[#0D904F] text-white font-bold py-2 rounded-lg mb-3 text-sm">⬇ Export (MASTER SHEET + saari sheets)</button>
     <div class="bg-white rounded-lg shadow overflow-x-auto mb-4">
       <table class="text-[11px] w-full"><thead class="bg-[#e5f4ec] text-left"><tr>
-        ${["S.N","Name","Area","BP No","Meter No","Phone","Status","SL","GI","NG","Rest.","SL tech","GI tech","NG tech","Rest. tech","MDPE (m)","GI ½\" (m)","GI ¾\" (m)","Elbow","AV / IV","Reg.","Burner","Rest. (PCC/Blk)","Bill (RA)","Forms %"].map(h=>`<th class="px-2 py-1 whitespace-nowrap">${h}</th>`).join("")}
+        ${["S.N","Name","Area","BP No","Meter No","Phone","Status","🔧 Kaam","SL","GI","NG","Rest.","SL tech","GI tech","NG tech","Rest. tech","MDPE (m)","GI ½\" (m)","GI ¾\" (m)","Elbow","AV / IV","Reg.","Burner","Rest. (PCC/Blk)","Bill (RA)","Forms %"].map(h=>`<th class="px-2 py-1 whitespace-nowrap">${h}</th>`).join("")}
       </tr></thead><tbody>
-      ${list.map(c=>{ const o = fpOverall(c); return `<tr onclick="openFormsPdf('${c.id}')" class="cursor-pointer">${cell(c.sn)}${cell(c.name)}${cell(c.area)}${cell(c.bpNo)}${cell(c.meterSerialNumber)}${cell(c.phone)}${cell(tejOurStatus(c))}${cell(stg(c,"slWork"))}${cell(stg(c,"giWork"))}${cell(stg(c,"ngWork"))}${cell(stg(c,"restoreWork"))}${cell(techOf(c,"SL"))}${cell(techOf(c,"GI"))}${cell(techOf(c,"NG"))}${cell(techOf(c,"REST"))}${(()=>{ const sl=slRowFor(c)||[], g=giRowFor(c)||[], ng=ngRowFor(c)||[], rs=restRowFor(c)||[], n=v=>Number(v)||0, q=v=>v?Math.round(v*100)/100:"";
+      ${list.map(c=>{ const o = fpOverall(c); return `<tr onclick="openFormsPdf('${c.id}')" class="cursor-pointer">${cell(c.sn)}${cell(c.name)}${cell(c.area)}${cell(c.bpNo)}${cell(c.meterSerialNumber)}${cell(c.phone)}${cell(tejOurStatus(c))}${cell(wzEsc(scopeTag(c)) + (scopeOf(c).src==="remark" ? " 📝" : ""))}${cell(stg(c,"slWork"))}${cell(stg(c,"giWork"))}${cell(stg(c,"ngWork"))}${cell(stg(c,"restoreWork"))}${cell(techOf(c,"SL"))}${cell(techOf(c,"GI"))}${cell(techOf(c,"NG"))}${cell(techOf(c,"REST"))}${(()=>{ const sl=slRowFor(c)||[], g=giRowFor(c)||[], ng=ngRowFor(c)||[], rs=restRowFor(c)||[], n=v=>Number(v)||0, q=v=>v?Math.round(v*100)/100:"";
           return cell(q(n(sl[6])+n(sl[7]))) + cell(q(n(g[5])+n(g[7]))) + cell(q(n(g[6])+n(g[8]))) + cell(q(n(g[9])+n(g[10])+n(g[11])+n(g[12])+n(g[13])))
             + cell((n(g[25])+n(g[26])||n(g[27])+n(g[28])) ? `${n(g[25])+n(g[26])} / ${n(g[27])+n(g[28])}` : "") + cell(/INSTAL|REPLAC/i.test(String(g[38]||"")) ? "✓" : "")
             + cell(q(n(ng[3]))) + cell((n(rs[4])||n(rs[5])) ? `${n(rs[4])} / ${n(rs[5])}` : ""); })()}${cell(wzEsc(raSummary(c)))}${cell(`<b class="${o.allDone?'text-green-700':'text-orange-600'}">${o.pct}%</b> (${o.complete}/6)`)}</tr>`; }).join("")}
@@ -7845,7 +8004,7 @@ function tejBook(){
   // ---- GI (+ GI SLEEVE, kept by the app, when used) ----
   const giSh = sheet("GI", "GI", [1,2,3,4], 5, 5, list, c=>{ const gi = giRowFor(c) || [];
     const v = [...c7(c), nw(c), ffStr(ri(gi,0)) || tname(c, "GI") || ""];
-    for(let j=1; j<=48; j++) v.push(j===1 || j===47 ? ri(gi,j) : tejV(ri(gi,j)));
+    for(let j=1; j<=48; j++) v.push(j===1 || j===47 ? ri(gi,j) : j===48 ? (ri(gi,48) || (scopeIsNew(scopeOf(c)) ? null : scopeOf(c).remark)) : tejV(ri(gi,j)));
     v.push(tejV(ri(gi,49)));
     return v; }, [10, 56]);
   extraCols(giSh, 4, 57, 58, ["GI SLEEVE"], 12);
@@ -7865,6 +8024,9 @@ function tejBook(){
 
   // ---- Capitalisation: the template sheet, quantities live from the app, rates from Capitalisation settings ----
   { const sh = XT.sheet(bk, "Capitalisation", "Capitalisation"), d = capCompute(), h = capHeader(), T = sh.T;
+    const RT = {gi12:0, gi34:0, n:0};          // GI pipe that was laid earlier (testing-only connections) inside the GI totals
+    list.forEach(c=>{ const K = scopeOf(c).i, gi = giRowFor(c) || []; if(K.gi!=="test" && K.gi!=="riser") return; const a = bnum(gi,5)+bnum(gi,7), b = K.gi==="test" ? bnum(gi,6)+bnum(gi,8) : 0;
+      if(a || b){ RT.gi12 = bround(RT.gi12 + a); RT.gi34 = bround(RT.gi34 + b); RT.n++; } });
     const copy = (src, dst)=>{ if(T.rows[src]) XT.row(sh, src, dst, null, {noMerge:true}); };
     const mergeAt = (src, dst)=>T.merges.forEach(m=>{ if(m[0]===src && m[2]===src) sh.merges.push([dst, m[1], dst, m[3]]); });
     for(let r=1; r<=6; r++){ copy(r, r); mergeAt(r, r); }
@@ -7881,7 +8043,8 @@ function tejBook(){
     const hdr = r; copy(20, r); copy(21, r+1); T.merges.forEach(m=>{ if(m[0]===20 && m[2]===21) sh.merges.push([hdr, m[1], hdr+1, m[3]]); }); r += 2;
     const c0 = r; d.con.forEach((x, i)=>{ XT.row(sh, 22, r, null, {blank:true});
       XT.set(sh, r, 1, i+1); XT.set(sh, r, 2, x.it.name); XT.set(sh, r, 3, x.it.unit); XT.set(sh, r, 4, x.it.spec);
-      XT.set(sh, r, 7, x.it.sor); XT.set(sh, r, 8, x.q); XT.set(sh, r, 9, x.rt); XT.set(sh, r, 10, xf(`H${r}*I${r}`, x.amt)); r++; });
+      XT.set(sh, r, 7, x.it.sor); XT.set(sh, r, 8, x.q); XT.set(sh, r, 9, x.rt); XT.set(sh, r, 10, xf(`H${r}*I${r}`, x.amt));
+      if(RT[x.it.qty]) XT.set(sh, r, 11, `incl. ${RT[x.it.qty]} m GI laid earlier (${RT.n} conn., testing only - 7.5 a)`); r++; });
     const c1 = r - 1;
     if(c1 >= c0){ XT.set(sh, c0, 5, h.contractor); XT.set(sh, c0, 6, h.contractNo); sh.merges.push([c0, 5, c1, 5], [c0, 6, c1, 6]); }
     const ct = r; copy(38, r); XT.set(sh, r, 10, xf(`SUM(J${c0}:J${c1})`, d.conTotal)); r++;
@@ -7900,14 +8063,16 @@ function tejBook(){
 
   // ---- ALL BILL TRACK: work status of every stage, the bills it went in, % claimed and where its billing stands ----
   const CLM = new Map(list.map(c=>[c.id, raStageClaims(c)]));
-  sheet("ALL BILL TRACK", "ALL BILL TRACK", [1], 2, 2, list, c=>{ const s = LV.get(c.id).s, rc = CLM.get(c.id), cl = rc.claims, rs = rc.s;
+  sheet("ALL BILL TRACK", "ALL BILL TRACK", [1], 2, 2, list, c=>{ const s = LV.get(c.id).s, rc = CLM.get(c.id), cl = rc.claims, rs = rc.s, K = scopeOf(c).i, giT = K.gi==="test" || K.gi==="riser";
     const pct = x=>x.pct ? x.pct + "%" : (x.bills ? "0%" : "");
     const status = (done, formOk, x, na)=>na ? "NOT IN BILL (ALREADY)" : !done ? "WORK PENDING" : x.pct>=100 ? "BILLED" : x.pct>0 ? "PART BILLED" : !formOk ? (raCfg.docGate ? "PAPER PENDING" : "READY FOR BILL (PAPER PENDING)") : "READY FOR BILL";
+    const OUT = "NOT IN BILL (NOT OUR WORK)";
     return [...c7(c),
-      s.already ? "ALREADY" : s.SL ? "SL DONE" : "PENDING", cl.SL.bills, pct(cl.SL), status(s.SL || s.already, rs.fSL, cl.SL, s.already && !cl.SL.pct),
-      s.GI ? "GI DONE" : "PENDING", s.giTested ? "PRESSURE CHECKED" : "PENDING", cl.GI.bills, pct(cl.GI), status(s.GI, rs.fGI, cl.GI),
-      s.NG ? "NG DONE" : "PENDING", cl.NG.bills, pct(cl.NG), status(s.NG, rs.fNG, cl.NG),
-      s.REST ? "RESTORED" : "WAITING", cl.REST.bills, pct(cl.REST), status(s.REST, true, cl.REST)]; });
+      s.already ? "ALREADY" : !K.sl ? "PEHLE SE" : s.SL ? "SL DONE" : "PENDING", cl.SL.bills, pct(cl.SL), (!K.sl && !s.already) ? OUT : status(s.SL || s.already, rs.fSL, cl.SL, s.already && !cl.SL.pct),
+      K.gi==="none" ? "NOT OUR WORK" : giT ? "GI PEHLE SE (TESTING)" : s.GI ? "GI DONE" : "PENDING", s.giTested ? "PRESSURE CHECKED" : "PENDING", cl.GI.bills, pct(cl.GI),
+        K.gi==="none" ? OUT : status(giT ? (s.giTested || s.gasIn) : (s.GI || rs.giInst), rs.fGI, cl.GI),
+      !K.ng ? "NOT OUR WORK" : s.NG ? "NG DONE" : "PENDING", cl.NG.bills, pct(cl.NG), !K.ng ? OUT : status(s.NG, rs.fNG, cl.NG),
+      !K.rest ? "NOT OUR WORK" : s.REST ? "RESTORED" : "WAITING", cl.REST.bills, pct(cl.REST), !K.rest ? OUT : status(s.REST, true, cl.REST)]; });
 
   // ---- BILL NO: per RA bill (R1 = RA-01 …) the stages of this connection that went in it ----
   const billOf = c=>{ const by = {}; (c.billed||[]).forEach(e=>{ const n = parseInt(String(e.b||"").replace(/\D/g, ""), 10); if(!(n > 0)) return; (by[n] = by[n] || new Set()).add(RA_STAGE_LABEL[raStageOf(e.k)] || e.k); }); return by; };
@@ -7930,6 +8095,7 @@ function tejBook(){
     ["TOTAL SD AMOUNT (₹)", sdTotal],[],
     ["WORK DONE"],["SL DONE", done("slWork")],["GI DONE", done("giWork")],["NG DONE", done("ngWork")],["RESTORATION DONE", done("restoreWork")],[],
     ["BY OUR STATUS"], ...count(tejOurStatus),[],
+    ["BY KAAM (WORK SCOPE)"], ...count(c=>scopeTag(c)),[],
     ["BY AREA"], ...count(c=>(c.area||"").replace(/\s+/g," ").trim().toUpperCase()),[],
     ["BY PLAN"], ...count(c=>tejPlanOut(c.paymentPlan)),[],
     ["PAPERWORK SUBMITTED"], ...count(c=>c.submitted),[],
@@ -7950,12 +8116,12 @@ function tejBook(){
   // ---- the app's own sheets after the workbook's (as before): MASTER SHEET (live status of every customer) and BILL TRACK ----
   const common = c=>[...c7(c), nw(c)];
   const masterHdr = ["S N.","NAME","F//M/H NAME","AREA","BP NO.","METER NO.","PHONE","NEW/OLD","OUR STATUS","SL","GI","NG","RESTORATION","JMR","ASSIGNED TECHNICIAN","APP STATUS","SL TECH","GI TECH","NG TECH","REST TECH","FORMS COMPLETE %",
-    "WORK STATUS (LIVE)","METER NO. (LIVE)","TELECALLER","LAST FEEDBACK","SURVEY","PHOTOS","SOURCE"];
-  const masterRows = list.map(c=>{ const L = LV.get(c.id), fb = c.tcFeedback || [], last = fb[fb.length-1];
+    "WORK STATUS (LIVE)","METER NO. (LIVE)","TELECALLER","LAST FEEDBACK","SURVEY","PHOTOS","SOURCE","KAAM (WORK SCOPE)","BILL REMARK"];
+  const masterRows = list.map(c=>{ const L = LV.get(c.id), fb = c.tcFeedback || [], last = fb[fb.length-1], S0 = scopeOf(c);
     return [...common(c), tejOurStatus(c), L.slWork, L.giWork, L.ngWork, L.restWork, L.jmr, c.assignedTechnician?techName(c.assignedTechnician):"", c.status||"", ...WS_STAGES.map(st=>tname(c, st)), L.o.pct,
       L.workStatus, L.meterNo, c.tcAssigned ? techName(c.tcAssigned) : "", last ? callTxt({at:last.at, by:last.by, txt:[TC_RESULT[last.result]||last.result, last.note].filter(Boolean).join(" - ")}) : "",
-      c.survey && c.survey.status==="sentback" ? "SENT BACK" : c.surveyDoneAt ? (c.survey && c.survey.status==="accepted" ? "DONE (OK)" : "DONE") : (c.surveyAssigned ? "ALLOTTED" : ""), `${mediaCount(c)}/${MEDIA_KINDS.length}`, c.source==="qr" ? "QR FORM" : ""]; });
-  const msSh = tejPlainSheet(bk, "MASTER SHEET", [6,22,20,18,13,14,13,9,12,9,9,9,13,9,18,12,12,12,12,12,12,16,14,14,30,10,8,9]);
+      c.survey && c.survey.status==="sentback" ? "SENT BACK" : c.surveyDoneAt ? (c.survey && c.survey.status==="accepted" ? "DONE (OK)" : "DONE") : (c.surveyAssigned ? "ALLOTTED" : ""), `${mediaCount(c)}/${MEDIA_KINDS.length}`, c.source==="qr" ? "QR FORM" : "", scopeTagOf(S0, c) + (S0.src==="remark" ? " (GI remark)" : ""), scopeIsNew(S0) ? "" : S0.remark]; });
+  const msSh = tejPlainSheet(bk, "MASTER SHEET", [6,22,20,18,13,14,13,9,12,9,9,9,13,9,18,12,12,12,12,12,12,16,14,14,30,10,8,9,24,40]);
   [["TEJASAV"],[],[], masterHdr, ...masterRows].forEach((row, i)=>row.forEach((v, j)=>{ if(v !== null && v !== undefined && v !== "") XT.set(msSh, i+1, j+1, v); }));
   msSh.freeze = "C5";
   const btSh = tejPlainSheet(bk, "BILL TRACK", [6,22,13,16,10,8,10,8,10,8,10,8,34]);
@@ -10066,6 +10232,54 @@ const CHK_FORMS = [
 ];
 const CHK_DECL = "We hereby certify that the PNG installation at the above premises has been executed, pressure tested, purged, and commissioned strictly as per CGD / GAIL technical guidelines and safety standards. The consumer has been briefed on safety instructions.";
 const CHK_TOTAL = CHK_FORMS.reduce((n,f)=>n+f.rows.length, 0);
+/* v59: the 7 SOP forms in easy words with symbols (screen); the PDF keeps the official English line and prints the easy
+   line under it (symbols left out — the PDF font has none). Same order as CHK_FORMS. */
+const CHK_EASY = {
+  f1:{t:"📍 Form 1: Site dekhna (survey) — line kahan se aayegi", c:["✅ Kya dekhna hai", "👍 Sahi kya hai"], r:[
+    ["🔌 TF (tapping point)", "Main MDPE line ghar ke paas ho (30 m ke andar) aur wahan aasani se pahunch sakein"],
+    ["📟 Meter ki jagah", "Hawadaar jagah ho; bijli ke DB box aur garam cheezon (chulha, geyser) se door"],
+    ["🧱 GI pipe ka rasta", "Seedhi deewar par; band ya khatarnak jagah se pipe na jaye"],
+    ["🍳 Chulha / geyser", "Kitchen hawadaar ho (khidki / exhaust)"]]},
+  f2:{t:"🦺 Form 2: Kaam ki permission aur safety (PTW + TBT)", c:["📋 Permission / safety", "👍 Kya pakka kiya"], r:[
+    ["⛏️ Khudai ka permit", "Pehle trial pit; zameen ke neeche ki bijli / paani / gas line mark kar di"],
+    ["🔧 GI / clamp ka kaam", "Sahi tools; seedhi (ladder) / scaffolding mazboot aur safe"],
+    ["🔥 EF jointing (garam kaam)", "Aag bujhane wala cylinder site par; certified EF welder maujood"],
+    ["🗣️ Toolbox talk", "Kaam se pehle sabko khatre samjhaye; sabne PPE pehna — ⛑️ helmet, 🥾 joote, 🧤 gloves"]]},
+  f3:{t:"🛣️ Form 3: TF (tapping) aur MDPE pipe bichhana", c:["🔍 Kya check karna hai", "👍 Sahi kya hai (standard)"], r:[
+    ["📏 Main MDPE line", "63 mm / 32 mm, SDR-11, PE100 grade pipe"],
+    ["🔩 Tapping saddle (TF)", "Electrofusion saddle 63x20 / 32x20 mm laga"],
+    ["⚡ EF joint", "Barcode se fusion; pipe scrape kiya; thanda hone ka poora time diya"],
+    ["🕳️ Khudai ki gehrai", "Kam se kam 1 m mitti upar; pipe ke neeche aur upar naram ret (sand)"],
+    ["🟨 Warning tape", "Peeli warning tape pipe se 300 mm upar bichhayi"]]},
+  f4:{t:"🏠 Form 4: GI pipe aur meter lagana", c:["🔍 Kya check karna hai", "👍 Sahi kya hai (standard)"], r:[
+    ["🔧 GI pipe aur chudi (thread)", "½\" / ¾\" heavy C-class pipe; har joint par teflon"],
+    ["🔴 Isolation valve", "½\" / ¾\" brass ball valve, peela handle"],
+    ["⚙️ Regulator", "4 bar se 21 mbar wala regulator laga"],
+    ["📟 Gas meter", "G-1.6 / G-2.5 meter mazboot bracket par"],
+    ["📎 Clamp aur sleeve", "Har 1 m par clamp; deewar ke aar-paar PVC sleeve"]]},
+  f5:{t:"🧪 Form 5: Pressure test — leak to nahi?", c:["🧪 Kaun si line", "💨 Kis se, kitna pressure", "⏱️ Kitni der"], r:[
+    ["🛣️ MDPE (zameen ke neeche)", "Hawa / N2, 6 bar — pressure bilkul na gire (0 drop)", "2 ghante"],
+    ["🏠 GI + meter line", "Hawa, 2.1 bar — 0 drop", "30 minute"],
+    ["🍳 Chulhe tak ki line", "Hawa, 100 mbar — 0 drop", "15 minute"]]},
+  f6:{t:"🔥 Form 6: Chulha conversion aur purging (LPG se PNG)", c:["🔍 Kya karna hai", "👍 Kaise karna hai"], r:[
+    ["💨 Purging", "Line se saari hawa nikalo jab tak sirf NG aaye (dhyan se, safely)"],
+    ["🔁 Jet badalna", "LPG jet hata kar PNG nozzle lagao (100 / 110 / 150)"],
+    ["🟠 Suraksha hose", "1.5 m Suraksha hose, dono taraf SS clip se kasa"],
+    ["🔵 Lau aur leak test", "Neeli lau stable; sabun ke ghol se leak test — koi leak nahi"]]},
+  f7:{t:"✅ Form 7: Joint inspection (JIR) aur customer ko saunpna", c:["📦 Kya laga hai", "📐 Size / spec"], r:[
+    ["🛣️ MDPE pipe", "SDR-11, 20 mm / 32 mm"],
+    ["🔧 GI pipe", "½\" / ¾\" heavy C-class"],
+    ["🔴 Ball valve", "½\" / ¾\" brass"],
+    ["⚙️ Regulator", "4 bar se 21 mbar"],
+    ["📟 Gas meter", "G-1.6 ghar wala meter"],
+    ["🟠 Suraksha hose", "1.5 m, wire wala hose + clamp"]]},
+};
+const CHK_DECL_EASY = "✍️ Hum likh kar dete hain: PNG ka kaam CGD / GAIL ke niyam se poora kiya — pressure test, purging aur gas chalu (commissioning) ho gaya, aur customer ko safety ki baatein samjha di.";
+const CHK_TIPS = "✅ YES = theek hai • ❌ NO = theek nahi (remark me likhein kya kami hai) • har line ke neeche chhota likha official English hai";
+// the PDF font has no emoji / arrows: keep letters, digits, ½ ¾ and plain punctuation
+const chkPdfSafe = s=>String(s||"").replace(/\u2192/g, "->").replace(/[^\u0020-\u007E\u00A0-\u00FF]/g, "").replace(/\s{2,}/g, " ").trim();
+let chkPdfEasy = true;            // print the easy line in the PDF too
+
 let chkState = {cid:null, d:null};
 // Form 7 "Remarks / Qty": the quantities the master sheet already has (only where the box is still empty)
 function chkQtyHints(c){
@@ -10124,18 +10338,22 @@ function chkRender(){
         ${hin("phone","Contact No")}${hin("date","Inspection Date","date")}
         <div class="col-span-2"><label class="ff-label">Contractor Agency</label><input class="ff-input text-xs" value="${wzEsc(h.agency||"")}" oninput="chkState.d.hdr.agency=this.value"></div>
       </div>
-      ${CHK_FORMS.map(f=>`<div class="bg-white rounded-lg shadow mb-3 overflow-hidden">
-        <div class="bg-[#1b365d] text-white px-3 py-2 flex justify-between items-center"><p class="text-xs font-bold">${f.title}</p><p class="text-[9px] text-blue-100 whitespace-nowrap ml-2">${f.doc}</p></div>
+      <p class="text-[11px] bg-blue-50 text-blue-900 rounded p-2 mb-3">${CHK_TIPS}</p>
+      ${CHK_FORMS.map(f=>{ const E = CHK_EASY[f.id] || {r:[]}; return `<div class="bg-white rounded-lg shadow mb-3 overflow-hidden">
+        <div class="bg-[#1b365d] text-white px-3 py-2"><div class="flex justify-between items-center"><p class="text-sm font-bold">${wzEsc(E.t || f.title)}</p><p class="text-[9px] text-blue-100 whitespace-nowrap ml-2">${f.doc}</p></div>
+          <p class="text-[9px] text-blue-200">${wzEsc(f.title)}</p></div>
         <div class="p-2">${chkHintLine(c, f.id)}
-          ${f.rows.map((r,i)=>{ const key = `${f.id}_${i+1}`; return `<div class="border-b border-gray-100 py-2">
-            <p class="text-xs font-bold text-gray-800">${i+1}. ${wzEsc(r[0])}</p>
-            <p class="text-[11px] text-gray-500 mb-1">${wzEsc(r[1])}${r[2] ? ` • <b>${wzEsc(r[2])}</b>` : ""}</p>
+          ${f.rows.map((r,i)=>{ const key = `${f.id}_${i+1}`, e = E.r[i] || []; return `<div class="border-b border-gray-100 py-2">
+            <p class="text-[13px] font-bold text-gray-800">${i+1}. ${wzEsc(e[0] || r[0])}</p>
+            <p class="text-[12px] text-gray-700">👍 ${wzEsc(e[1] || r[1])}${(e[2] || r[2]) ? ` • ⏱️ <b>${wzEsc(e[2] || r[2])}</b>` : ""}</p>
+            <p class="text-[9px] text-gray-400 italic mb-1">${wzEsc(r[0])} — ${wzEsc(r[1])}${r[2] ? " • " + wzEsc(r[2]) : ""}</p>
             <div class="flex items-center gap-2">${yn(key, d.v[key])}<input class="ff-input text-xs flex-1" placeholder="${wzEsc(f.rem)}" value="${wzEsc(d.r[key]||"")}" oninput="chkState.d.r['${key}']=this.value"></div>
           </div>`; }).join("")}
-          ${f.id==="f7" ? `<p class="text-[11px] text-gray-600 my-2"><b>JOINT DECLARATION:</b> ${CHK_DECL}</p>
+          ${f.id==="f7" ? `<p class="text-[12px] text-gray-800 my-2">${CHK_DECL_EASY}</p><p class="text-[10px] text-gray-500 mb-2"><b>JOINT DECLARATION:</b> ${CHK_DECL}</p>
             <div class="grid grid-cols-1 gap-2">${[["cust","Customer / Consumer — Name"],["eng","Contractor Site Engineer — Name"],["qa","CGD / GAIL QA Inspector — Name"]].map(([k,l])=>`<div><label class="ff-label">${l}</label><input class="ff-input text-xs" value="${wzEsc(d.sig[k]||"")}" oninput="chkState.d.sig['${k}']=this.value"></div>`).join("")}</div>
             <p class="text-[10px] text-gray-400 mt-1">Signature & date PDF print karke hath se karein.</p>` : ""}
-        </div></div>`).join("")}
+        </div></div>`; }).join("")}
+      <label class="flex items-center gap-2 text-[11px] bg-white rounded-lg shadow p-2 mb-3"><input type="checkbox" ${chkPdfEasy ? "checked" : ""} onchange="chkPdfEasy=this.checked"> PDF me har line ke neeche aasaan Hinglish line bhi chhapein</label>
       <div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #e5e7eb;padding:10px;display:flex;gap:8px;z-index:71">
         <button onclick="chkSave()" class="flex-1 bg-[#0D904F] text-white font-bold py-3 rounded-lg">💾 Save</button>
         <button onclick="chkPdfDownload()" class="flex-1 bg-[#1b365d] text-white font-bold py-3 rounded-lg">⬇ PDF</button>
@@ -10191,8 +10409,10 @@ function chkPdfBuild(d){
     const ws = hasDur ? [9, 33, 44, 18, 19, 19] : [9, 39, 55, 0, 19, 19]; ws.push(W - ws.reduce((a,b)=>a+b,0));
     const xs = []; let xx = L; ws.forEach(w=>{ xs.push(xx); xx += w; });
     const heads = ["S.N.", f.cols[0], f.cols[1], hasDur ? f.cols[2] : "", "YES", "NO", f.rem];
+    const EZ = CHK_EASY[f.id] || {r:[]}, ez = (i, j)=>chkPdfEasy ? chkPdfSafe((EZ.r[i]||[])[j]) : "";
     const rowsH = f.rows.map((r,i)=>{ const key = `${f.id}_${i+1}`;
-      const n = Math.max(wrap(r[0], ws[1]-3, 7.6).length, wrap(r[1], ws[2]-3, 7.6).length, wrap((d.r||{})[key], ws[6]-3, 7).length, 1);
+      const n = Math.max(wrap(r[0], ws[1]-3, 7.6).length + (ez(i,0) ? wrap(ez(i,0), ws[1]-3, 6.4).length*0.85 : 0), wrap(r[1], ws[2]-3, 7.6).length + (ez(i,1) ? wrap(ez(i,1), ws[2]-3, 6.4).length*0.85 : 0),
+        hasDur ? wrap(r[2], ws[3]-3, 7.6).length + (ez(i,2) ? wrap(ez(i,2), ws[3]-3, 6.4).length*0.85 : 0) : 0, wrap((d.r||{})[key], ws[6]-3, 7).length, 1);
       return Math.max(8.6, n * 3.3 + 3.2); });
     const headH = Math.max(...heads.map((s,j)=>ws[j] ? wrap(s, ws[j]-3, 7.6).length : 1)) * 3.3 + 3.6;
     let need = 8 + 2 + headH + rowsH.reduce((a,b)=>a+b,0) + 5;
@@ -10209,10 +10429,13 @@ function chkPdfBuild(d){
     f.rows.forEach((r,i)=>{
       const key = `${f.id}_${i+1}`, rh = rowsH[i], v = (d.v||{})[key], mid = y + rh/2;
       pdf.rect(L, y, W, rh); ws.forEach((w,j)=>{ if(j && w) pdf.line(xs[j], y, xs[j], y + rh); });
-      const cell = (s, j, size, bold)=>{ const lines = wrap(s, ws[j]-3, size); pdf.setFont("helvetica", bold ? "bold" : "normal"); col(INK, "setTextColor");
-        lines.forEach((ln,k)=>pdf.text(ln, xs[j] + 1.6, mid - (lines.length-1)*1.65 + 1.1 + k*3.3)); };
+      const cell = (s, j, size, bold, easy)=>{ const lines = wrap(s, ws[j]-3, size), el = easy ? wrap(easy, ws[j]-3, 6.4) : [];
+        const tot = lines.length*3.3 + el.length*2.8, top = mid - tot/2 + 2.4;
+        pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); col(INK, "setTextColor");
+        lines.forEach((ln,k)=>pdf.text(ln, xs[j] + 1.6, top + k*3.3));
+        if(el.length){ pdf.setFont("helvetica", "italic"); pdf.setFontSize(6.4); col(GREY, "setTextColor"); el.forEach((ln,k)=>pdf.text(ln, xs[j] + 1.6, top + lines.length*3.3 + k*2.8)); pdf.setFontSize(size); col(INK, "setTextColor"); } };
       txt(String(i+1), xs[0] + ws[0]/2, mid + 1.1, 7.6, false, INK, {align:"center"});
-      cell(r[0], 1, 7.6); cell(r[1], 2, 7.6); if(hasDur) cell(r[2], 3, 7.6);
+      cell(r[0], 1, 7.6, false, ez(i,0)); cell(r[1], 2, 7.6, false, ez(i,1)); if(hasDur) cell(r[2], 3, 7.6, false, ez(i,2));
       box(xs[4] + ws[4]/2, mid, v==="YES"); box(xs[5] + ws[5]/2, mid, v==="NO");
       cell((d.r||{})[key] || "", 6, 7);
       col(LINE, "setDrawColor"); pdf.setLineWidth(0.25);
@@ -11573,6 +11796,7 @@ function dataStop(){
 function dataReset(){   // nothing the last user saw stays in memory on this phone
   allUsers = []; inventory = []; issues = []; consumption = []; submissions = []; customers = []; attendance = []; safetyChecks = []; raBills = [];
   leads = []; custFeedbacks = []; portalRequests = []; staffDir = {}; custExtra = {}; lookupCache = {}; safetyHist = {}; layingRows = [];
+  delReqs = []; custHidden = []; devDel = []; delBusy = {}; custUi = {tab:"", add:false, open:{}, more:{}, show:40, filterOpen:false, allotOpen:false}; scopeUiState = {}; scopeOpenId = null;
   secUi = {busy:false, fresh:true, results:null, check:null, msg:"", sub:false, loadErr:""};      // new passwords of the last setup: gone at logout
   try{ Object.keys(mediaCache).forEach(k=>delete mediaCache[k]); }catch(e){}
 }
@@ -11615,7 +11839,8 @@ function custRebuild(quiet){
   const m = {};
   Object.keys(custExtra).forEach(id=>{ m[id] = custExtra[id]; });
   Object.values(custSrc).forEach(src=>Object.keys(src).forEach(id=>{ m[id] = src[id]; delete custExtra[id]; }));
-  customers = Object.keys(m).sort().map(id=>({...m[id], id}));
+  const all = Object.keys(m).sort().map(id=>({...m[id], id}));
+  customers = all.filter(c=>!c.deleteReq); custHidden = all.filter(c=>c.deleteReq);     // waiting for the developer's delete decision: out of every list
   if(currentUser && currentUser.role==="admin") adminReconcileSoon();
   if(!quiet) renderSoon();
 }
@@ -11663,6 +11888,7 @@ async function dataStart(){
     listen(C("leads"), into(l=>{ leads = l; }), "leads");
     listen(C("custFeedback"), into(l=>{ custFeedbacks = l; }), "custFeedback");
     listen(C("portalRequests"), into(l=>{ portalRequests = l; }), "portalRequests");
+    listen(C("deleteRequests"), into(l=>{ delReqs = l; delReqRunSoon(); }), "deleteRequests");
     safetyListen(()=>C("safety_checks").where("date","==",todayISO()));
   } else if(role==="technician"){
     custListen("asg", cust().where("assignedTechnician","==",me));
@@ -11872,6 +12098,188 @@ async function portalSync(c){
   await rawDb.doc("customers/" + c.id).update({portalKeys:keys, portalSig:sig});
   if(custExtra[c.id]) custExtra[c.id] = {...custExtra[c.id], portalKeys:keys, portalSig:sig};
 }
+/* ---------- v59: deleting a customer — the admin asks (the customer leaves every list at once), the developer checks and
+   approves; then the admin's app removes the customer from every record: forms, the material they used, photos / videos,
+   the status page, feedback, the QR lead. Store issues keep their stock entry (only the job tag goes). A customer already
+   in a bill sent to GAIL cannot be deleted. The developer sees only the request's snapshot, never the customer data. ---------- */
+let delReqs = [];                 // deleteRequests (admin: all; developer: all)
+let custHidden = [];              // customers waiting for the developer's decision (hidden from every list)
+let delUi = {cid:null, bar:false};
+const DEL_REASONS = ["Duplicate entry (do baar bana)", "Galat entry / galat details", "Customer ne connection se mana kiya", "Test / demo entry", "Other (note me likhein)"];
+const DEL_STATUS = {pending:"⏳ Developer ke paas", approved:"✅ Approve — delete ho raha hai", deleting:"🗑 Delete ho raha hai", deleted:"🗑 Delete ho gaya", rejected:"❌ Developer ne mana kiya", cancelled:"↩ Wapas le liya"};
+function delLinks(c){
+  const subs = submissions.filter(x=>x.customerId===c.id), sid = new Set(subs.map(x=>x.id));
+  return {forms:subs.length, material:consumption.filter(x=>sid.has(x.submissionId)).length, photos:Object.keys(c.media||{}).length,
+    feedback:custFeedbacks.filter(x=>x.cid===c.id).length, leads:leads.filter(x=>x.customerId===c.id).length, issues:issues.filter(x=>x.customerId===c.id).length, statusPage:(c.portalKeys||[]).length};
+}
+function delDupes(c){
+  const p = phone10(c.phone), out = [];
+  customers.forEach(x=>{ if(x.id===c.id) return; const why = [];
+    if(/^\d{10}$/.test(p) && phone10(x.phone)===p) why.push("phone");
+    if(String(c.bpNo||"").trim() && String(x.bpNo||"").trim()===String(c.bpNo).trim()) why.push("BP");
+    if(String(c.meterSerialNumber||"").trim() && String(x.meterSerialNumber||"").trim()===String(c.meterSerialNumber).trim()) why.push("meter");
+    if(why.length) out.push({sn:x.sn||"", name:x.name||"", area:x.area||"", why:why.join(" + ")}); });
+  return out.slice(0, 6);
+}
+function delBilled(c){ const sent = new Set(raBills.filter(b=>b.status==="submitted").map(b=>b.no)); return [...new Set((c.billed||[]).map(e=>e.b).filter(b=>sent.has(b)))]; }
+const delLinkTxt = L=>[["forms","forms"],["material","material entries"],["photos","photos / videos"],["feedback","feedback"],["leads","QR lead"],["statusPage","status page"],["issues","store issue tag"]]
+  .filter(([k])=>L && L[k]).map(([k, t])=>`${L[k]} ${t}`).join(" • ") || "sirf customer entry";
+// ---- admin: the request ----
+function delReqOpen(cid){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const c = customers.find(x=>x.id===cid); if(!c) return;
+  const billed = delBilled(c);
+  if(billed.length){ alert(`Ye customer ${billed.join(", ")} bill me GAIL ko ja chuka hai — iska delete nahi ho sakta.`); return; }
+  delUi.cid = cid;
+  let ov = document.getElementById("delOverlay");
+  if(!ov){ ov = document.createElement("div"); ov.id = "delOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55);overflow-y:auto;padding:16px;";
+  const dup = delDupes(c);
+  ov.innerHTML = `<div class="bg-white rounded-xl p-4 max-w-md mx-auto">
+    <p class="font-bold text-red-700">🗑 Customer delete karne ki request</p>
+    <p class="text-sm font-bold mt-2">${wzEsc(c.sn||"")} • ${wzEsc(c.name||"")} <span class="font-normal text-gray-500">• ${wzEsc(c.area||"")}</span></p>
+    <p class="text-[11px] text-gray-500">BP ${wzEsc(c.bpNo||"—")} • Meter ${wzEsc(c.meterSerialNumber||"—")} • 📞 ${wzEsc(c.phone||"—")}</p>
+    <p class="text-[11px] mt-2 bg-gray-50 rounded p-2">Saath me hatega: ${wzEsc(delLinkTxt(delLinks(c)))}</p>
+    ${dup.length ? `<p class="text-[11px] mt-2 bg-yellow-50 text-yellow-900 rounded p-2">👥 Isi jaise: ${dup.map(d=>`${wzEsc(d.sn)} ${wzEsc(d.name)} (${wzEsc(d.why)})`).join(", ")}</p>` : ""}
+    <label class="ff-label mt-2">Kyun delete karna hai?</label>
+    <select id="delReason" class="ff-input text-sm"><option value="">— chuniye —</option>${DEL_REASONS.map(r=>`<option>${wzEsc(r)}</option>`).join("")}</select>
+    <textarea id="delNote" class="ff-input text-sm mt-2" rows="2" placeholder="Note (developer ko dikhega)"></textarea>
+    <p class="text-[11px] text-gray-500 mt-2">Request jaate hi ye customer admin ki list se hat jayega. Developer approve karega to har jagah se delete; mana karega to wapas aa jayega.</p>
+    <div class="flex gap-2 mt-3"><button onclick="delReqClose()" class="flex-1 bg-gray-100 font-bold py-2.5 rounded-lg text-sm">Cancel</button>
+      <button onclick="delReqSend('${c.id}')" class="flex-1 bg-red-600 text-white font-bold py-2.5 rounded-lg text-sm">Developer ko bhejein</button></div>
+  </div>`;
+}
+function delReqClose(){ const ov = document.getElementById("delOverlay"); if(ov) ov.remove(); delUi.cid = null; }
+async function delReqSend(cid){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const c = customers.find(x=>x.id===cid); if(!c) return;
+  const billed = delBilled(c);
+  if(billed.length){ alert(`Ye customer ${billed.join(", ")} bill me GAIL ko ja chuka hai — iska delete nahi ho sakta.`); return; }
+  const reason = ((document.getElementById("delReason")||{}).value || "").trim(), note = ((document.getElementById("delNote")||{}).value || "").trim();
+  if(!reason){ alert("Delete ki wajah chuniye."); return; }
+  if(/^Other/.test(reason) && !note){ alert("Note me wajah likhiye."); return; }
+  const s = stageLive(c), now = new Date().toISOString();
+  const rec = {cid, sn:c.sn||"", name:c.name||"", father:c.fatherHusbandName||"", area:c.area||"", bp:String(c.bpNo||""), meter:String(c.meterSerialNumber||""), phone:String(c.phone||""),
+    stages:{SL:!!(s.SL || s.already), GI:!!s.GI, NG:!!(s.NG || s.gasIn), REST:!!s.REST}, links:delLinks(c), dupes:delDupes(c),
+    reason, note, by:currentUser.username, byName:currentUser.name || currentUser.username, at:now, status:"pending"};
+  const mark = {deleteReq:{at:now, by:currentUser.username, reason}};
+  if(db){
+    try{ await rawDb.doc("deleteRequests/" + cid).set(rec); await db.doc("customers/" + cid).update(mark); }
+    catch(e){ console.error(e); alert("Request nahi gayi — internet check karke dobara try karein."); return; }
+  } else { Object.assign(c, mark); delReqs = [...delReqs.filter(x=>x.id!==cid), {id:cid, ...rec}]; customers = customers.filter(x=>x.id!==cid); custHidden.push(c); }
+  delReqClose();
+  showToast("🗑 Request developer ko gayi — customer list se hat gaya.");
+  renderMain();
+}
+async function delReqCancel(cid){
+  const r = delReqs.find(x=>x.id===cid); if(!r || r.status!=="pending") return;
+  if(!confirm(`${r.name} ki delete request wapas lein? Customer list me wapas aa jayega.`)) return;
+  try{ await rawDb.doc("deleteRequests/" + cid).update({status:"cancelled", cancelledAt:new Date().toISOString(), cancelledBy:currentUser.username}); await db.doc("customers/" + cid).update({deleteReq:null}); }
+  catch(e){ console.error(e); alert("Nahi ho paya — dobara try karein."); return; }
+  showToast("↩ Request wapas — customer list me aa gaya.");
+}
+async function delReqSeen(cid){
+  try{ await rawDb.doc("deleteRequests/" + cid).update({adminSeen:true}); }catch(e){ console.error(e); }
+}
+function delReqShown(){ return delReqs.filter(r=>!r.adminSeen && r.status!=="cancelled").sort((a,b)=>String(b.at||"").localeCompare(String(a.at||""))); }
+function renderDelReqBar(){
+  const list = delReqShown(); if(!list.length) return "";
+  const pend = list.filter(r=>["pending","approved","deleting"].includes(r.status)).length;
+  return `<details class="bg-red-50 border border-red-200 rounded-lg p-2 mb-2" ${delUi.bar || list.length > pend ? "open" : ""} ontoggle="delUi.bar=this.open">
+    <summary class="text-xs font-bold text-red-800">🗑 Delete requests: ${pend} developer ke paas${list.length > pend ? ` • ${list.length - pend} jawab aaye` : ""}</summary>
+    <div class="space-y-1 mt-2">${list.map(r=>`<div class="bg-white rounded p-2 text-[11px]">
+      <div class="flex justify-between gap-2"><b>${wzEsc(r.sn||"")} ${wzEsc(r.name||"")}</b><span>${DEL_STATUS[r.status]||r.status}</span></div>
+      <p class="text-gray-500">${wzEsc(r.reason||"")}${r.note ? " — " + wzEsc(r.note) : ""} • ${fpDate(String(r.at||"").slice(0,10))}</p>
+      ${r.devNote ? `<p class="text-gray-700">Developer: ${wzEsc(r.devNote)}</p>` : ""}
+      ${r.status==="deleted" && r.removed ? `<p class="text-gray-500">Hataya: ${wzEsc(delLinkTxt(r.removed))}</p>` : ""}
+      ${r.status==="pending" ? `<button onclick="delReqCancel('${r.id}')" class="text-[#8430CE] font-bold mt-1">↩ Request wapas lein</button>` : ""}
+      ${["rejected","deleted"].includes(r.status) ? `<button onclick="delReqSeen('${r.id}')" class="text-[#0D904F] font-bold mt-1">✓ OK</button>` : ""}
+    </div>`).join("")}</div></details>`;
+}
+// ---- admin's app: carry out the developer's decision ----
+let delBusy = {};
+function delReqRunSoon(){ setTimeout(()=>{ delReqRun().catch(e=>console.error("delete", e)); }, 30); }
+async function delReqRun(){
+  if(!currentUser || currentUser.role!=="admin" || !db || !rawDb) return;
+  for(const r of delReqs){
+    if(delBusy[r.id]) continue;
+    const stale = r.status==="deleting" && (Date.now() - Date.parse(r.startedAt||0)) > 10*60*1000;        // another app stopped half-way
+    if(r.status==="approved" || stale){ delBusy[r.id] = true; try{ await custPurge(r); }catch(e){ console.error("purge", e); } continue; }
+    if(r.status==="rejected" && custHidden.some(c=>c.id===r.id)){                          // back in the lists
+      delBusy[r.id] = true; try{ await db.doc("customers/" + r.id).update({deleteReq:null}); }catch(e){ console.error(e); } delete delBusy[r.id];
+    }
+  }
+}
+async function custPurge(r){
+  const cid = r.cid || r.id, ref = rawDb.doc("deleteRequests/" + cid), now = ()=>new Date().toISOString();
+  await ref.update({status:"deleting", startedAt:now(), doneBy:currentUser.username});
+  const n = {customers:0, forms:0, material:0, photos:0, statusPage:0, feedback:0, leads:0, issues:0};
+  const del = async path=>{ try{ await rawDb.doc(path).delete(); return 1; }catch(e){ console.error(e); return 0; } };
+  const find = async (colName, field, value, local)=>{ try{ return docsOf(await rawDb.collection(colName).where(field, "==", value).get()); }catch(e){ console.error(e); return local(); } };
+  let c = null; try{ const s = await rawDb.doc("customers/" + cid).get(); c = s && s.exists ? {id:cid, ...s.data()} : null; }catch(e){ console.error(e); }
+  // forms + the material each form recorded
+  const subs = await find("submissions", "customerId", cid, ()=>submissions.filter(x=>x.customerId===cid));
+  for(const sb of subs){
+    const cons = await find("consumption", "submissionId", sb.id, ()=>consumption.filter(x=>x.submissionId===sb.id));
+    for(const x of cons) n.material += await del("consumption/" + x.id);
+    n.forms += await del("submissions/" + sb.id);
+  }
+  if(c){
+    for(const k of Object.keys(c.media||{})){ const m = c.media[k]; if(!m || !m.ver || !m.n) continue; let ok = 0; for(let i=0;i<m.n;i++) ok += await del(`media/${cid}__${k}__${m.ver}__${i}`); if(ok) n.photos++; }
+    for(const k of (c.portalKeys||[])){ try{ await portalDocEdit(k, cid, null); n.statusPage++; }catch(e){ console.error(e); } }
+  }
+  for(const x of await find("custFeedback", "cid", cid, ()=>custFeedbacks.filter(f=>f.cid===cid))) n.feedback += await del("custFeedback/" + x.id);
+  for(const x of await find("leads", "customerId", cid, ()=>leads.filter(l=>l.customerId===cid))) n.leads += await del("leads/" + x.id);
+  for(const x of await find("issues", "customerId", cid, ()=>issues.filter(i=>i.customerId===cid))){
+    try{ await rawDb.doc("issues/" + x.id).update({customerId:null, customerName:"", bpNo:"", sn:null, jobNote:`customer delete hua (S.No ${r.sn||""} ${r.name||""})`}); n.issues++; }catch(e){ console.error(e); }
+  }
+  n.customers = c ? await del("customers/" + cid) : 0;
+  await ref.update({status:"deleted", doneAt:now(), doneBy:currentUser.username, removed:n});
+  delete delBusy[cid];
+  showToast(`🗑 ${r.name||"Customer"} har jagah se delete ho gaya.`);
+}
+// ---- the developer: approve / reject ----
+let devDel = [], devDelErr = "";
+function devDelListen(){
+  if(!rawDb) return;
+  try{
+    const u = rawDb.collection("deleteRequests").onSnapshot(snap=>{ devDelErr = ""; devDel = docsOf(snap).sort((a,b)=>String(b.at||"").localeCompare(String(a.at||""))); renderSoon(); },
+      e=>{ devDelErr = (e && e.code) || "error"; console.warn("deleteRequests", e); renderSoon(); });
+    if(typeof u==="function") dataSubs.push(u);
+  }catch(e){ devDelErr = "error"; }
+}
+const devDelPending = ()=>devDel.filter(r=>r.status==="pending");
+function renderDevDelete(){
+  const pend = devDelPending(), done = devDel.filter(r=>r.status!=="pending").slice(0, 25);
+  const card = r=>{ const L = r.links || {}, st = r.stages || {}, tick = b=>b ? "✅" : "⏳";
+    return `<div class="bg-white rounded-lg shadow p-3 mb-2 ${r.status==="pending" ? "border-l-4 border-red-500" : ""}">
+      <div class="flex justify-between gap-2"><p class="font-bold text-sm">${wzEsc(r.sn||"")} • ${wzEsc(r.name||"")}</p><span class="text-[11px]">${DEL_STATUS[r.status]||wzEsc(r.status||"")}</span></div>
+      <p class="text-[11px] text-gray-600">${r.father ? "S/o, W/o " + wzEsc(r.father) + " • " : ""}${wzEsc(r.area||"")} • BP ${wzEsc(r.bp||"—")} • Meter ${wzEsc(r.meter||"—")} • 📞 ${wzEsc(r.phone||"—")}</p>
+      <p class="text-[11px] mt-1">${tick(st.SL)} SL ${tick(st.GI)} GI ${tick(st.NG)} NG ${tick(st.REST)} Restoration</p>
+      <p class="text-[11px] mt-1 bg-gray-50 rounded px-2 py-1">Saath me hatega: ${wzEsc(delLinkTxt(L))}</p>
+      ${(r.dupes||[]).length ? `<p class="text-[11px] mt-1 bg-yellow-50 text-yellow-900 rounded px-2 py-1">👥 Isi jaise: ${r.dupes.map(d=>`${wzEsc(d.sn)} ${wzEsc(d.name)} — ${wzEsc(d.area)} (${wzEsc(d.why)})`).join("; ")}</p>` : ""}
+      <p class="text-[11px] mt-1"><b>Wajah:</b> ${wzEsc(r.reason||"")}${r.note ? " — " + wzEsc(r.note) : ""}</p>
+      <p class="text-[10px] text-gray-400">${wzEsc(r.byName||r.by||"")} • ${r.at ? fpDate(String(r.at).slice(0,10)) + " " + pgTime(new Date(r.at)) : ""}${r.devNote ? " • aapka note: " + wzEsc(r.devNote) : ""}</p>
+      ${r.status==="deleted" && r.removed ? `<p class="text-[11px] text-gray-600 mt-1">Hataya: ${wzEsc(delLinkTxt(r.removed))}</p>` : ""}
+      ${r.status==="pending" ? `<div class="flex gap-2 mt-2"><button onclick="devDelDecide('${r.id}', false)" class="flex-1 bg-gray-100 text-gray-800 text-xs font-bold py-2 rounded">❌ Mana karein</button>
+        <button onclick="devDelDecide('${r.id}', true)" class="flex-1 bg-red-600 text-white text-xs font-bold py-2 rounded">✅ Approve — delete</button></div>` : ""}
+    </div>`; };
+  return `<h2 class="font-bold text-gray-800 mb-1">🗑 Customer delete — approval</h2>
+    <p class="text-[11px] text-gray-500 mb-2">Admin ne jo customer delete karne ko bheje. Approve karte hi admin ke app me us customer ki har entry (forms, photos, material, feedback, status page) hat jayegi — wapas nahi aayegi. Aapko sirf ye details dikhti hain, baaki customer data nahi.</p>
+    ${devDelErr ? `<p class="text-[11px] bg-orange-50 text-orange-700 rounded p-2 mb-2">Requests nahi aa rahi (${wzEsc(devDelErr)}) — 🔒 Security → Step 3 ke naye rules Firebase console mein publish kijiye.</p>` : ""}
+    <p class="text-xs font-bold text-gray-700 mb-1">Approval baaki (${pend.length})</p>
+    ${pend.map(card).join("") || `<p class="text-[11px] text-gray-400 mb-3">Koi request nahi.</p>`}
+    ${done.length ? `<p class="text-xs font-bold text-gray-700 mt-3 mb-1">Pichhli requests</p>${done.map(card).join("")}` : ""}`;
+}
+async function devDelDecide(cid, ok){
+  const r = devDel.find(x=>x.id===cid); if(!r || r.status!=="pending") return;
+  let note = "";
+  if(ok){ if(!confirm(`${r.sn} ${r.name} — har jagah se delete approve karein? Ye wapas nahi hoga.`)) return; }
+  else { note = prompt("Mana karne ki wajah (admin ko dikhegi):", ""); if(note===null) return; }
+  try{ await rawDb.doc("deleteRequests/" + cid).update({status: ok ? "approved" : "rejected", decidedBy:"developer", decidedAt:new Date().toISOString(), devNote:String(note||"").trim()}); }
+  catch(e){ console.error(e); alert("Save nahi hua: " + ((e && (e.code || e.message)) || e)); return; }
+  showToast(ok ? "✅ Approve — admin ka app online hote hi customer har jagah se delete ho jayega." : "❌ Request mana kar di — customer admin ki list me wapas.");
+}
 async function portalDocEdit(key, cid, view){
   const ref = rawDb.doc("portal/" + key);
   let d = {}; try{ const s = await ref.get(); if(s && s.exists) d = s.data() || {}; }catch(e){}
@@ -11884,7 +12292,7 @@ async function portalDocEdit(key, cid, view){
 /* ---------- Firestore security rules for the live site (developer → 🔒 Security setup → copy → Firebase console) ---------- */
 const SECURE_RULES = `rules_version = '2';
 // PNG Enterprise (M/S TEJASAV) - need-to-know access. Admin: everything. Others: only their own work.
-// Developer: the problem chat + the Security setup console (employee login records) - no customers, bills or stock.
+// Developer: the problem chat + the Security setup console (employee login records) + customer delete approvals - no customers, bills or stock.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
@@ -11996,6 +12404,14 @@ service cloud.firestore {
       allow read: if isStaff() && resource.data.threadId == me();
       allow create: if isStaff() && request.resource.data.threadId == me() && request.resource.data.from == 'user';
       allow update: if isStaff() && resource.data.threadId == me() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readByUser']);
+    }
+    // customer delete requests: the admin asks (with a snapshot of the customer), the developer approves or rejects;
+    // the admin's app then removes the customer's records (the developer never reads the customer data itself)
+    match /deleteRequests/{cid} {
+      allow read: if isDevOwner();
+      allow update: if isDevOwner() && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedBy', 'decidedAt', 'devNote'])
+        && request.resource.data.status in ['approved', 'rejected'];
     }
     // public QR form, status-page feedback and PIN requests: anyone may send, only the team reads
     match /leads/{id} {
@@ -12272,7 +12688,7 @@ async function wizGaugeThumb(c, k, imgId){
    no customers, bills or stock.
    Every employee: a 💬 button; topic chips with quick tips (chatbot style); each message carries the app version, screen and the
    last errors on the phone so the developer can find the cause. Each employee reads only his own thread. */
-const APP_VERSION = "v58 · 21.10.2026";
+const APP_VERSION = "v59 · 21.10.2026";
 const DEV_USER = "dev.support";                       // employee usernames are letters + digits only, so no employee can get this one
 // the first password (given to the developer, not in the app — only its salted SHA-256): his first login makes his own account
 const DEV_INIT_SALT = "png-dev-init|v1|";
@@ -12512,6 +12928,7 @@ async function chatMarkRead(){
 /* ---------- the developer's screens: inbox, one thread, settings ---------- */
 function devListen(){
   if(!rawDb) return;
+  devDelListen();
   try{
     const u = rawDb.collection("devChat").onSnapshot(snap=>{ devErr = ""; devAll = docsOf(snap).sort(chatByAt); renderSoon(); if(currentView==="devThread" && devUi.thread) devMarkRead(devUi.thread); },
       e=>{ devErr = (e && e.code) || "error"; console.warn("devChat", e); renderSoon(); });
@@ -12527,7 +12944,7 @@ function devThreads(){
 function renderDevInbox(){
   const all = devThreads(), list = all.filter(t=>devUi.filter==="all" || !t.resolved);
   return `<h2 class="font-bold text-gray-800 mb-1">💬 Problems — inbox</h2>
-    <p class="text-[11px] text-gray-500 mb-2">Har employee ka apna thread; naye message par laal number. Aapko ye messages aur 🔒 Security setup milte hain — customers / bills ka data nahi.</p>
+    <p class="text-[11px] text-gray-500 mb-2">Har employee ka apna thread; naye message par laal number. Aapko ye messages, 🔒 Security setup aur 🗑 customer delete approvals milte hain — customers / bills ka data nahi.</p>
     ${devErr ? `<p class="text-[11px] bg-orange-50 text-orange-700 rounded p-2 mb-2">Messages nahi aa rahe (${wzEsc(devErr)}) — 🔒 Security → Step 3 ke rules Firebase console mein publish kijiye.</p>` : ""}
     <div class="flex gap-2 mb-3"><button onclick="devUi.filter='open'; renderMain()" class="flex-1 text-xs font-bold py-1.5 rounded ${devUi.filter!=="all" ? "bg-[#1a237e] text-white" : "bg-white border"}">Khule (${all.filter(t=>!t.resolved).length})</button>
       <button onclick="devUi.filter='all'; renderMain()" class="flex-1 text-xs font-bold py-1.5 rounded ${devUi.filter==="all" ? "bg-[#1a237e] text-white" : "bg-white border"}">Sab (${all.length})</button></div>
