@@ -151,7 +151,7 @@ const I18N = {
     nav_addcustomer: "Add Customer", nav_mysurveys: "My Surveys",
     nav_inventory: "Inventory", nav_issue: "Issue Material", nav_history: "History",
     nav_overview: "Overview", nav_employees: "Employees", nav_store: "Store", nav_customers_plain: "Customers",
-    nav_newcall: "New Call", nav_mycalls: "My Calls", nav_payout: "Payout",
+    nav_newcall: "New Call", nav_mycalls: "My Calls", nav_payout: "Payout", nav_memo: "Memo", nav_docs: "Docs",
     safety_title: "Safety Kit Verification",
     safety_desc: "Verify your safety kit before starting work — required once after every login.",
     safety_ppe_heading: "Required PPE:",
@@ -242,7 +242,7 @@ const I18N = {
     nav_addcustomer: "कस्टमर जोड़ें", nav_mysurveys: "मेरे सर्वे",
     nav_inventory: "इन्वेंटरी", nav_issue: "मटेरियल जारी करें", nav_history: "हिस्ट्री",
     nav_overview: "ओवरव्यू", nav_employees: "कर्मचारी", nav_store: "स्टोर", nav_customers_plain: "कस्टमर",
-    nav_newcall: "नई कॉल", nav_mycalls: "मेरी कॉल्स", nav_payout: "पेआउट",
+    nav_newcall: "नई कॉल", nav_mycalls: "मेरी कॉल्स", nav_payout: "पेआउट", nav_memo: "मेमो", nav_docs: "डॉक्स",
     safety_title: "सेफ्टी किट वेरिफिकेशन",
     safety_desc: "काम शुरू करने से पहले अपनी सेफ्टी किट वेरिफाई करें — हर लॉगिन के बाद एक बार ज़रूरी है।",
     safety_ppe_heading: "आवश्यक PPE:",
@@ -571,7 +571,7 @@ function doLogout(msg){
   try{ localStorage.removeItem("png_user"); }catch(e){}
   if(typeof clearGaugeReminderTimer === "function") clearGaugeReminderTimer();
   currentUser = null; currentView = null; lastMainView = null;
-  ["mediaAllOverlay","mediaViewOverlay","mediaRecOverlay","formsPdfOverlay","wizardOverlay","workSheetOverlay","chkOverlay","custEditOverlay","loaChkOverlay","raPreviewOverlay","svyOverlay","svyRepOverlay"].forEach(id=>{ const el = document.getElementById(id); if(el && el.remove) el.remove(); });
+  ["mediaAllOverlay","mediaViewOverlay","mediaRecOverlay","formsPdfOverlay","wizardOverlay","workSheetOverlay","chkOverlay","custEditOverlay","loaChkOverlay","raPreviewOverlay","svyOverlay","svyRepOverlay","fdOverlay","fileViewOverlay","delOverlay"].forEach(id=>{ const el = document.getElementById(id); if(el && el.remove) el.remove(); });
   document.getElementById("appScreen").classList.add("hidden");
   document.getElementById("appScreen").classList.remove("flex");
   document.getElementById("loginScreen").classList.remove("hidden");
@@ -847,21 +847,27 @@ function setupBottomNav(){
     nav.innerHTML = `
       <button onclick="setView('inventory')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>${t("nav_inventory")}</button>
       <button onclick="setView('issue')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🚚</span>${t("nav_issue")}</button>
-      <button onclick="setView('history')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📜</span>${t("nav_history")}</button>`;
+      <button onclick="setView('history')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📜</span>${t("nav_history")}</button>
+      <button onclick="setView('petty')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_memo")}</button>
+      <button onclick="setView('docs')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">📂</span>${t("nav_docs")}<span id="navBadge_docs" class="nav-badge hidden"></span></button>`;
     currentView = "inventory";
   } else if(currentUser.role === "technician"){
     title.textContent = t("header_technician");
     nav.innerHTML = `
       <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_customers")}</button>
       <button onclick="setView('stock')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🎒</span>${t("nav_stock")}</button>
-      <button onclick="setView('myjobs')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📋</span>${t("nav_myjobs")}</button>`;
+      <button onclick="setView('myjobs')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📋</span>${t("nav_myjobs")}</button>
+      <button onclick="setView('petty')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_memo")}</button>
+      <button onclick="setView('docs')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">📂</span>${t("nav_docs")}<span id="navBadge_docs" class="nav-badge hidden"></span></button>`;
     currentView = "customers";
   } else if(currentUser.role === "surveyor"){
     title.textContent = t("header_surveyor");
     nav.innerHTML = `
       <button onclick="setView('addCustomer')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">➕</span>${t("nav_addcustomer")}</button>
       <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_customers")}</button>
-      <button onclick="setView('mySurveys')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧭</span>${t("nav_mysurveys")}</button>`;
+      <button onclick="setView('mySurveys')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧭</span>${t("nav_mysurveys")}</button>
+      <button onclick="setView('petty')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_memo")}</button>
+      <button onclick="setView('docs')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">📂</span>${t("nav_docs")}<span id="navBadge_docs" class="nav-badge hidden"></span></button>`;
     currentView = "addCustomer";
   } else if(currentUser.role === "admin"){
     title.textContent = t("header_admin");
@@ -920,9 +926,10 @@ function updateNavBadges(){
   const set = (id, n)=>{ const el = document.getElementById(id); if(!el || !el.classList) return; el.textContent = n > 99 ? "99+" : String(n||""); el.classList.toggle("hidden", !n); };
   if(currentUser.role==="telecaller"){ set("navBadge_leads", leadNewCount()); set("navBadge_tcwork", tcMine().filter(tcNeedsReply).length); set("navBadge_newcall", cfbNewCount()); }
   if(currentUser.role==="developer"){ set("navBadge_dev", devThreads().reduce((n,t)=>n + t.unread, 0)); set("navBadge_devdel", devDelPending().length); }
-  if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount() + svyNewCount() + cfbFwdCount());
+  if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount() + svyNewCount() + cfbFwdCount() + fdNewCount() + pcPendCount());
+  else set("navBadge_docs", fdBackCount());
 }
-const FORM_KEEP_VIEWS = ["addCustomer", "trackA", "storereport", "employees", "security", "inventory", "issue", "devThread", "devSettings", "customers"];
+const FORM_KEEP_VIEWS = ["addCustomer", "trackA", "storereport", "employees", "security", "inventory", "issue", "devThread", "devSettings", "customers", "petty", "docs"];
 let lastMainView = null;
 function formSnap(root){
   const out = {vals:{}, focus:null};
@@ -956,6 +963,8 @@ function renderMainInner(){
 
   if(currentView==="customerDetail"){ el.innerHTML = renderTechCustomerDetail(activeCustomerId); return; }
   if(currentView==="formEntry"){ return; /* rendered by openFormEntry directly */ }
+  if(currentView==="petty"){ el.innerHTML = renderPetty(); return; }      // v60: every login — petty cash daily memo
+  if(currentView==="docs"){ el.innerHTML = renderDocs(); return; }        // v60: every login — form collection
 
   if(currentUser.role === "store"){
     if(currentView==="inventory") el.innerHTML = renderStoreInventory();
@@ -4323,7 +4332,8 @@ function computeTelecallerPayout(username, startDate, endDate){
 function renderTelecallerPayout(){
   const {start, end} = telecallerPayoutFilter;
   const result = computeTelecallerPayout(currentUser.username, start, end);
-  return `<h2 class="font-bold text-gray-800 mb-3">${t("payout_title")}</h2>
+  return `<div class="grid grid-cols-2 gap-2 mb-3"><button onclick="setView('petty')" class="bg-[#8430CE] text-white text-xs font-bold py-2.5 rounded-lg">🧾 Petty cash memo</button><button onclick="setView('docs')" class="bg-[#1a73e8] text-white text-xs font-bold py-2.5 rounded-lg">📂 Form collection${fdBackCount() ? ` <span class="bg-red-600 rounded-full px-1.5">${fdBackCount()}</span>` : ""}</button></div>
+    <h2 class="font-bold text-gray-800 mb-3">${t("payout_title")}</h2>
     <div class="bg-white rounded-lg shadow p-4 mb-4">
       <div class="grid grid-cols-2 gap-2 mb-3">
         <div><label class="ff-label">${t("payout_start_date")}</label><input type="date" id="payoutStart" class="ff-input" value="${start||""}"></div>
@@ -4382,8 +4392,8 @@ function renderAdminCustomers(){
       <div class="mt-2">${renderCustFilterBar({count:flt.length})}</div>
     </details>
     <details class="mb-2" ${custUi.allotOpen ? "open" : ""} ontoggle="custUi.allotOpen=this.open">
-      <summary class="bg-white rounded-lg shadow px-3 py-2 text-xs font-bold text-gray-700">👷 Kaam allot / 📞 telecaller ko dein (filter ke customers)</summary>
-      <div class="mt-2">${renderAllotPanel()}${renderTcAssignPanel()}</div>
+      <summary class="bg-white rounded-lg shadow px-3 py-2 text-xs font-bold text-gray-700">👷 Kaam allot / 🧭 survey / 📞 telecaller ko dein (filter ke customers)</summary>
+      <div class="mt-2">${renderAllotPanel()}${renderSvyAssignPanel()}${renderTcAssignPanel()}</div>
     </details>
     <div class="flex gap-2 mb-2">${tabBtn("pending", "🕓 Pending", pending.length)}${tabBtn("all", "📋 Assigned / Done", others.length)}</div>
     <p class="text-[10px] text-gray-500 mb-1">Customer par tap karein — details, 🔧 kaam / bill, assign, WhatsApp, delete. 🔧 = hamein kaunsa kaam karna hai (📝 = GI sheet ke remark se, final baaki).</p>
@@ -4415,7 +4425,7 @@ function custRow(c, kind){
       <span class="text-[10px] text-gray-400 w-7 text-right shrink-0">${wzEsc(c.sn||"")}</span>
       <span class="flex-1 min-w-0">
         <span class="block text-[13px] font-bold text-gray-800 truncate">${wzEsc(c.name||"—")}<span class="font-normal text-[10px] text-gray-500"> • ${wzEsc(c.area||"")}</span></span>
-        <span class="block text-[10px] text-gray-500 truncate">🔧 ${wzEsc(scopeTagOf(S, c))}${S.src==="remark" ? " 📝" : ""}${tech ? " • 👷 " + wzEsc(tech) : ""}${c.bpNo ? " • BP " + wzEsc(c.bpNo) : ""}${c.source==="qr" ? " • 📥 QR" : ""}</span>
+        <span class="block text-[10px] text-gray-500 truncate">🔧 ${wzEsc(scopeTagOf(S, c))}${S.src==="remark" ? " 📝" : ""}${tech ? " • 👷 " + wzEsc(tech) : ""}${c.surveyAssigned && !c.surveyDoneAt ? " • 🧭 " + wzEsc(techName(c.surveyAssigned)) : ""}${c.bpNo ? " • BP " + wzEsc(c.bpNo) : ""}${c.source==="qr" ? " • 📥 QR" : ""}</span>
       </span>
       <span class="flex gap-0.5 shrink-0">${custStageDots(c)}</span>
       <span class="text-gray-400 text-xs shrink-0">${open ? "▴" : "▾"}</span>
@@ -4445,8 +4455,9 @@ function custDetail(c, kind){
     ${srcChip(c)}${svyChip(c)}${tcChip(c)}
     ${scopeBox(c)}
     ${wsBtn(c)}
+    ${fdChip(c)}
     ${assign}
-    ${c.status==="pending" ? svyAssignRow(c) + tcAssignRow(c) : ""}
+    ${svyAssignRow(c)}${c.status==="pending" ? tcAssignRow(c) : ""}
     <details class="mt-2" ${custUi.more[c.id] ? "open" : ""} ontoggle="custUi.more['${c.id}']=this.open">
       <summary class="text-[11px] font-bold text-gray-700 py-1">⚙️ Aur options — ${c.status==="pending" ? "" : "telecaller, "}PIN, WhatsApp, delete ▾</summary>
       ${c.status==="pending" ? "" : tcAssignRow(c)}${portalPinBtn(c)}${wa}
@@ -4572,6 +4583,8 @@ function renderAdminOverview(){
     <div class="bg-white rounded-lg shadow p-3 mb-4 space-y-1">
       ${Object.keys(FORMS).map(id=>`<div class="flex justify-between text-sm border-b last:border-0 py-1"><span>${FORMS[id].icon} ${FORMS[id].title}</span><span class="font-bold">${byForm[id]||0}</span></div>`).join("")}
     </div>
+    <button onclick="setView('docs')" class="w-full bg-[#1a73e8] text-white font-bold py-2.5 rounded-lg mb-2">📂 Form collection — documents + photos (PDF / Excel) ${fdNewCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${fdNewCount()} naye poore</span>` : ""}</button>
+    <button onclick="setView('petty')" class="w-full bg-[#8430CE] text-white font-bold py-2.5 rounded-lg mb-2">🧾 Petty cash — daily memo + bill ${pcPendCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${pcPendCount()} pass karne hain</span>` : ""}</button>
     <button onclick="setView('master')" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-2">🗂 Master Sheet (live) + Forms status</button>
     <button onclick="setView('tcupdates')" class="w-full bg-[#1a73e8] text-white font-bold py-2.5 rounded-lg mb-2">📞 Telecaller updates ${tcUnreadCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${tcUnreadCount()} naye</span>` : ""}</button>
     <button onclick="setView('cfbAdmin')" class="w-full bg-yellow-500 text-white font-bold py-2.5 rounded-lg mb-2">⭐ Customer feedback (Excel / PDF) ${cfbFwdCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${cfbFwdCount()} naye</span>` : ""}</button>
@@ -9887,6 +9900,8 @@ async function svyAssign(cid){
   const c = customers.find(x=>x.id===cid); if(!c) return;
   const u = (document.getElementById("svySel_"+cid)||{}).value || "";
   if(!u){ alert("Surveyor chuniye."); return; }
+  if(c.surveyDoneAt && !confirm(`${c.name}: survey pehle ho chuka hai (${techName(c.surveyDoneBy)}, ${fpDate(String(c.surveyDoneAt).slice(0,10))}).\nDobara survey ke liye ${techName(u)} ko bhejna hai?`)) return;
+  if(!c.surveyDoneAt && c.surveyAssigned && c.surveyAssigned!==u && !confirm(`${c.name}: survey abhi ${techName(c.surveyAssigned)} ke paas hai — ${techName(u)} ko de dein?`)) return;
   if(!(await saveJobField(cid, {surveyAssigned:u, surveyAssignedAt:new Date().toISOString(), surveyAssignedBy:currentUser.username, surveyDoneAt:null, surveyDoneBy:null}))) return;
   showToast(`${c.name}: survey ke liye ${techName(u)} ko diya`); renderMain();
 }
@@ -9897,8 +9912,41 @@ function svyChip(c){
   return rep;
 }
 function svyAssignRow(c){
+  const lbl = c.surveyDoneAt ? "🔁 Dobara survey" : (c.surveyAssigned ? "🔁 Badlein" : "Survey ke liye dein");
   return `<div class="flex gap-1 mt-2"><select id="svySel_${c.id}" class="ff-input text-xs flex-1"><option value="">🧭 surveyor…</option>${userOpts("surveyor", c.surveyAssigned||"")}</select>
-    <button onclick="svyAssign('${c.id}')" class="bg-[#EA8600] text-white text-xs font-bold px-2 rounded">Survey ke liye dein</button></div>`;
+    <button onclick="svyAssign('${c.id}')" class="bg-[#EA8600] text-white text-xs font-bold px-2 rounded">${lbl}</button></div>`;
+}
+/* v60: the admin gives the filtered customers (pending or already assigned / running) to a surveyor in one go */
+let svyBulkUi = {u:"", redo:false};
+function svyBulkPlan(list){
+  const u = svyBulkUi.u, go = []; let done = 0, same = 0;
+  list.forEach(c=>{
+    if(c.surveyDoneAt && !svyBulkUi.redo){ done++; return; }
+    if(u && c.surveyAssigned===u && !c.surveyDoneAt){ same++; return; }
+    go.push(c);
+  });
+  return {go, done, same};
+}
+function renderSvyAssignPanel(){
+  const list = cfList(), plan = svyBulkPlan(list), svs = usersOfRole("surveyor");
+  return `<div class="bg-white rounded-lg shadow p-3 mb-4 border-l-4 border-[#EA8600]">
+    <p class="font-bold text-sm text-gray-800 mb-1">🧭 Survey ke liye surveyor ko dein (filter ke ${list.length})</p>
+    <p class="text-[11px] text-gray-500 mb-2">Pending ke saath assigned / chal rahe customers bhi de sakte hain — surveyor ke "🧭 My Surveys" me aa jayenge; report aapko "Survey reports" me milegi.</p>
+    <select id="svyBulkSel" class="ff-input text-xs mb-2" onchange="svyBulkUi.u=this.value; renderMain()"><option value="">— surveyor —</option>${userOpts("surveyor", svyBulkUi.u)}</select>
+    <label class="flex items-center gap-2 text-xs mb-2"><input id="svyBulkRedo" type="checkbox" ${svyBulkUi.redo ? "checked" : ""} onchange="svyBulkUi.redo=this.checked; renderMain()"> Jinka survey ho chuka hai, unka bhi dobara survey</label>
+    <p class="text-xs mb-2">Diye jayenge: <b>${plan.go.length}</b>${plan.done ? ` • survey ho chuka (chhod diye): ${plan.done}` : ""}${plan.same ? ` • pehle se isi surveyor ke paas: ${plan.same}` : ""}</p>
+    <button onclick="svyAssignBulk()" class="w-full bg-[#EA8600] text-white text-xs font-bold py-2 rounded ${plan.go.length && svyBulkUi.u && svs.length ? "" : "opacity-50"}">✅ ${plan.go.length} customers survey ke liye dein</button>
+  </div>`;
+}
+async function svyAssignBulk(){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const u = svyBulkUi.u; if(!u){ alert("Surveyor chuniye."); return; }
+  const plan = svyBulkPlan(cfList());
+  if(!plan.go.length){ alert("Filter mein dene ke liye koi customer nahi."); return; }
+  if(!confirm(`${plan.go.length} customers survey ke liye ${techName(u)} ko dene hain?`)) return;
+  const now = new Date().toISOString(); let n = 0;
+  for(const c of plan.go){ try{ await writeCustomerPatch(c, {surveyAssigned:u, surveyAssignedAt:now, surveyAssignedBy:currentUser.username, surveyDoneAt:null, surveyDoneBy:null}); n++; }catch(e){ console.error(e); } }
+  showToast(`🧭 ${n} customers survey ke liye ${techName(u)} ko diye gaye.`); renderMain();
 }
 function srcChip(c){
   return c.source==="qr" ? `<p class="text-[11px] mt-1"><span class="bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded font-bold">📥 QR form se</span> ${c.telecallerId?"• add kiya: "+wzEsc(techName(c.telecallerId)):""}</p>` : "";
@@ -10468,7 +10516,8 @@ function renderChecklistHub(){
   // other customers come from the server only by phone / BP / name search (need-to-know)
   if(q && currentUser.role!=="admin" && chkLookedUp!==q){ chkLookedUp = q; custLookup(chkQuery.trim()).then(()=>{ if(currentView==="tcchk") renderMain(); }); }
   const res = q ? customers.filter(c=>[c.name, c.bpNo, c.area, c.address].some(x=>String(x||"").toLowerCase().includes(q)) || (qd.length>=5 && [c.phone, c.altPhone].some(p=>String(p||"").replace(/\D/g,"").includes(qd)))).slice(0,40) : mine.slice(0,40);
-  return `<h2 class="font-bold text-gray-800 mb-1">📋 SOP & Inspection Checklists</h2>
+  return `${currentUser.role==="telecaller" ? `<div class="grid grid-cols-2 gap-2 mb-3"><button onclick="setView('petty')" class="bg-[#8430CE] text-white text-xs font-bold py-2.5 rounded-lg">🧾 Petty cash memo</button><button onclick="setView('docs')" class="bg-[#1a73e8] text-white text-xs font-bold py-2.5 rounded-lg">📂 Form collection${fdBackCount() ? ` <span class="bg-red-600 rounded-full px-1.5">${fdBackCount()}</span>` : ""}</button></div>` : ""}
+    <h2 class="font-bold text-gray-800 mb-1">📋 SOP & Inspection Checklists</h2>
     <p class="text-[11px] text-gray-500 mb-2">7 forms: Site survey, Work permit & safety, TF & MDPE, GI & meter, Pressure test, Conversion & purging, JIR & handover. Customer chuniye, YES / NO aur remarks bhariye, phir PDF download karein.</p>
     <input class="ff-input mb-3" placeholder="Naam / BP / poora mobile number se dhoondhein" value="${wzEsc(chkQuery)}" onchange="chkQuery=this.value; renderMain()">
     <p class="text-[11px] font-bold text-gray-500 mb-1">${q ? `Search ke ${res.length} customers` : "Aapke customers"}</p>
@@ -11602,6 +11651,7 @@ async function cfbPdf(id){
      store      stock, issues, and the running jobs (to tag an issue to a job)
      customer   only his own status page (portal/<key>, key = hash of mobile + PIN), never the customer list
      developer  the problem chat + the Security setup console (employee login records), nothing else
+     every staff login also: his own petty cash memos (+ the cash given to him) and his own form collections, with their photos
    On the live site the Firestore security rules (developer → 🔒 Security setup) enforce the same split on the server. */
 const STAFF_ROLES = ["admin","technician","surveyor","telecaller","store"];
 let rawDb = null;                 // the store itself (Firestore, or the trial's db); `db` = the same store with customer hooks
@@ -11796,6 +11846,9 @@ function dataStop(){
 function dataReset(){   // nothing the last user saw stays in memory on this phone
   allUsers = []; inventory = []; issues = []; consumption = []; submissions = []; customers = []; attendance = []; safetyChecks = []; raBills = [];
   leads = []; custFeedbacks = []; portalRequests = []; staffDir = {}; custExtra = {}; lookupCache = {}; safetyHist = {}; layingRows = [];
+  pcList = []; pcSrc = {by:[], to:[]}; pcDraft = null; pcUi = {add:false, month:"", who:"", cat:"", st:"", give:false, balOpen:false};
+  fdList = []; fdDraft = null; fdLoaded = false; fdUi = {tab:"", q:""}; svyBulkUi = {u:"", redo:false};
+  try{ Object.keys(fileCache).forEach(k=>delete fileCache[k]); }catch(e){}
   delReqs = []; custHidden = []; devDel = []; delBusy = {}; custUi = {tab:"", add:false, open:{}, more:{}, show:40, filterOpen:false, allotOpen:false}; scopeUiState = {}; scopeOpenId = null;
   secUi = {busy:false, fresh:true, results:null, check:null, msg:"", sub:false, loadErr:""};      // new passwords of the last setup: gone at logout
   try{ Object.keys(mediaCache).forEach(k=>delete mediaCache[k]); }catch(e){}
@@ -11889,6 +11942,8 @@ async function dataStart(){
     listen(C("custFeedback"), into(l=>{ custFeedbacks = l; }), "custFeedback");
     listen(C("portalRequests"), into(l=>{ portalRequests = l; }), "portalRequests");
     listen(C("deleteRequests"), into(l=>{ delReqs = l; delReqRunSoon(); }), "deleteRequests");
+    listen(C("pettyCash"), into(l=>{ pcList = pcSortList(l); }), "pettyCash");
+    listen(C("formDocs"), into(l=>{ fdOnSnap(l); }), "formDocs");
     safetyListen(()=>C("safety_checks").where("date","==",todayISO()));
   } else if(role==="technician"){
     custListen("asg", cust().where("assignedTechnician","==",me));
@@ -11912,6 +11967,11 @@ async function dataStart(){
     custListen("run", cust().where("status","==","assigned"));
     listen(C("inventory"), into(l=>{ inventory = l; }), "inventory");
     listen(C("issues"), into(l=>{ issues = l; }), "issues");
+  }
+  if(role!=="admin"){                 // v60: his own petty cash memos + the cash the admin gave him + his own form collections
+    listen(C("pettyCash").where("by","==",me), into(l=>{ pcSrc.by = l; pcMerge(); }), "pettyCash");
+    listen(C("pettyCash").where("to","==",me), into(l=>{ pcSrc.to = l; pcMerge(); }), "pettyCash:cash");
+    listen(C("formDocs").where("by","==",me), into(l=>{ fdOnSnap(l); }), "formDocs");
   }
 }
 // today's safety checks only (photos are heavy): the listener moves to the new day by itself
@@ -12280,6 +12340,872 @@ async function devDelDecide(cid, ok){
   catch(e){ console.error(e); alert("Save nahi hua: " + ((e && (e.code || e.message)) || e)); return; }
   showToast(ok ? "✅ Approve — admin ka app online hote hi customer har jagah se delete ho jayega." : "❌ Request mana kar di — customer admin ki list me wapas.");
 }
+/* v60: the photos of the petty cash bills and of the customers' documents (form collection) — kept in the "files" collection
+   in small parts like the work photos; every part carries who took it, so only he and the admin can open it. */
+const FILE_CHUNK = 200000;
+const fileCache = {};
+let fileSeq = 0;
+const fileDocId = (pcol, pid, ver, i)=>`${pcol}__${pid}__${ver}__${i}`;
+async function filePut(pcol, pid, dataUrl, extra){
+  const ver = Date.now().toString(36) + (fileSeq++).toString(36), parts = [];
+  for(let i=0;i<dataUrl.length;i+=FILE_CHUNK) parts.push(dataUrl.slice(i, i+FILE_CHUNK));
+  const at = new Date().toISOString(), by = (currentUser||{}).username || "";
+  if(rawDb){ for(let i=0;i<parts.length;i++) await rawDb.doc("files/" + fileDocId(pcol, pid, ver, i)).set({by, pcol, pid, ver, i, n:parts.length, d:parts[i], at}); }
+  fileCache[`${pcol}|${pid}|${ver}`] = dataUrl;
+  return {ver, n:parts.length, type:"image/jpeg", size:dataUrl.length, at, by, ...(extra||{})};
+}
+async function fileGet(pcol, pid, rec){
+  if(!rec || !rec.ver) return null;
+  const key = `${pcol}|${pid}|${rec.ver}`;
+  if(fileCache[key]) return fileCache[key];
+  if(!rawDb) return null;
+  const parts = [];
+  for(let i=0;i<(Number(rec.n)||1);i++){ const s = await rawDb.doc("files/" + fileDocId(pcol, pid, rec.ver, i)).get(); if(!s || !s.exists) return null; parts.push((s.data()||{}).d || ""); }
+  return (fileCache[key] = parts.join(""));
+}
+async function fileDrop(pcol, pid, rec){
+  if(!rec || !rec.ver) return;
+  delete fileCache[`${pcol}|${pid}|${rec.ver}`];
+  if(!rawDb) return;
+  for(let i=0;i<(Number(rec.n)||1);i++){ try{ await rawDb.doc("files/" + fileDocId(pcol, pid, rec.ver, i)).delete(); }catch(e){ console.error(e); } }
+}
+// a paper / bill photo: sharp enough to read; the label goes on a strip under the picture (nothing on the paper is covered)
+async function fileMakePhoto(file, lines){
+  const img = await mediaReadImage(file);
+  let out = "";
+  for(const [maxDim, q] of [[1600, 0.72], [1280, 0.64], [1024, 0.56], [800, 0.5]]){
+    let w = img.width || 800, h = img.height || 1000;
+    if(w >= h && w > maxDim){ h = Math.round(h*maxDim/w); w = maxDim; } else if(h > maxDim){ w = Math.round(w*maxDim/h); h = maxDim; }
+    const fs = Math.max(12, Math.round(w/48)), band = lines.length*(fs + 6) + 10;
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h + band;
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h + band);
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.fillStyle = "#e2e8f0"; ctx.fillRect(0, h, w, band);
+    ctx.fillStyle = "#111827"; ctx.font = `bold ${fs}px Arial, sans-serif`; ctx.textBaseline = "top";
+    lines.forEach((s,i)=>ctx.fillText(String(s), 8, h + 6 + i*(fs + 6), w - 16));
+    out = cv.toDataURL("image/jpeg", q);
+    if(out.length <= 460000) break;
+  }
+  return out;
+}
+// camera or gallery: one picture -> cb(file)
+function filePick(cb){
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.style.display = "none";
+  inp.onchange = ()=>{ const f = inp.files && inp.files[0]; if(inp.remove) inp.remove(); if(f) cb(f); };
+  document.body.appendChild(inp); inp.click();
+}
+// one or more photos, full screen (local = pictures not uploaded yet)
+async function fileViewMany(pcol, pid, recs, title, local){
+  let ov = document.getElementById("fileViewOverlay");
+  if(!ov){ ov = document.createElement("div"); ov.id = "fileViewOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:98;background:rgba(0,0,0,.92);overflow-y:auto;padding:12px;";
+  const list = local ? local.map(d=>({d})) : (recs||[]).map(r=>({r}));
+  ov.innerHTML = `<div class="flex items-center justify-between text-white mb-2 sticky top-0"><p class="font-bold text-sm">${wzEsc(title||"Photo")}</p><button onclick="fileViewClose()" class="text-2xl font-bold px-2">✖</button></div>
+    ${list.map((x,i)=>`<div id="fileViewBody_${i}" class="text-center text-gray-300 text-sm py-10 mb-3">Load ho rahi hai…</div>`).join("") || '<p class="text-gray-300 text-sm">Photo nahi hai.</p>'}`;
+  for(let i=0;i<list.length;i++){
+    let d = list[i].d || null;
+    if(!d){ try{ d = await fileGet(pcol, pid, list[i].r); }catch(e){ console.error(e); } }
+    const b = document.getElementById("fileViewBody_" + i); if(!b) return;
+    if(!d){ b.textContent = "Photo nahi mili (internet check karein)."; continue; }
+    b.className = "mb-3"; b.innerHTML = `<img src="${d}" style="width:100%;max-height:85vh;object-fit:contain;border-radius:8px">`;
+  }
+}
+function fileViewClose(){ const ov = document.getElementById("fileViewOverlay"); if(ov) ov.remove(); }
+// thumbnails of pictures already saved: <img data-fthumb="pcol|pid|ver|n">, filled in after the screen is drawn
+async function fileThumbs(){
+  const els = Array.from(document.querySelectorAll("img[data-fthumb]") || []);
+  for(const el of els){
+    if(el.dataset.done) continue; el.dataset.done = "1";
+    const [pcol, pid, ver, n] = String(el.dataset.fthumb).split("|");
+    try{ const d = await fileGet(pcol, pid, {ver, n:Number(n)||1}); if(d) el.src = d; }catch(e){ console.error(e); }
+  }
+}
+function fileThumbsSoon(){ setTimeout(()=>{ fileThumbs().catch(e=>console.error(e)); }, 30); }
+/* v60: petty cash — the daily memo with the bill. Every login writes what he bought (🖊️ stationery / 🔧 technical: tool or
+   consumable), from where, for which work, the amount, a remark and a photo of the bill. The admin passes or returns it,
+   records the cash he gives and sees everyone's balance. One day's memo prints as one PDF with its bills; the register
+   (with every person's balance) goes to Excel. Need-to-know: each person sees only his own; the admin sees all. */
+const PC_CAT = {stationery:{l:"Stationery", i:"🖊️"}, technical:{l:"Technical", i:"🔧"}};
+const PC_SUB = {tool:"🔧 Tool / auzaar", consumable:"🧴 Consumable", other:"📦 Spare / other"};
+const PC_SUB_TXT = {tool:"Tool", consumable:"Consumable", other:"Spare / other"};
+const PC_STATUS = {pending:"⏳ Admin ke paas", approved:"✅ Pass", rejected:"❌ Wapas"};
+const PC_ST_TXT = {pending:"Pending", approved:"Pass", rejected:"Wapas"};
+const PC_MAX_BILLS = 3;
+const PC_MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+let pcList = [], pcSrc = {by:[], to:[]}, pcDraft = null, pcBusy = false;
+let pcUi = {add:false, month:"", who:"", cat:"", st:"", give:false, balOpen:false};
+const pcNum = v=>{ const n = Number(String(v===undefined || v===null ? "" : v).replace(/[^\d.-]/g, "")); return isFinite(n) ? n : 0; };
+const pcRs = v=>(Math.round(pcNum(v)*100)/100).toLocaleString("en-IN", {maximumFractionDigits:2});
+const pcNewId = ()=>"pc_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pcMonLabel = m=>{ const [y, mo] = String(m).split("-"); return `${PC_MON[(Number(mo)||1)-1]} ${y}`; };
+const pcPendCount = ()=>pcList.filter(r=>r.kind==="exp" && r.status==="pending").length;
+function pcSortList(l){ return l.sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")) || String(b.createdAt||"").localeCompare(String(a.createdAt||""))); }
+function pcMerge(){ const m = {}; [...pcSrc.by, ...pcSrc.to].forEach(r=>{ m[r.id] = r; }); pcList = pcSortList(Object.values(m)); }
+function pcBalance(u){
+  const b = {got:0, pass:0, pend:0, rej:0};
+  pcList.forEach(r=>{ const a = pcNum(r.amount);
+    if(r.kind==="adv" && r.to===u) b.got += a;
+    else if(r.kind==="exp" && r.by===u){ if(r.status==="approved") b.pass += a; else if(r.status==="pending") b.pend += a; else if(r.status==="rejected") b.rej += a; } });
+  b.hand = Math.round((b.got - b.pass)*100)/100;
+  return b;
+}
+function pcPeople(){
+  const s = new Set();
+  (allUsers||[]).forEach(u=>{ if(u && u.username && STAFF_ROLES.includes(u.role) && u.active!==false) s.add(u.username); });
+  pcList.forEach(r=>{ if(r.by) s.add(r.by); if(r.to) s.add(r.to); });
+  return [...s].sort((a,b)=>String(techName(a)).localeCompare(String(techName(b))));
+}
+// the admin's own spends: no cash-in-hand line
+function pcIsAdminUser(u){
+  if(currentUser && currentUser.role==="admin" && u===currentUser.username) return true;
+  const x = (allUsers||[]).find(v=>v.username===u) || (staffDir||{})[u] || SEED_USERS.find(v=>v.username===u);
+  return x ? x.role==="admin" : pcList.some(r=>r.by===u && r.role==="admin");
+}
+function pcCanEdit(r){ return !!(r && currentUser && r.kind==="exp" && (currentUser.role==="admin" || (r.by===currentUser.username && r.status==="pending"))); }
+function pcNewDraft(r){
+  return r ? {id:r.id, date:r.date || localISODate(), cat:r.cat || "", sub:r.sub || "", item:r.item || "", shop:r.shop || "", purpose:r.purpose || "", amount:r.amount==null ? "" : String(r.amount),
+      remark:r.remark || "", noBill:!!r.noBill, bills:[...(r.bills||[])], add:[], del:[]}
+    : {id:null, date:localISODate(), cat:"", sub:"", item:"", shop:"", purpose:"", amount:"", remark:"", noBill:false, bills:[], add:[], del:[]};
+}
+function pcOpen(id){
+  const r = id ? pcList.find(x=>x.id===id) : null;
+  if(id && !pcCanEdit(r)){ alert("Ye kharcha admin dekh chuka hai — ab badal nahi sakte."); return; }
+  pcDraft = pcNewDraft(r); pcUi.add = true; pcUi.give = false;
+  if(currentView!=="petty") setView("petty"); else renderMain();
+  setTimeout(()=>{ const el = document.getElementById("pcForm"); if(el && el.scrollIntoView) el.scrollIntoView({block:"start"}); }, 60);
+}
+function pcCancel(){ pcDraft = null; pcUi.add = false; renderMain(); }
+function pcSet(k, v){ if(pcDraft) pcDraft[k] = v; }
+function pcAddBill(){
+  const d = pcDraft; if(!d) return;
+  if(d.bills.length + d.add.length >= PC_MAX_BILLS){ alert(`${PC_MAX_BILLS} bill photo tak laga sakte hain.`); return; }
+  filePick(async f=>{
+    const tt = showToast("Bill ki photo taiyaar ho rahi hai...");
+    try{
+      const out = await fileMakePhoto(f, [`Petty cash bill - ${d.item || (PC_CAT[d.cat]||{}).l || ""}${pcNum(d.amount) ? " - Rs " + pcRs(d.amount) : ""}`, `${currentUser.name} - ${pgDate(new Date())} ${pgTime(new Date())}`]);
+      if(pcDraft===d){ d.add.push({d:out, at:new Date().toISOString()}); d.noBill = false; }
+    }catch(e){ console.error(e); alert("Photo process nahi ho payi, dobara try karein."); }
+    finally{ hideToast(tt); }
+    if(pcDraft===d) renderMain();
+  });
+}
+function pcDelBill(old, i){
+  const d = pcDraft; if(!d) return;
+  if(old){ const b = d.bills.splice(i, 1)[0]; if(b) d.del.push(b); } else d.add.splice(i, 1);
+  renderMain();
+}
+function pcBillView(id){
+  const r = pcList.find(x=>x.id===id); if(!r) return;
+  fileViewMany("pettyCash", id, r.bills||[], `🧾 Bill — ${r.item||""} (₹${pcRs(r.amount)})`);
+}
+function pcDraftBillView(old, i){
+  const d = pcDraft; if(!d) return;
+  if(old) fileViewMany("pettyCash", d.id, [d.bills[i]], "🧾 Bill");
+  else fileViewMany("pettyCash", d.id, [], "🧾 Bill", [d.add[i].d]);
+}
+async function pcSave(){
+  const d = pcDraft; if(!d || !currentUser) return;
+  if(!rawDb){ alert("Database se connect nahi hai — internet check karein."); return; }
+  const amt = pcNum(d.amount);
+  if(!d.cat){ alert("Kis cheez ka kharcha hai — 🖊️ Stationery ya 🔧 Technical chuniye."); return; }
+  if(!String(d.item||"").trim()){ alert("Kya liya — likhiye."); return; }
+  if(!String(d.shop||"").trim()){ alert("Kahan se liya — dukaan / jagah likhiye."); return; }
+  if(!(amt > 0)){ alert("Amount (₹) likhiye."); return; }
+  if(!String(d.remark||"").trim()){ alert("Remark me samjhaiye — kyun liya / kya hua."); return; }
+  if(!(d.bills.length + d.add.length) && !d.noBill){ alert("Bill ki photo lagaiye — bill nahi mila to 'Bill nahi mila' tick karke remark me wajah likhiye."); return; }
+  if(pcBusy) return; pcBusy = true;
+  const old = d.id ? pcList.find(r=>r.id===d.id) : null, id = d.id || pcNewId(), admin = currentUser.role==="admin";
+  const tt = showToast("Save ho raha hai...");
+  try{
+    const bills = [...d.bills];
+    for(const a of d.add) bills.push(await filePut("pettyCash", id, a.d));
+    const now = new Date().toISOString();
+    const rec = {kind:"exp", by: old ? old.by : currentUser.username, byName: old ? (old.byName || "") : (currentUser.name || ""), role: old ? (old.role || "") : currentUser.role, to:"",
+      date:d.date || localISODate(), cat:d.cat, sub:d.cat==="technical" ? (d.sub || "") : "", item:String(d.item).trim(), shop:String(d.shop).trim(), purpose:String(d.purpose||"").trim(),
+      amount:Math.round(amt*100)/100, remark:String(d.remark).trim(), noBill:!bills.length && !!d.noBill, bills, updatedAt:now};
+    if(old) await rawDb.doc("pettyCash/" + id).update(rec);
+    else await rawDb.doc("pettyCash/" + id).set({...rec, createdAt:now, status: admin ? "approved" : "pending", adminNote:"", decidedBy: admin ? currentUser.username : "", decidedAt: admin ? now : ""});
+    for(const b of d.del) await fileDrop("pettyCash", id, b);
+    hideToast(tt);
+    pcDraft = null; pcUi.add = false;
+    showToast(admin ? "✅ Kharcha save ho gaya." : "✅ Save ho gaya — admin ke paas pass hone ke liye gaya.");
+  }catch(e){ console.error(e); hideToast(tt); alert("Save nahi hua — internet check karke dobara try karein."); }
+  pcBusy = false;
+  renderMain();
+}
+async function pcDelete(id){
+  const r = pcList.find(x=>x.id===id); if(!r || !currentUser) return;
+  const admin = currentUser.role==="admin";
+  if(!admin && !(r.kind==="exp" && r.by===currentUser.username && r.status==="pending")){ alert("Ye kharcha ab hata nahi sakte."); return; }
+  if(!confirm(r.kind==="adv" ? `${techName(r.to)} ko diye ₹${pcRs(r.amount)} cash ka record hatana hai?` : `"${r.item}" (₹${pcRs(r.amount)}) hatana hai?`)) return;
+  try{
+    for(const b of (r.bills||[])) await fileDrop("pettyCash", id, b);
+    await rawDb.doc("pettyCash/" + id).delete();
+    showToast("Hata diya.");
+  }catch(e){ console.error(e); alert("Hata nahi paya — internet check karein."); }
+  if(pcDraft && pcDraft.id===id){ pcDraft = null; pcUi.add = false; }
+  renderMain();
+}
+async function pcDecide(id, ok){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const r = pcList.find(x=>x.id===id); if(!r) return;
+  let note = "";
+  if(!ok){
+    note = prompt(`"${r.item}" (₹${pcRs(r.amount)}) — wapas kyun? (kharcha karne wale ko dikhega)`, "");
+    if(note===null) return; note = String(note).trim();
+    if(!note){ alert("Wapas karne ki wajah likhiye."); return; }
+  }
+  try{ await rawDb.doc("pettyCash/" + id).update({status: ok ? "approved" : "rejected", adminNote:note, decidedBy:currentUser.username, decidedAt:new Date().toISOString()});
+    showToast(ok ? "✅ Pass kar diya." : "❌ Wapas bhej diya."); }
+  catch(e){ console.error(e); alert("Save nahi hua."); }
+  renderMain();
+}
+async function pcPassDay(u, date){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const list = pcList.filter(r=>r.kind==="exp" && r.status==="pending" && r.by===u && r.date===date);
+  if(!list.length) return;
+  if(!confirm(`${techName(u)} ke ${fpDate(date)} ke ${list.length} kharche (₹${pcRs(list.reduce((s,r)=>s + pcNum(r.amount), 0))}) pass karne hain?`)) return;
+  const now = new Date().toISOString(); let n = 0;
+  for(const r of list){ try{ await rawDb.doc("pettyCash/" + r.id).update({status:"approved", adminNote:"", decidedBy:currentUser.username, decidedAt:now}); n++; }catch(e){ console.error(e); } }
+  showToast(`✅ ${n} kharche pass.`); renderMain();
+}
+async function pcGiveSave(){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const g = id=>String((document.getElementById(id)||{}).value || "").trim();
+  const to = g("pcGiveTo"), amt = pcNum(g("pcGiveAmt")), date = g("pcGiveDate") || localISODate();
+  if(!to){ alert("Kisko diya — chuniye."); return; }
+  if(!(amt > 0)){ alert("Amount likhiye."); return; }
+  const now = new Date().toISOString();
+  try{
+    await rawDb.doc("pettyCash/" + pcNewId()).set({kind:"adv", by:currentUser.username, byName:currentUser.name || "", role:"admin", to, date, amount:Math.round(amt*100)/100, remark:g("pcGiveNote"), status:"approved", createdAt:now, updatedAt:now});
+    ["pcGiveAmt", "pcGiveNote"].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ""; });
+    pcUi.give = false; showToast(`💵 ${techName(to)} ko ₹${pcRs(amt)} diya — save ho gaya.`);
+  }catch(e){ console.error(e); alert("Save nahi hua."); }
+  renderMain();
+}
+
+/* ---- screens ---- */
+function renderPetty(){ return currentUser && currentUser.role==="admin" ? renderPettyAdmin() : renderPettyStaff(); }
+function pcBalanceCard(u){
+  const b = pcBalance(u), owe = b.hand < 0;
+  const tile = (l, v, cls)=>`<div class="bg-white rounded-lg shadow p-1.5 text-center"><p class="text-[13px] font-bold ${cls}">₹${pcRs(v)}</p><p class="text-[9px] text-gray-500 leading-tight">${l}</p></div>`;
+  return `<div class="grid grid-cols-4 gap-1 mb-2">${tile("💵 Admin se mila", b.got, "text-blue-700")}${tile("✅ Pass kharcha", b.pass, "text-green-700")}${tile("⏳ Pending", b.pend, "text-orange-600")}${tile(owe ? "👛 Aapko milna hai" : "👛 Haath me baaki", Math.abs(b.hand), owe ? "text-red-600" : "text-gray-800")}</div>`;
+}
+function renderPettyStaff(){
+  const me = currentUser.username, list = pcList.filter(r=>(r.kind==="exp" && r.by===me) || (r.kind==="adv" && r.to===me));
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2 border-l-4 border-[#8430CE]">
+      <p class="font-bold text-sm text-gray-800">🧾 Petty cash — Daily memo</p>
+      <p class="text-[11px] text-gray-500">Kaam ke liye jo bhi kharida — 🖊️ stationery ya 🔧 tool / consumable — yahan likhein aur bill ki photo lagaiye. Admin pass karega; din ka memo PDF bhi ban jata hai.</p>
+    </div>
+    ${pcBalanceCard(me)}
+    ${pcUi.add && pcDraft ? renderPcForm() : `<button onclick="pcOpen()" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-3">➕ Naya kharcha likhein (bill ke saath)</button>`}
+    ${pcGroups(list).map(g=>pcGroupCard(g, false)).join("") || '<p class="text-xs text-gray-400 text-center py-4">Abhi koi kharcha nahi likha.</p>'}`;
+}
+function renderPcForm(){
+  const d = pcDraft; if(!d) return "";
+  const v = k=>wzEsc(d[k]==null ? "" : String(d[k]));
+  const catBtn = k=>`<button id="pcCat_${k}" onclick="pcSet('cat','${k}'); renderMain()" class="flex-1 py-2 rounded-lg text-sm font-bold border ${d.cat===k ? "bg-[#0D904F] text-white border-[#0D904F]" : "bg-white text-gray-700"}">${PC_CAT[k].i} ${PC_CAT[k].l}</button>`;
+  const bills = [...d.bills.map((b,i)=>({old:true, i, b})), ...d.add.map((a,i)=>({old:false, i, a}))];
+  const tech = d.cat==="technical";
+  setTimeout(()=>{ if(typeof fileThumbs==="function") fileThumbs().catch(e=>console.error(e)); }, 30);
+  return `<div id="pcForm" class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 border-[#0D904F]">
+    <p class="font-bold text-sm mb-2">${d.id ? "✏️ Kharcha badlein" : "➕ Naya kharcha (daily memo)"}</p>
+    <label class="ff-label">📅 Tareekh</label><input id="pcDate" type="date" class="ff-input text-sm mb-2" value="${v("date")}" onchange="pcSet('date', this.value)">
+    <label class="ff-label">Kis cheez ka kharcha? *</label>
+    <div class="flex gap-2 mb-2">${catBtn("stationery")}${catBtn("technical")}</div>
+    ${tech ? `<div class="flex gap-1 mb-2 flex-wrap">${Object.keys(PC_SUB).map(k=>`<button id="pcSub_${k}" onclick="pcSet('sub','${k}'); renderMain()" class="px-2.5 py-1.5 rounded-full text-[11px] font-bold border ${d.sub===k ? "bg-[#EA8600] text-white border-[#EA8600]" : "bg-white text-gray-700"}">${PC_SUB[k]}</button>`).join("")}</div>` : ""}
+    <label class="ff-label">Kya liya? *</label>
+    <input id="pcItem" class="ff-input text-sm mb-2" value="${v("item")}" oninput="pcSet('item', this.value)" placeholder="${tech ? "jaise: teflon tape 10 pc, drill bit 8 mm" : "jaise: register, pen, photocopy 50 page"}">
+    <label class="ff-label">Kahan se liya? (dukaan / jagah) *</label>
+    <input id="pcShop" class="ff-input text-sm mb-2" value="${v("shop")}" oninput="pcSet('shop', this.value)" placeholder="jaise: Sharma Hardware, Rewali">
+    <label class="ff-label">Kis kaam / site ke liye</label>
+    <input id="pcPurpose" list="pcCustList" class="ff-input text-sm mb-2" value="${v("purpose")}" oninput="pcSet('purpose', this.value)" placeholder="jaise: S.No 45 Ramesh — GI kaam / office">
+    <datalist id="pcCustList">${customers.slice(0, 300).map(c=>`<option value="${wzEsc(`S.No ${c.sn||"-"} ${c.name||""}`)}">`).join("")}</datalist>
+    <label class="ff-label">💰 Amount (₹) *</label>
+    <input id="pcAmt" type="number" inputmode="decimal" min="0" class="ff-input text-sm mb-2" value="${v("amount")}" oninput="pcSet('amount', this.value)" placeholder="0">
+    <label class="ff-label">🧾 Bill ki photo (${PC_MAX_BILLS} tak) *</label>
+    <div class="flex gap-2 flex-wrap mb-1">
+      ${bills.map(x=>`<div class="relative"><img ${x.old ? `data-fthumb="pettyCash|${d.id}|${x.b.ver}|${x.b.n}" src=""` : `src="${x.a.d}"`} onclick="pcDraftBillView(${x.old}, ${x.i})" class="w-16 h-16 object-cover rounded border bg-gray-100">
+        <button onclick="pcDelBill(${x.old}, ${x.i})" class="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 text-[10px] font-bold">✖</button></div>`).join("")}
+      ${bills.length < PC_MAX_BILLS ? `<button id="pcAddBillBtn" onclick="pcAddBill()" class="w-16 h-16 rounded border-2 border-dashed border-[#0D904F] text-[#0D904F] text-[11px] font-bold leading-tight">📷<br>Bill photo</button>` : ""}
+    </div>
+    <label class="flex items-center gap-2 text-xs mb-2"><input id="pcNoBill" type="checkbox" ${d.noBill ? "checked" : ""} onchange="pcSet('noBill', this.checked)"> Bill nahi mila (remark me wajah likhein)</label>
+    <label class="ff-label">📝 Remark — samjhaiye kyun / kya liya *</label>
+    <textarea id="pcRemark" rows="2" class="ff-input text-sm mb-2" oninput="pcSet('remark', this.value)" placeholder="jaise: site par teflon khatam ho gaya tha, store se nahi mila, isliye Rewali ki dukaan se liya">${wzEsc(d.remark||"")}</textarea>
+    <div class="flex gap-2"><button onclick="pcCancel()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg text-sm">✖ Band</button>
+      <button id="pcSaveBtn" onclick="pcSave()" class="flex-[2] bg-[#0D904F] text-white font-bold py-2.5 rounded-lg text-sm">💾 Save${currentUser.role==="admin" ? "" : " — admin ko bhejein"}</button></div>
+  </div>`;
+}
+// one card per day (and per person on the admin's screen)
+function pcGroups(list){
+  const m = {};
+  list.forEach(r=>{ const who = r.kind==="adv" ? r.to : r.by, k = (r.date||"") + "|" + who; (m[k] = m[k] || {date:r.date||"", who, items:[]}).items.push(r); });
+  Object.values(m).forEach(g=>g.items.sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))));
+  return Object.values(m).sort((a,b)=>String(b.date).localeCompare(String(a.date)) || String(techName(a.who)).localeCompare(String(techName(b.who))));
+}
+function pcGroupCard(g, admin){
+  const exp = g.items.filter(r=>r.kind==="exp"), tot = exp.filter(r=>r.status!=="rejected").reduce((s,r)=>s + pcNum(r.amount), 0), pend = exp.filter(r=>r.status==="pending").length;
+  return `<div class="bg-white rounded-lg shadow mb-2">
+    <div class="flex items-center gap-1.5 px-3 py-2 border-b bg-gray-50 rounded-t-lg">
+      <p class="flex-1 text-xs font-bold text-gray-800">📅 ${fpDate(g.date)}${admin ? " • 👤 " + wzEsc(techName(g.who)) : ""} <span class="font-normal text-gray-500">• ${exp.length} kharche • ₹${pcRs(tot)}</span></p>
+      ${admin && pend ? `<button onclick="pcPassDay('${g.who}','${g.date}')" class="text-[10px] bg-[#0D904F] text-white font-bold px-2 py-1 rounded">✅ Sab pass</button>` : ""}
+      ${exp.length ? `<button onclick="pcMemoPdf('${g.who}','${g.date}')" class="text-[10px] bg-white border font-bold px-2 py-1 rounded">🖨 Memo PDF</button>` : ""}
+    </div>
+    ${g.items.map(r=>pcItemRow(r, admin)).join("")}
+  </div>`;
+}
+function pcItemRow(r, admin){
+  if(r.kind==="adv") return `<div class="px-3 py-2 border-b last:border-0 text-xs bg-blue-50 flex items-center gap-2"><span class="flex-1"><b>💵 Cash ${admin ? "diya → " + wzEsc(techName(r.to)) : "mila (admin se)"}: ₹${pcRs(r.amount)}</b>${r.remark ? " • " + wzEsc(r.remark) : ""}</span>${admin ? `<button onclick="pcDelete('${r.id}')" class="text-red-600 font-bold">🗑</button>` : ""}</div>`;
+  const C = PC_CAT[r.cat] || {l:r.cat || "", i:"•"}, nb = (r.bills||[]).length;
+  const stCls = r.status==="approved" ? "text-green-700" : r.status==="rejected" ? "text-red-600" : "text-orange-600";
+  return `<div class="px-3 py-2 border-b last:border-0 ${r.status==="rejected" ? "opacity-70" : ""}">
+    <div class="flex items-start gap-2">
+      <span class="text-lg leading-none mt-0.5">${C.i}</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-[13px] font-bold text-gray-800">${wzEsc(r.item||"")} <span class="font-normal text-[11px] text-gray-500">• ${wzEsc(r.shop||"")}</span></p>
+        <p class="text-[11px] text-gray-500">${C.l}${r.sub && PC_SUB_TXT[r.sub] ? " • " + PC_SUB_TXT[r.sub] : ""}${r.purpose ? " • " + wzEsc(r.purpose) : ""}${admin ? " • 👤 " + wzEsc(techName(r.by)) : ""}</p>
+        ${r.remark ? `<p class="text-[11px] text-gray-700">📝 ${wzEsc(r.remark)}</p>` : ""}
+        <p class="text-[10px] mt-0.5"><span class="font-bold ${stCls}">${PC_STATUS[r.status] || wzEsc(r.status||"")}</span>${r.adminNote ? " • " + wzEsc(r.adminNote) : ""}${r.noBill ? ' • <span class="text-red-600">⚠️ bill nahi</span>' : ""}</p>
+      </div>
+      <div class="text-right shrink-0"><p class="text-sm font-bold">₹${pcRs(r.amount)}</p>
+        ${nb ? `<button onclick="pcBillView('${r.id}')" class="text-[11px] bg-gray-100 font-bold px-2 py-1 rounded mt-1">🧾 ${nb}</button>` : ""}</div>
+    </div>
+    ${admin && r.status==="pending" ? `<div class="flex gap-1 mt-1.5"><button onclick="pcDecide('${r.id}', true)" class="flex-1 bg-[#0D904F] text-white text-xs font-bold py-1.5 rounded">✅ Pass</button><button onclick="pcDecide('${r.id}', false)" class="flex-1 bg-red-50 text-red-700 text-xs font-bold py-1.5 rounded">❌ Wapas</button></div>` : ""}
+    ${pcCanEdit(r) ? `<div class="flex gap-1 mt-1.5"><button onclick="pcOpen('${r.id}')" class="flex-1 bg-white border text-xs font-bold py-1 rounded">✏️ Badlein</button><button onclick="pcDelete('${r.id}')" class="flex-1 bg-white border text-red-600 text-xs font-bold py-1 rounded">🗑 Hatayein</button></div>` : ""}
+  </div>`;
+}
+function pcMonths(){
+  const out = [], d = new Date(); d.setDate(1);
+  for(let i=0;i<12;i++){ out.push(localISODate(d).slice(0,7)); d.setMonth(d.getMonth()-1); }
+  pcList.forEach(r=>{ const m = String(r.date||"").slice(0,7); if(/^\d{4}-\d{2}$/.test(m) && !out.includes(m)) out.push(m); });
+  return out.sort().reverse();
+}
+function pcFiltered(){
+  const month = pcUi.month || localISODate().slice(0,7);
+  return pcList.filter(r=>(month==="all" || String(r.date||"").slice(0,7)===month) && (!pcUi.who || r.by===pcUi.who || r.to===pcUi.who)
+    && (!pcUi.cat || (r.kind==="exp" && r.cat===pcUi.cat)) && (!pcUi.st || (r.kind==="exp" && r.status===pcUi.st)));
+}
+function renderPettyAdmin(){
+  const month = pcUi.month || localISODate().slice(0,7), list = pcFiltered(), exp = list.filter(r=>r.kind==="exp"), people = pcPeople();
+  const sum = f=>exp.filter(f).reduce((s,r)=>s + pcNum(r.amount), 0);
+  const sel = (k, opts)=>`<select id="pcF_${k}" class="ff-input text-xs" onchange="pcUi.${k}=this.value; renderMain()">${opts.map(([val, l])=>`<option value="${wzEsc(val)}" ${String(pcUi[k]||"")===String(val) ? "selected" : ""}>${wzEsc(l)}</option>`).join("")}</select>`;
+  const tile = (l, val, cls)=>`<div class="bg-white rounded-lg shadow p-2 text-center"><p class="text-sm font-bold ${cls}">₹${pcRs(val)}</p><p class="text-[10px] text-gray-500 leading-tight">${l}</p></div>`;
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2 border-l-4 border-[#8430CE]">
+      <p class="font-bold text-sm text-gray-800">🧾 Petty cash — daily memo (sab ka)</p>
+      <p class="text-[11px] text-gray-500">Har kharche ke saath bill ki photo; ✅ Pass / ❌ Wapas karein. 💵 Cash diya likhne par har bande ka baaki hisaab apne aap.</p>
+      <div class="grid grid-cols-2 gap-2 mt-2">
+        <select id="pcF_month" class="ff-input text-xs" onchange="pcUi.month=this.value; renderMain()">${pcMonths().map(m=>`<option value="${m}" ${month===m ? "selected" : ""}>📅 ${pcMonLabel(m)}</option>`).join("")}<option value="all" ${month==="all" ? "selected" : ""}>📅 Sab mahine</option></select>
+        ${sel("who", [["", "👤 Sab log"], ...people.map(u=>[u, techName(u)])])}
+        ${sel("cat", [["", "Sab category"], ["stationery", "🖊️ Stationery"], ["technical", "🔧 Technical"]])}
+        ${sel("st", [["", "Sab status"], ["pending", "⏳ Pending"], ["approved", "✅ Pass"], ["rejected", "❌ Wapas"]])}
+      </div>
+    </div>
+    <div class="grid grid-cols-3 gap-1 mb-1">${tile("Kul kharcha", sum(r=>r.status!=="rejected"), "text-gray-800")}${tile(`⏳ Pending (${exp.filter(r=>r.status==="pending").length})`, sum(r=>r.status==="pending"), "text-orange-600")}${tile("✅ Pass", sum(r=>r.status==="approved"), "text-green-700")}</div>
+    <div class="grid grid-cols-3 gap-1 mb-2">${tile("🖊️ Stationery", sum(r=>r.cat==="stationery" && r.status!=="rejected"), "text-gray-700")}${tile("🔧 Technical", sum(r=>r.cat==="technical" && r.status!=="rejected"), "text-gray-700")}${tile("💵 Cash diya", list.filter(r=>r.kind==="adv").reduce((s,r)=>s + pcNum(r.amount), 0), "text-blue-700")}</div>
+    <div class="grid grid-cols-3 gap-2 mb-2">
+      <button onclick="pcOpen()" class="bg-[#0D904F] text-white text-[11px] font-bold py-2 rounded">➕ Apna kharcha</button>
+      <button id="pcGiveBtn" onclick="pcUi.give=!pcUi.give; pcUi.add=false; pcDraft=null; renderMain()" class="bg-[#1a73e8] text-white text-[11px] font-bold py-2 rounded">💵 Cash diya</button>
+      <button onclick="pcExcel()" class="bg-[#8430CE] text-white text-[11px] font-bold py-2 rounded">⬇ Excel</button>
+    </div>
+    ${pcUi.give ? renderPcGive(people) : ""}
+    ${pcUi.add && pcDraft ? renderPcForm() : ""}
+    ${renderPcBalances(people)}
+    ${pcGroups(list).map(g=>pcGroupCard(g, true)).join("") || '<p class="text-xs text-gray-400 text-center py-4">Is filter me koi kharcha nahi.</p>'}`;
+}
+function renderPcGive(people){
+  return `<div id="pcGiveBox" class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 border-[#1a73e8]">
+    <p class="font-bold text-sm mb-2">💵 Petty cash diya (advance)</p>
+    <div class="grid grid-cols-2 gap-2">
+      <select id="pcGiveTo" class="ff-input text-sm col-span-2"><option value="">— kisko diya —</option>${people.filter(u=>u!==currentUser.username).map(u=>`<option value="${u}">${wzEsc(techName(u))} (${u})</option>`).join("")}</select>
+      <input id="pcGiveAmt" type="number" inputmode="decimal" min="0" class="ff-input text-sm" placeholder="Amount ₹">
+      <input id="pcGiveDate" type="date" class="ff-input text-sm" value="${localISODate()}">
+      <input id="pcGiveNote" class="ff-input text-sm col-span-2" placeholder="Note (jaise: cash / UPI, kis kaam ke liye)">
+    </div>
+    <div class="flex gap-2 mt-2"><button onclick="pcUi.give=false; renderMain()" class="flex-1 bg-gray-100 font-bold py-2 rounded-lg text-sm">✖ Band</button>
+      <button onclick="pcGiveSave()" class="flex-[2] bg-[#1a73e8] text-white font-bold py-2 rounded-lg text-sm">💾 Save</button></div>
+  </div>`;
+}
+function renderPcBalances(people){
+  const rows = people.filter(u=>!pcIsAdminUser(u)).map(u=>({u, b:pcBalance(u)})).filter(x=>x.b.got || x.b.pass || x.b.pend || x.b.rej);
+  if(!rows.length) return "";
+  return `<details class="mb-2" ${pcUi.balOpen ? "open" : ""} ontoggle="pcUi.balOpen=this.open"><summary class="bg-white rounded-lg shadow px-3 py-2 text-xs font-bold text-gray-700">👛 Sab ka hisaab — kiske paas kitna (ab tak) ▾</summary>
+    <div class="bg-white rounded-lg shadow mt-1 overflow-x-auto"><table class="w-full text-[11px]"><tr class="bg-gray-50 text-gray-600"><th class="text-left p-1.5">Naam</th><th class="text-right p-1.5">💵 Mila</th><th class="text-right p-1.5">✅ Pass</th><th class="text-right p-1.5">⏳ Pending</th><th class="text-right p-1.5">👛 Baaki</th></tr>
+      ${rows.map(({u, b})=>`<tr class="border-t"><td class="p-1.5">${wzEsc(techName(u))}</td><td class="text-right p-1.5">${pcRs(b.got)}</td><td class="text-right p-1.5">${pcRs(b.pass)}</td><td class="text-right p-1.5">${pcRs(b.pend)}</td><td class="text-right p-1.5 font-bold ${b.hand < 0 ? "text-red-600" : ""}">${b.hand < 0 ? "−" : ""}${pcRs(Math.abs(b.hand))}</td></tr>`).join("")}
+    </table><p class="text-[10px] text-gray-500 p-1.5">Baaki = cash mila − pass kharcha. Laal (−) = us bande ko company se itna milna hai.</p></div></details>`;
+}
+
+/* ---- Excel: the register + everyone's balance + cash given ---- */
+async function pcExcel(){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const t = showToast("Excel ban rahi hai...");
+  try{ await ensureXlsxLib(); }catch(e){ hideToast(t); alert("Excel engine load nahi hua."); return; }
+  try{
+    const month = pcUi.month || localISODate().slice(0,7), list = pcFiltered();
+    const exp = list.filter(r=>r.kind==="exp").sort((a,b)=>String(a.date).localeCompare(String(b.date)) || String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
+    const head = ["S.No","Date","Naam","Role","Category","Type","Kya liya","Kahan se liya","Kis kaam / site","Amount (Rs)","Bill photo","Remark","Status","Admin note","Pass / wapas kisne","Kab"];
+    const rows = exp.map((r,i)=>[i+1, fpDate(r.date), techName(r.by), r.role || "", (PC_CAT[r.cat]||{}).l || r.cat || "", PC_SUB_TXT[r.sub] || "", r.item || "", r.shop || "", r.purpose || "", pcNum(r.amount),
+      (r.bills||[]).length ? `${r.bills.length} photo` : (r.noBill ? "Bill nahi mila" : "-"), r.remark || "", PC_ST_TXT[r.status] || r.status || "", r.adminNote || "", r.decidedBy ? techName(r.decidedBy) : "", r.decidedAt ? fpDate(String(r.decidedAt).slice(0,10)) : ""]);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([["PETTY CASH REGISTER - M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED"], [`Mahina: ${month==="all" ? "Sab" : pcMonLabel(month)}${pcUi.who ? "  |  " + techName(pcUi.who) : ""}${pcUi.cat ? "  |  " + PC_CAT[pcUi.cat].l : ""}${pcUi.st ? "  |  " + PC_ST_TXT[pcUi.st] : ""}`], [], head, ...rows,
+      ["", "", "", "", "", "", "", "", "TOTAL (pass + pending)", exp.filter(r=>r.status!=="rejected").reduce((s,r)=>s + pcNum(r.amount), 0)],
+      ["", "", "", "", "", "", "", "", "Stationery", exp.filter(r=>r.cat==="stationery" && r.status!=="rejected").reduce((s,r)=>s + pcNum(r.amount), 0)],
+      ["", "", "", "", "", "", "", "", "Technical", exp.filter(r=>r.cat==="technical" && r.status!=="rejected").reduce((s,r)=>s + pcNum(r.amount), 0)]]);
+    ws["!cols"] = [6,11,18,11,12,13,30,24,24,12,14,40,10,24,16,11].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws, "Petty Cash Register");
+    const bal = pcPeople().filter(u=>!pcIsAdminUser(u)).map(u=>({u, b:pcBalance(u)})).filter(x=>x.b.got || x.b.pass || x.b.pend || x.b.rej);
+    const ws2 = XLSX.utils.aoa_to_sheet([["HISAAB - kiske paas kitna (ab tak)"], [], ["Naam","Role","Cash mila (Rs)","Pass kharcha (Rs)","Pending (Rs)","Wapas (Rs)","Baaki / haath me (Rs)"],
+      ...bal.map(({u, b})=>[techName(u), (allUsers.find(x=>x.username===u)||{}).role || "", b.got, b.pass, b.pend, b.rej, b.hand])]);
+    ws2["!cols"] = [22,12,14,16,12,12,18].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws2, "Hisaab");
+    const adv = list.filter(r=>r.kind==="adv").sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const ws3 = XLSX.utils.aoa_to_sheet([["CASH DIYA (advance)"], [], ["S.No","Date","Kisko","Amount (Rs)","Note","Kisne diya"], ...adv.map((r,i)=>[i+1, fpDate(r.date), techName(r.to), pcNum(r.amount), r.remark || "", techName(r.by)])]);
+    ws3["!cols"] = [6,11,22,12,36,16].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws3, "Cash diya");
+    hideToast(t);
+    await saveXlsxFile(wb, `Petty_Cash_${month==="all" ? "all" : month}.xlsx`);
+  }catch(e){ console.error(e); hideToast(t); alert("Excel nahi bani: " + (e && e.message || e)); }
+}
+
+/* ---- the day's memo: one PDF with every bill ---- */
+async function pcMemoPdf(u, date){
+  if(!currentUser) return;
+  if(currentUser.role!=="admin" && u!==currentUser.username) return;
+  const items = pcList.filter(r=>r.kind==="exp" && r.by===u && r.date===date).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
+  if(!items.length) return;
+  const cash = pcList.filter(r=>r.kind==="adv" && r.to===u && r.date===date);
+  const tt = showToast("Memo PDF ban rahi hai (bills ke saath)...");
+  try{ await ensurePdfLibs(); }catch(e){ hideToast(tt); alert("PDF engine load nahi hua."); return; }
+  const bills = [];
+  for(let i=0;i<items.length;i++){ const r = items[i];
+    for(let j=0;j<(r.bills||[]).length;j++){ let d = null; try{ d = await fileGet("pettyCash", r.id, r.bills[j]); }catch(e){ console.error(e); } bills.push({i, j, n:r.bills.length, r, d, size: d ? await svyImgSize(d) : null}); } }
+  let pdf;
+  try{ pdf = pcMemoPdfBuild(u, date, items, cash, bills); }catch(e){ console.error(e); hideToast(tt); alert("PDF nahi ban payi: " + (e && e.message || e)); return; }
+  hideToast(tt);
+  await savePdfFile(pdf, `Petty_Cash_Memo_${String(techName(u)).replace(/[^\w]+/g,"_").slice(0,20)}_${date}.pdf`);
+}
+function pcMemoPdfBuild(u, date, items, cash, bills){
+  const pdf = new window.jspdf.jsPDF("p","mm","a4"), L = 12, R = 198, W = R - L, B = 280;
+  const PUR = [132,48,206], INK = [30,41,59], GREY = [100,116,139], LINE = [203,213,225], RED = [220,38,38], S = chkPdfSafe;
+  const col = (a, f)=>pdf[f](a[0], a[1], a[2]);
+  const txt = (s, x, y, size, bold, color, opt)=>{ pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); col(color||INK, "setTextColor"); pdf.text(S(s), x, y, opt||{}); };
+  const wrap = (s, w, size, bold)=>{ pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); return pdf.splitTextToSize(S(s) || " ", w); };
+  const memoNo = `PC-${String(date).replace(/-/g,"")}-${u}`;
+  let y = 0;
+  const head = ()=>{ col(PUR, "setFillColor"); pdf.rect(0, 0, 210, 22, "F");
+    txt("PETTY CASH - DAILY MEMO", L, 10, 14, true, [255,255,255]);
+    txt("M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED  |  PNG connection, Sonipat", L, 17, 8.5, false, [237,233,254]);
+    txt(memoNo, R, 10, 8, false, [237,233,254], {align:"right"}); y = 30; };
+  head();
+  const role = (allUsers.find(x=>x.username===u)||{}).role || (items[0]||{}).role || "";
+  txt(`Date: ${fpDate(date)}`, L, y, 10, true); txt(`Name: ${techName(u)}${role ? " (" + role + ")" : ""}`, L + 52, y, 10, true); y += 7;
+  const cols = [["S.No", 9], ["Category", 27], ["Kya liya", 40], ["Kahan se", 30], ["Kis kaam / remark", 48], ["Bill", 13], ["Amount (Rs)", 19]];
+  const xs = []; let x0 = L; cols.forEach(([, w])=>{ xs.push(x0); x0 += w; });
+  const hdr = ()=>{ col([238,242,246], "setFillColor"); pdf.rect(L, y, W, 7, "F"); col(LINE, "setDrawColor"); pdf.setLineWidth(0.3); pdf.rect(L, y, W, 7);
+    cols.forEach(([l], k)=>txt(l, xs[k] + 1.4, y + 4.7, 7.6, true)); y += 7; };
+  hdr();
+  let total = 0;
+  items.forEach((r, i)=>{
+    const rej = r.status==="rejected";
+    const cells = [String(i+1), `${(PC_CAT[r.cat]||{}).l || r.cat || ""}${r.sub ? " / " + (PC_SUB_TXT[r.sub] || r.sub) : ""}${rej ? " (WAPAS)" : r.status==="pending" ? " (pending)" : ""}`, r.item, r.shop,
+      [r.purpose, r.remark].filter(Boolean).join(" - "), (r.bills||[]).length ? `${r.bills.length} photo` : (r.noBill ? "Nahi" : "-"), pcRs(r.amount)];
+    const lines = cells.map((c, k)=>wrap(c, cols[k][1] - 2.8, 7.8));
+    const h = Math.max(7, Math.max(...lines.map(l=>l.length))*3.4 + 3);
+    if(y + h > B - 45){ pdf.addPage(); head(); hdr(); }
+    col(LINE, "setDrawColor"); pdf.setLineWidth(0.3); pdf.rect(L, y, W, h);
+    xs.slice(1).forEach(xx=>pdf.line(xx, y, xx, y + h));
+    lines.forEach((ls, k)=>ls.forEach((ln, j)=>txt(ln, k===6 ? xs[k] + cols[k][1] - 1.4 : xs[k] + 1.4, y + 4.6 + j*3.4, 7.8, k===6, rej ? GREY : INK, k===6 ? {align:"right"} : undefined)));
+    if(!rej) total += pcNum(r.amount);
+    y += h;
+  });
+  col([238,242,246], "setFillColor"); pdf.rect(L, y, W, 7.5, "F"); col(LINE, "setDrawColor"); pdf.rect(L, y, W, 7.5);
+  txt("TOTAL", xs[6] - 2, y + 5, 9, true, INK, {align:"right"}); txt(pcRs(total), R - 1.4, y + 5, 9.5, true, INK, {align:"right"}); y += 11;
+  wrap(inrWords(total), W, 8.5, true).forEach(ln=>{ txt(ln, L, y, 8.5, true); y += 4.2; });
+  if(items.some(r=>r.status==="rejected")){ txt("(WAPAS wale kharche total me nahi jode)", L, y, 7.5, false, GREY); y += 4; }
+  if(cash.length){ y += 1; const notes = cash.map(r=>r.remark).filter(Boolean);
+    txt(`Is din cash mila: Rs ${pcRs(cash.reduce((s,r)=>s + pcNum(r.amount), 0))}${notes.length ? " (" + notes.join("; ") + ")" : ""}`, L, y, 8.5, false, INK); y += 5; }
+  const bal = pcBalance(u);
+  txt(`Hisaab (ab tak): cash mila Rs ${pcRs(bal.got)}  |  pass kharcha Rs ${pcRs(bal.pass)}  |  pending Rs ${pcRs(bal.pend)}  |  baaki Rs ${pcRs(bal.hand)}`, L, y, 7.8, false, GREY); y += 9;
+  if(y + 26 > B){ pdf.addPage(); head(); }
+  const sw = (W - 8)/3;
+  ["Kharcha karne wala (sign)", "Checked by", "Approved by (Admin)"].forEach((l, k)=>{ const sx = L + k*(sw + 4); col(LINE, "setDrawColor"); pdf.setLineWidth(0.3); pdf.rect(sx, y, sw, 20); txt(l, sx + 2, y + 18, 7.5, false, GREY); });
+  y += 26;
+  if(bills.length){
+    pdf.addPage(); head(); txt(`BILLS (${bills.length})`, L, y, 10, true, PUR); y += 4;
+    const cw = (W - 6)/2, ph = 112;
+    for(let i=0;i<bills.length;i+=2){
+      const pair = bills.slice(i, i+2), h = ph + 12;
+      if(y + h > B){ pdf.addPage(); head(); }
+      pair.forEach((b, k)=>{ const bx = L + k*(cw + 6);
+        col(LINE, "setDrawColor"); pdf.setLineWidth(0.3); pdf.rect(bx, y, cw, ph);
+        if(b.d && b.size){ const sc = Math.min(cw/b.size.w, ph/b.size.h), w = b.size.w*sc, hh = b.size.h*sc;
+          try{ pdf.addImage(b.d, "JPEG", bx + (cw - w)/2, y + (ph - hh)/2, w, hh); }catch(e){ console.error(e); txt("(photo nahi lag payi)", bx + 3, y + 10, 8, false, GREY); } }
+        else txt("(photo load nahi hui)", bx + 3, y + 10, 8, false, RED);
+        txt(`${b.i + 1}. ${b.r.item || ""} - Rs ${pcRs(b.r.amount)}${b.n > 1 ? `  (bill ${b.j + 1}/${b.n})` : ""}`, bx, y + ph + 5, 8, true); });
+      y += h;
+    }
+  }
+  const pages = typeof pdf.getNumberOfPages==="function" ? pdf.getNumberOfPages() : 1;
+  for(let p=1;p<=pages;p++){ if(typeof pdf.setPage==="function") pdf.setPage(p);
+    txt(`PNG Enterprise  |  petty cash memo ${memoNo}  |  generated ${pgDate(new Date())} ${pgTime(new Date())}`, L, 290, 7, false, GREY); txt(`Page ${p} of ${pages}`, R, 290, 7, false, GREY, {align:"right"}); }
+  return pdf;
+}
+/* v60: form collection — the customer's papers with a checklist and a photo of each, from every login. When all 7 are
+   received the record is complete: the admin gets it in "📂 Form collection" as one PDF (details + checklist + every
+   photo) and every record in one Excel. Need-to-know: each person sees only what he collected; the admin sees all. */
+const FD_ITEMS = [
+  {k:"docs",   i:"📑", l:"Documents received (signature ke saath)", pdf:"Documents received with signature"},
+  {k:"cheque", i:"🏦", l:"Cheque / Draft (signature ke saath)", pdf:"Cheque / Draft with signature",
+    f:[["no","Cheque / DD no."],["bank","Bank ka naam"],["amt","Amount (₹)","number"],["date","Cheque date","date"]]},
+  {k:"idcard", i:"🪪", l:"ID card", pdf:"ID card",
+    f:[["type","ID ka type","select",["Aadhaar","PAN card","Voter ID","Driving licence","Passport","Other"]],["no","ID number"]]},
+  {k:"addr",   i:"🏠", l:"Address proof", pdf:"Address proof",
+    f:[["type","Proof ka type","select",["Aadhaar","Bijli bill","Paani bill","Registry / property paper","Rent agreement","Ration card","Other"]]]},
+  {k:"form",   i:"📝", l:"Connection form (signature ke saath)", pdf:"Connection form with signature"},
+  {k:"tc",     i:"📜", l:"Terms & conditions (sign kiye hue)", pdf:"Terms and conditions (signed)"},
+  {k:"ack",    i:"✅", l:"Acknowledgment (receiving)", pdf:"Acknowledgment"},
+];
+const FD_MAX_PH = 4;
+const FD_STATUS = {open:"⏳ Adhoora", complete:"✅ Poora — admin ke paas", accepted:"👍 Admin ne check kar liya", sentback:"↩ Admin ne wapas bheja"};
+const FD_ST_TXT = {open:"Incomplete", complete:"Complete", accepted:"Checked by admin", sentback:"Sent back"};
+let fdList = [], fdDraft = null, fdBusy = false, fdLoaded = false, fdUi = {tab:"", q:""};
+const fdNewId = ()=>"fd_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const fdItem = (r, k)=>(((r||{}).items||{})[k]) || {};
+const fdDone = r=>FD_ITEMS.filter(it=>fdItem(r, it.k).ok).length;
+const fdPhotoCount = r=>FD_ITEMS.reduce((n,it)=>n + (fdItem(r, it.k).ph||[]).length, 0);
+const fdIsNew = r=>r.status==="complete" && (!r.adminSeenAt || String(r.adminSeenAt) < String(r.completeAt || r.updatedAt || ""));
+const fdNewCount = ()=>fdList.filter(fdIsNew).length;
+const fdBackCount = ()=>fdList.filter(r=>r.status==="sentback" && currentUser && r.by===currentUser.username).length;
+const fdCustLabel = c=>`S.No ${c.sn||"-"} | ${c.name||""} | ${c.phone||""}`;
+function fdOnSnap(l){
+  if(currentUser && currentUser.role==="admin" && fdLoaded){
+    l.forEach(r=>{ const old = fdList.find(x=>x.id===r.id);
+      if(r.status==="complete" && r.by!==currentUser.username && (!old || old.status!=="complete")) showToast(`📂 ${r.name}: saare documents aa gaye — PDF taiyaar (Overview → Form collection)`); });
+  }
+  fdList = l.sort((a,b)=>String(b.updatedAt||b.createdAt||"").localeCompare(String(a.updatedAt||a.createdAt||""))); fdLoaded = true;
+}
+function fdItemDetail(r, it){
+  const s = fdItem(r, it.k);
+  if(it.k==="cheque") return [s.no ? "No " + s.no : "", s.bank, s.amt ? "Rs " + pcRs(s.amt) : "", s.date ? fpDate(s.date) : ""].filter(Boolean).join(" | ");
+  if(it.k==="idcard") return [s.type, s.no].filter(Boolean).join(" - ");
+  if(it.k==="addr") return s.type || "";
+  return "";
+}
+function fdNewDraft(r, c){
+  const items = {};
+  FD_ITEMS.forEach(it=>{ const s = fdItem(r, it.k); items[it.k] = {...s, ok:!!s.ok, ph:[...(s.ph||[])], add:[], del:[]}; });
+  const b = r || {};
+  return {id:r ? r.id : null, ro:false, customerId:b.customerId || (c ? c.id : ""), sn:String(b.sn || (c && c.sn) || ""), name:b.name || (c && c.name) || "", phone:b.phone || (c && c.phone) || "",
+    address:b.address || (c && c.address) || "", bpNo:b.bpNo || (c && c.bpNo) || "", formNo:b.formNo || (c && c.formNumber) || "", remark:b.remark || "", status:b.status || "open", adminNote:b.adminNote || "", items};
+}
+function fdOpen(id, cid){
+  if(!currentUser) return;
+  let r = id ? fdList.find(x=>x.id===id) : null;
+  if(!r && cid) r = fdList.find(x=>x.customerId===cid) || null;      // one record per customer: open the one he already has
+  const c = cid ? customers.find(x=>x.id===cid) : null;
+  fdDraft = fdNewDraft(r, c);
+  fdDraft.ro = !!(r && currentUser.role!=="admin" && (r.status==="accepted" || r.by!==currentUser.username));
+  fdRender();
+}
+function fdClose(){ const ov = document.getElementById("fdOverlay"); if(ov) ov.remove(); fdDraft = null; if(currentUser) renderMain(); }
+function fdSet(k, v){ if(fdDraft && !fdDraft.ro) fdDraft[k] = v; }
+function fdSetItem(k, f, v){ if(fdDraft && !fdDraft.ro) fdDraft.items[k][f] = v; }
+function fdToggle(k, on){ if(!fdDraft || fdDraft.ro) return; fdDraft.items[k].ok = !!on; fdRender(); }
+function fdPickCustomer(v){
+  const d = fdDraft; if(!d || d.ro) return;
+  const q = String(v||"").trim(); if(!q) return;
+  let c = customers.find(x=>fdCustLabel(x)===q);
+  if(!c){ const ql = q.toLowerCase(), hits = customers.filter(x=>[x.name, x.phone, x.bpNo, "s.no " + x.sn].some(f=>String(f||"").toLowerCase()===ql)); if(hits.length===1) c = hits[0]; }
+  if(!c) return;
+  const ex = fdList.find(x=>x.customerId===c.id && x.id!==d.id);
+  if(ex && confirm(`${c.name} ka form collection pehle se bana hai — wahi kholein?`)){ fdOpen(ex.id); return; }
+  Object.assign(d, {customerId:c.id, sn:String(c.sn||""), name:c.name || "", phone:c.phone || "", address:c.address || "", bpNo:c.bpNo || "", formNo:c.formNumber || d.formNo || ""});
+  fdRender();
+}
+function fdAddPhoto(k){
+  const d = fdDraft; if(!d || d.ro) return;
+  const s = d.items[k], it = FD_ITEMS.find(x=>x.k===k); if(!s || !it) return;
+  if(s.ph.length + s.add.length >= FD_MAX_PH){ alert(`Ek cheez ki ${FD_MAX_PH} photo tak.`); return; }
+  filePick(async f=>{
+    const tt = showToast("Photo taiyaar ho rahi hai...");
+    try{
+      const out = await fileMakePhoto(f, [`${d.name || "Customer"}${d.sn ? " (S.No " + d.sn + ")" : ""} - ${it.pdf}`, `${currentUser.name} - ${pgDate(new Date())} ${pgTime(new Date())}`]);
+      if(fdDraft===d){ s.add.push({d:out, at:new Date().toISOString()}); s.ok = true; }
+    }catch(e){ console.error(e); alert("Photo process nahi ho payi, dobara try karein."); }
+    finally{ hideToast(tt); }
+    if(fdDraft===d) fdRender();
+  });
+}
+function fdDelPhoto(k, old, i){
+  const d = fdDraft; if(!d || d.ro) return;
+  const s = d.items[k];
+  if(old){ const r = s.ph.splice(i, 1)[0]; if(r) s.del.push(r); } else s.add.splice(i, 1);
+  fdRender();
+}
+function fdPhotoView(k, old, i){
+  const d = fdDraft; if(!d) return; const s = d.items[k], it = FD_ITEMS.find(x=>x.k===k);
+  if(old) fileViewMany("formDocs", d.id, [s.ph[i]], `${it.i} ${it.l}`);
+  else fileViewMany("formDocs", d.id, [], `${it.i} ${it.l}`, [s.add[i].d]);
+}
+function fdItemCard(it, n){
+  const d = fdDraft, s = d.items[it.k], ro = d.ro;
+  const ph = [...(s.ph||[]).map((r,i)=>({old:true, i, r})), ...(s.add||[]).map((a,i)=>({old:false, i, a}))];
+  const field = ([fk, fl, ft, fo])=>ft==="select"
+    ? `<select id="fdF_${it.k}_${fk}" class="ff-input text-xs" ${ro ? "disabled" : ""} onchange="fdSetItem('${it.k}','${fk}', this.value)"><option value="">${fl}…</option>${fo.map(o=>`<option ${s[fk]===o ? "selected" : ""}>${o}</option>`).join("")}</select>`
+    : `<input id="fdF_${it.k}_${fk}" class="ff-input text-xs" ${ro ? "disabled" : ""} ${ft==="number" ? 'type="number" inputmode="decimal"' : ft==="date" ? 'type="date"' : ""} placeholder="${fl}" value="${wzEsc(s[fk]||"")}" oninput="fdSetItem('${it.k}','${fk}', this.value)">`;
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2 border-l-4 ${s.ok ? "border-[#0D904F]" : "border-gray-200"}">
+    <label class="flex items-center gap-3">
+      <input id="fdOk_${it.k}" type="checkbox" class="w-6 h-6" ${s.ok ? "checked" : ""} ${ro ? "disabled" : ""} onchange="fdToggle('${it.k}', this.checked)">
+      <span class="flex-1 text-sm font-bold ${s.ok ? "text-green-800" : "text-gray-800"}">${n+1}. ${it.i} ${it.l}</span>
+      <span class="text-[10px] font-bold ${ph.length ? "text-green-700" : "text-gray-400"}">📷 ${ph.length}</span>
+    </label>
+    ${(it.f||[]).length ? `<div class="grid grid-cols-2 gap-2 mt-2">${it.f.map(field).join("")}</div>` : ""}
+    <div class="flex gap-2 flex-wrap mt-2">
+      ${ph.map(p=>`<div class="relative"><img ${p.old ? `data-fthumb="formDocs|${d.id}|${p.r.ver}|${p.r.n}" src=""` : `src="${p.a.d}"`} onclick="fdPhotoView('${it.k}', ${p.old}, ${p.i})" class="w-16 h-16 object-cover rounded border bg-gray-100">
+        ${ro ? "" : `<button onclick="fdDelPhoto('${it.k}', ${p.old}, ${p.i})" class="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 text-[10px] font-bold">✖</button>`}</div>`).join("")}
+      ${!ro && ph.length < FD_MAX_PH ? `<button id="fdPh_${it.k}" onclick="fdAddPhoto('${it.k}')" class="w-16 h-16 rounded border-2 border-dashed border-[#1a73e8] text-[#1a73e8] text-[11px] font-bold leading-tight">📷<br>Photo</button>` : ""}
+    </div>
+  </div>`;
+}
+function fdRender(){
+  const d = fdDraft; if(!d) return;
+  let ov = document.getElementById("fdOverlay");
+  if(!ov){ ov = document.createElement("div"); ov.id = "fdOverlay"; document.body.appendChild(ov); }
+  ov.style.cssText = "position:fixed;inset:0;z-index:70;background:#f3f4f6;overflow-y:auto;padding:0 0 90px 0;";
+  const v = k=>wzEsc(d[k]==null ? "" : String(d[k])), ro = d.ro;
+  const done = FD_ITEMS.filter(it=>d.items[it.k].ok).length, all = FD_ITEMS.length, full = done===all;
+  ov.innerHTML = `<div class="bg-[#1a73e8] text-white p-3 flex items-center gap-3 sticky top-0 z-10"><button onclick="fdClose()" class="text-2xl font-bold">←</button>
+      <div class="flex-1"><p class="font-bold text-sm">📂 Form collection — customer ke documents</p><p class="text-[11px] text-blue-100">${done}/${all} mil gaye${d.id ? " • " + (FD_STATUS[d.status] || "") : ""}</p></div></div>
+    <div class="p-3">
+      ${d.status==="sentback" && d.adminNote ? `<p class="text-xs bg-red-50 text-red-700 rounded-lg p-2 mb-2">↩ Admin ne wapas bheja: ${wzEsc(d.adminNote)}</p>` : ""}
+      ${ro ? `<p class="text-xs bg-green-50 text-green-800 rounded-lg p-2 mb-2">👍 Admin ne check kar liya — ab sirf dekh sakte hain.</p>` : ""}
+      <div class="bg-white rounded-lg shadow p-3 mb-3">
+        <p class="font-bold text-sm mb-1">👤 Customer</p>
+        ${ro ? "" : `<input id="fdCust" list="fdCustList" class="ff-input text-sm mb-2" placeholder="🔎 Customer chunein (naam / S.No / phone) — ya neeche khud likhein" onchange="fdPickCustomer(this.value)">
+        <datalist id="fdCustList">${customers.slice(0, 400).map(c=>`<option value="${wzEsc(fdCustLabel(c))}">`).join("")}</datalist>`}
+        <div class="grid grid-cols-2 gap-2">
+          <input id="fdName" class="ff-input text-sm col-span-2" ${ro ? "disabled" : ""} placeholder="Customer ka naam *" value="${v("name")}" oninput="fdSet('name', this.value)">
+          <input id="fdPhone" class="ff-input text-sm" ${ro ? "disabled" : ""} inputmode="numeric" maxlength="13" placeholder="Mobile *" value="${v("phone")}" oninput="fdSet('phone', this.value)">
+          <input id="fdSn" class="ff-input text-sm" ${ro ? "disabled" : ""} placeholder="S.No" value="${v("sn")}" oninput="fdSet('sn', this.value)">
+          <input id="fdBp" class="ff-input text-sm" ${ro ? "disabled" : ""} placeholder="BP No." value="${v("bpNo")}" oninput="fdSet('bpNo', this.value)">
+          <input id="fdFormNo" class="ff-input text-sm" ${ro ? "disabled" : ""} placeholder="Form No." value="${v("formNo")}" oninput="fdSet('formNo', this.value)">
+          <textarea id="fdAddr" rows="2" class="ff-input text-sm col-span-2" ${ro ? "disabled" : ""} placeholder="Address" oninput="fdSet('address', this.value)">${v("address")}</textarea>
+        </div>
+      </div>
+      <p class="text-[11px] text-gray-600 mb-2">✅ Har cheez milne par tick karein aur 📷 uski photo lein (photo lete hi tick lag jata hai). Saare ${all} milte hi admin ke paas single PDF + Excel me chala jayega.</p>
+      ${FD_ITEMS.map((it, n)=>fdItemCard(it, n)).join("")}
+      <div class="bg-white rounded-lg shadow p-3 mb-3"><label class="ff-label">📝 Remark (optional)</label><textarea id="fdRemark" rows="2" class="ff-input text-sm" ${ro ? "disabled" : ""} oninput="fdSet('remark', this.value)">${v("remark")}</textarea></div>
+      ${d.id ? `<button onclick="fdPdf('${d.id}')" class="w-full bg-white border border-[#0D904F] text-[#0D904F] font-bold py-2.5 rounded-lg text-sm mb-2">📄 Single PDF dekhein / download</button>` : ""}
+    </div>
+    <div class="bg-white border-t p-3 flex gap-2" style="position:fixed;left:0;right:0;bottom:0;z-index:71">
+      <button onclick="fdClose()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-lg text-sm">✖ Band</button>
+      ${ro ? "" : `<button id="fdSaveBtn" onclick="fdSave()" class="flex-[2] ${full ? "bg-[#0D904F]" : "bg-[#1a73e8]"} text-white font-bold py-3 rounded-lg text-sm">${full ? "✅ Save — admin ko bhejein" : `💾 Save (${done}/${all}) — baaki baad me`}</button>`}
+    </div>`;
+  fileThumbs().catch(e=>console.error(e));
+}
+async function fdSave(){
+  const d = fdDraft; if(!d || d.ro || fdBusy || !currentUser) return;
+  if(!rawDb){ alert("Database se connect nahi hai — internet check karein."); return; }
+  if(!String(d.name||"").trim()){ alert("Customer ka naam likhiye."); return; }
+  const ph10 = String(d.phone||"").replace(/\D/g, "").slice(-10);
+  if(ph10.length!==10){ alert("Customer ka 10 digit mobile number likhiye."); return; }
+  const noPh = FD_ITEMS.filter(it=>d.items[it.k].ok && !(d.items[it.k].ph.length + d.items[it.k].add.length));
+  if(noPh.length && !confirm(`${noPh.length} cheezon ki photo nahi hai (${noPh.map(it=>it.pdf).join(", ")}).\nPhir bhi save karein?`)) return;
+  fdBusy = true;
+  const old = d.id ? fdList.find(x=>x.id===d.id) : null, id = d.id || fdNewId(), admin = currentUser.role==="admin";
+  const total = FD_ITEMS.reduce((n,it)=>n + d.items[it.k].add.length, 0);
+  let tt = showToast("Save ho raha hai...");
+  try{
+    const items = {}; let up = 0;
+    for(const it of FD_ITEMS){
+      const s = d.items[it.k], ph = [...s.ph];
+      for(const a of s.add){ hideToast(tt); tt = showToast(`Photos upload ho rahi hain (${++up}/${total})...`); ph.push(await filePut("formDocs", id, a.d, {item:it.k})); }
+      const o = {ok:!!s.ok, ph}; (it.f||[]).forEach(([fk])=>{ o[fk] = String(s[fk]==null ? "" : s[fk]).trim(); });
+      items[it.k] = o;
+    }
+    const full = FD_ITEMS.every(it=>items[it.k].ok), now = new Date().toISOString();
+    const status = full ? (admin && old && old.status==="accepted" ? "accepted" : "complete") : "open";
+    const rec = {by: old ? old.by : currentUser.username, byName: old ? (old.byName || "") : (currentUser.name || ""), role: old ? (old.role || "") : currentUser.role,
+      customerId:d.customerId || "", sn:String(d.sn||"").trim(), name:String(d.name).trim(), phone:String(d.phone).trim(), address:String(d.address||"").trim(),
+      bpNo:String(d.bpNo||"").trim(), formNo:String(d.formNo||"").trim(), remark:String(d.remark||"").trim(), items, status, updatedAt:now};
+    if(full && !(old && (old.status==="complete" || old.status==="accepted"))) rec.completeAt = now;
+    if(old) await rawDb.doc("formDocs/" + id).update(rec); else await rawDb.doc("formDocs/" + id).set({...rec, createdAt:now});
+    for(const it of FD_ITEMS) for(const r of d.items[it.k].del) await fileDrop("formDocs", id, r);
+    hideToast(tt); fdBusy = false;
+    const ov = document.getElementById("fdOverlay"); if(ov) ov.remove(); fdDraft = null;
+    showToast(full ? "✅ Saare documents mil gaye — admin ke paas single PDF + Excel me chala gaya." : `💾 Save ho gaya (${FD_ITEMS.filter(it=>items[it.k].ok).length}/${FD_ITEMS.length}) — baaki baad me bharein.`);
+    renderMain();
+  }catch(e){ console.error(e); hideToast(tt); fdBusy = false; alert("Save nahi hua — internet check karke dobara try karein."); }
+}
+async function fdMark(id, patch, msg){
+  try{ await rawDb.doc("formDocs/" + id).update(patch); if(msg) showToast(msg); }catch(e){ console.error(e); alert("Save nahi hua."); }
+  renderMain();
+}
+function fdAccept(id){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const now = new Date().toISOString();
+  return fdMark(id, {status:"accepted", checkedBy:currentUser.username, checkedAt:now, adminSeenAt:now}, "👍 Check ho gaya.");
+}
+function fdSendBack(id){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const r = fdList.find(x=>x.id===id); if(!r) return;
+  const note = prompt(`${r.name}: kya theek karna hai? (bharne wale ko dikhega)`, "");
+  if(note===null) return;
+  if(!String(note).trim()){ alert("Kya theek karna hai — likhiye."); return; }
+  const now = new Date().toISOString();
+  return fdMark(id, {status:"sentback", adminNote:String(note).trim(), checkedBy:currentUser.username, checkedAt:now, adminSeenAt:now}, "↩ Wapas bhej diya.");
+}
+
+/* ---- screens ---- */
+function renderDocs(){
+  if(currentUser.role==="admin") return renderDocsAdmin();
+  const mine = fdList.filter(r=>r.by===currentUser.username);
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2 border-l-4 border-[#1a73e8]">
+      <p class="font-bold text-sm text-gray-800">📂 Form collection — customer ke documents</p>
+      <p class="text-[11px] text-gray-500">Checklist: ${FD_ITEMS.map(it=>it.i + " " + it.pdf.replace(/ with signature| \(signed\)/g, "")).join(" • ")} — har ek ki photo lein. Saare milte hi admin ko single PDF + Excel me chala jata hai.</p>
+    </div>
+    <button onclick="fdOpen()" class="w-full bg-[#1a73e8] text-white font-bold py-2.5 rounded-lg mb-3">➕ Naya form collection</button>
+    ${mine.map(r=>fdRow(r, false)).join("") || '<p class="text-xs text-gray-400 text-center py-4">Abhi koi form collection nahi.</p>'}`;
+}
+function fdRow(r, admin){
+  const done = fdDone(r), all = FD_ITEMS.length, canEdit = admin || r.status!=="accepted";
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2 ${admin && fdIsNew(r) ? "ring-2 ring-[#0D904F]" : ""}">
+    <div class="flex items-start gap-2">
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold text-gray-800 truncate">${wzEsc(r.name||"—")}${r.sn ? ` <span class="font-normal text-[10px] text-gray-500">S.No ${wzEsc(r.sn)}</span>` : ""}</p>
+        <p class="text-[11px] text-gray-500">📞 ${wzEsc(r.phone||"—")}${r.bpNo ? " • BP " + wzEsc(r.bpNo) : ""}${admin ? " • 👤 " + wzEsc(techName(r.by)) : ""} • ${fpDate(String(r.updatedAt||r.createdAt||"").slice(0,10))}</p>
+        <p class="text-[12px] mt-0.5">${FD_ITEMS.map(it=>`<span class="${fdItem(r, it.k).ok ? "" : "opacity-25"}">${it.i}</span>`).join(" ")} <b>${done}/${all}</b> <span class="text-[10px] text-gray-500">• 📷 ${fdPhotoCount(r)}</span></p>
+        <p class="text-[11px] font-bold mt-0.5 ${r.status==="sentback" ? "text-red-600" : r.status==="open" ? "text-orange-600" : "text-green-700"}">${FD_STATUS[r.status] || wzEsc(r.status||"")}</p>
+        ${r.status==="sentback" && r.adminNote ? `<p class="text-[11px] bg-red-50 text-red-700 rounded px-2 py-1 mt-1">↩ ${wzEsc(r.adminNote)}</p>` : ""}
+      </div>
+      ${admin && fdIsNew(r) ? '<span class="bg-red-600 text-white text-[10px] font-bold rounded-full px-2 py-0.5">NAYA</span>' : ""}
+    </div>
+    <div class="flex gap-1 mt-2">
+      <button onclick="fdOpen('${r.id}')" class="flex-1 bg-white border text-xs font-bold py-1.5 rounded">${canEdit ? "✏️ Kholein / bharein" : "👁 Dekhein"}</button>
+      <button onclick="fdPdf('${r.id}')" class="flex-1 bg-[#0D904F] text-white text-xs font-bold py-1.5 rounded">📄 Single PDF</button>
+    </div>
+    ${admin && r.status==="complete" ? `<div class="flex gap-1 mt-1"><button onclick="fdAccept('${r.id}')" class="flex-1 bg-green-50 text-green-800 text-xs font-bold py-1.5 rounded">👍 Theek hai</button><button onclick="fdSendBack('${r.id}')" class="flex-1 bg-red-50 text-red-700 text-xs font-bold py-1.5 rounded">↩ Wapas bhejein</button></div>` : ""}
+  </div>`;
+}
+const FD_TABS = {complete:r=>r.status==="complete", open:r=>r.status==="open" || r.status==="sentback", accepted:r=>r.status==="accepted", all:()=>true};
+function renderDocsAdmin(){
+  const q = String(fdUi.q||"").trim().toLowerCase();
+  const match = r=>!q || [r.name, r.phone, r.bpNo, r.sn, r.formNo, techName(r.by)].some(x=>String(x||"").toLowerCase().includes(q));
+  if(!fdUi.tab) fdUi.tab = fdList.some(FD_TABS.complete) ? "complete" : "all";
+  const list = fdList.filter(FD_TABS[fdUi.tab] || FD_TABS.all).filter(match).sort((a,b)=>(fdIsNew(b) - fdIsNew(a)) || String(b.updatedAt||"").localeCompare(String(a.updatedAt||"")));
+  const tabBtn = (k, label)=>`<button onclick="fdUi.tab='${k}'; renderMain()" class="flex-1 text-[11px] font-bold py-2 rounded-lg ${fdUi.tab===k ? "bg-[#1a73e8] text-white" : "bg-white text-gray-600 border"}">${label} (${fdList.filter(FD_TABS[k]).length})</button>`;
+  const nn = fdNewCount();
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2 border-l-4 border-[#1a73e8]">
+      <p class="font-bold text-sm text-gray-800">📂 Form collection — saare customers ke documents${nn ? ` <span class="bg-red-600 text-white rounded-full px-2 text-[10px]">${nn} naye poore</span>` : ""}</p>
+      <p class="text-[11px] text-gray-500">Har customer ki ek PDF (details + checklist + saari photos); saara data ek Excel me. Poore hote hi yahan "NAYA" aata hai.</p>
+      <div class="grid grid-cols-2 gap-2 mt-2"><button onclick="fdExcel()" class="bg-[#0D904F] text-white text-xs font-bold py-2 rounded">⬇ Excel (saare ${fdList.length})</button><button onclick="fdOpen()" class="bg-[#1a73e8] text-white text-xs font-bold py-2 rounded">➕ Naya form</button></div>
+    </div>
+    <div class="flex gap-1 mb-2">${tabBtn("complete","✅ Poore")}${tabBtn("open","⏳ Adhoore")}${tabBtn("accepted","👍 Checked")}${tabBtn("all","Sab")}</div>
+    <input id="fdQ" class="ff-input text-xs mb-2" placeholder="🔎 naam / phone / BP / S.No / kisne bhara" value="${wzEsc(fdUi.q)}" onchange="fdUi.q=this.value; renderMain()">
+    ${list.map(r=>fdRow(r, true)).join("") || '<p class="text-xs text-gray-400 text-center py-4">Is list me kuch nahi.</p>'}`;
+}
+// admin's customer card: the documents of this customer
+function fdChip(c){
+  const r = fdList.find(x=>x.customerId===c.id);
+  if(!r) return `<button onclick="fdOpen(null,'${c.id}')" class="w-full text-xs bg-blue-50 text-blue-800 font-bold py-1.5 rounded mt-2">📂 Form collection (documents + photo) bharein</button>`;
+  return `<div class="flex gap-1 mt-2"><button onclick="fdOpen('${r.id}')" class="flex-1 text-xs bg-blue-50 text-blue-800 font-bold py-1.5 rounded">📂 Documents ${fdDone(r)}/${FD_ITEMS.length} • ${FD_STATUS[r.status] || ""}</button>
+    <button onclick="fdPdf('${r.id}')" class="text-xs bg-[#0D904F] text-white font-bold px-3 rounded">📄 PDF</button></div>`;
+}
+
+/* ---- the single PDF: details + checklist, then every photo on its own page ---- */
+async function fdPdf(id){
+  const r = fdList.find(x=>x.id===id); if(!r || !currentUser) return;
+  if(currentUser.role!=="admin" && r.by!==currentUser.username) return;
+  const tt = showToast("PDF ban rahi hai (saari photos ke saath)...");
+  try{ await ensurePdfLibs(); }catch(e){ hideToast(tt); alert("PDF engine load nahi hua."); return; }
+  const photos = [];
+  for(const it of FD_ITEMS){ const ph = fdItem(r, it.k).ph || [];
+    for(let j=0;j<ph.length;j++){ let d = null; try{ d = await fileGet("formDocs", r.id, ph[j]); }catch(e){ console.error(e); } photos.push({it, j, n:ph.length, d, size: d ? await svyImgSize(d) : null}); } }
+  let pdf;
+  try{ pdf = fdPdfBuild(r, photos); }catch(e){ console.error(e); hideToast(tt); alert("PDF nahi ban payi: " + (e && e.message || e)); return; }
+  hideToast(tt);
+  if(currentUser.role==="admin" && fdIsNew(r)){ try{ await rawDb.doc("formDocs/" + r.id).update({adminSeenAt:new Date().toISOString()}); }catch(e){ console.error(e); } }
+  await savePdfFile(pdf, `Documents_${String(r.name||"customer").replace(/[^\w]+/g,"_").slice(0,24)}${r.sn ? "_SNo" + String(r.sn).replace(/[^\w]+/g,"") : ""}.pdf`);
+}
+function fdPdfBuild(r, photos){
+  const pdf = new window.jspdf.jsPDF("p","mm","a4"), L = 12, R = 198, W = R - L, B = 282;
+  const BLUE = [26,115,232], GREEN = [13,144,79], INK = [30,41,59], GREY = [100,116,139], LINE = [203,213,225], RED = [220,38,38], S = chkPdfSafe;
+  const col = (a, f)=>pdf[f](a[0], a[1], a[2]);
+  const txt = (s, x, y, size, bold, color, opt)=>{ pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); col(color||INK, "setTextColor"); pdf.text(S(s), x, y, opt||{}); };
+  const wrap = (s, w, size, bold)=>{ pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); return pdf.splitTextToSize(S(s) || "-", w); };
+  let y = 0;
+  const head = ()=>{ col(BLUE, "setFillColor"); pdf.rect(0, 0, 210, 22, "F");
+    txt("PNG CONNECTION - DOCUMENT COLLECTION", L, 10, 14, true, [255,255,255]);
+    txt("M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED  |  PNG connection, Sonipat", L, 17, 8.5, false, [219,234,254]);
+    txt(String(FD_ST_TXT[r.status] || "").toUpperCase(), R, 10, 8, true, [219,234,254], {align:"right"}); y = 30; };
+  head();
+  // customer + who collected
+  txt("CUSTOMER DETAILS", L, y, 9.5, true, BLUE); y += 2;
+  const det = [["Customer", r.name], ["Mobile", r.phone], ["S.No", r.sn || "-"], ["BP No", r.bpNo || "-"], ["Form No", r.formNo || "-"], ["Address", r.address || "-"],
+    ["Collected by", `${techName(r.by)}${r.role ? " (" + r.role + ")" : ""}`], ["Last update", r.updatedAt ? `${pgDate(new Date(r.updatedAt))} ${pgTime(new Date(r.updatedAt))}` : "-"],
+    ["Complete on", r.completeAt ? `${pgDate(new Date(r.completeAt))} ${pgTime(new Date(r.completeAt))}` : "-"], ["Status", FD_ST_TXT[r.status] || r.status || ""]];
+  const half = Math.ceil(det.length/2); let ly = y, ry = y;
+  col(LINE, "setDrawColor"); pdf.setLineWidth(0.3);
+  det.forEach(([l, val], i)=>{ const left = i < half, x = left ? L : L + W/2 + 2, w = W/2 - 2, lines = wrap(val, w - 30, 8.5).slice(0, 3), h = Math.max(6.4, lines.length*3.6 + 2.8), yy = left ? ly : ry;
+    pdf.rect(x, yy, w, h); txt(l, x + 1.8, yy + 4.3, 7.6, true, GREY); lines.forEach((ln, k)=>txt(ln, x + 30, yy + 4.3 + k*3.6, 8.5, false));
+    if(left) ly += h; else ry += h; });
+  y = Math.max(ly, ry) + 7;
+  // the checklist
+  txt(`DOCUMENT CHECKLIST  (${fdDone(r)}/${FD_ITEMS.length} received, ${fdPhotoCount(r)} photos)`, L, y, 9.5, true, BLUE); y += 2;
+  const cw = [10, 70, 22, 18, 66], xs = []; let x0 = L; cw.forEach(w=>{ xs.push(x0); x0 += w; });
+  col([238,242,246], "setFillColor"); pdf.rect(L, y, W, 7, "F"); col(LINE, "setDrawColor"); pdf.rect(L, y, W, 7);
+  ["S.No", "Document", "Received", "Photos", "Details"].forEach((l, k)=>txt(l, xs[k] + 1.5, y + 4.7, 8, true)); y += 7;
+  FD_ITEMS.forEach((it, i)=>{
+    const s = fdItem(r, it.k), det2 = wrap(fdItemDetail(r, it) || "-", cw[4] - 3, 8), h = Math.max(7.4, det2.length*3.6 + 3.4);
+    col(LINE, "setDrawColor"); pdf.setLineWidth(0.3); pdf.rect(L, y, W, h); xs.slice(1).forEach(xx=>pdf.line(xx, y, xx, y + h));
+    txt(String(i+1), xs[0] + 1.5, y + 4.8, 8.5); txt(it.pdf, xs[1] + 1.5, y + 4.8, 8.5, true);
+    txt(s.ok ? "YES" : "NO", xs[2] + 1.5, y + 4.8, 9, true, s.ok ? GREEN : RED); txt(String((s.ph||[]).length), xs[3] + 1.5, y + 4.8, 8.5);
+    det2.forEach((ln, k)=>txt(ln, xs[4] + 1.5, y + 4.8 + k*3.6, 8)); y += h; });
+  y += 6;
+  if(r.remark){ txt("Remark:", L, y, 8.5, true); wrap(r.remark, W - 16, 8.5).slice(0, 4).forEach((ln, k)=>txt(ln, L + 15, y + k*3.8, 8.5)); y += Math.min(4, wrap(r.remark, W - 16, 8.5).length)*3.8 + 3; }
+  if(r.adminNote && r.status==="sentback"){ txt("Admin note: " + r.adminNote, L, y, 8.5, false, RED); y += 6; }
+  if(y + 26 > B){ pdf.addPage(); head(); }
+  const sw = (W - 4)/2;
+  ["Collected by (sign)", "Checked by (Admin)"].forEach((l, k)=>{ const sx = L + k*(sw + 4); col(LINE, "setDrawColor"); pdf.rect(sx, y + 2, sw, 20); txt(l, sx + 2, y + 20, 7.5, false, GREY); });
+  // every photo, one per page
+  photos.forEach((p, i)=>{
+    pdf.addPage(); head();
+    txt(`${FD_ITEMS.indexOf(p.it) + 1}. ${p.it.pdf}${p.n > 1 ? `  -  photo ${p.j + 1} of ${p.n}` : ""}`, L, y, 10.5, true, INK); y += 3;
+    if(p.d && p.size){ const maxH = B - y - 2, sc = Math.min(W/p.size.w, maxH/p.size.h), w = p.size.w*sc, h = p.size.h*sc;
+      try{ pdf.addImage(p.d, "JPEG", L + (W - w)/2, y + 1, w, h); }catch(e){ console.error(e); txt("(photo nahi lag payi)", L, y + 10, 9, false, RED); } }
+    else txt("(photo load nahi hui - internet check karke dobara PDF banayein)", L, y + 10, 9, false, RED);
+  });
+  const pages = typeof pdf.getNumberOfPages==="function" ? pdf.getNumberOfPages() : 1;
+  for(let p=1;p<=pages;p++){ if(typeof pdf.setPage==="function") pdf.setPage(p);
+    txt(`PNG Enterprise  |  documents of ${r.name||""}${r.sn ? " (S.No " + r.sn + ")" : ""}  |  generated ${pgDate(new Date())} ${pgTime(new Date())}`, L, 290, 7, false, GREY); txt(`Page ${p} of ${pages}`, R, 290, 7, false, GREY, {align:"right"}); }
+  return pdf;
+}
+
+/* ---- Excel: one row per customer ---- */
+async function fdExcel(){
+  if(!currentUser || currentUser.role!=="admin") return;
+  if(!fdList.length){ alert("Abhi koi form collection nahi."); return; }
+  const t = showToast("Excel ban rahi hai...");
+  try{ await ensureXlsxLib(); }catch(e){ hideToast(t); alert("Excel engine load nahi hua."); return; }
+  try{
+    const list = [...fdList].sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
+    const head = ["S.No","Date","Collected by","Role","Customer S.No","Customer name","Mobile","Address","BP No","Form No", ...FD_ITEMS.map(it=>it.pdf),
+      "Cheque / DD no.","Bank","Amount (Rs)","Cheque date","ID type","ID number","Address proof","Received","Total photos","Status","Complete on","Admin note","Checked by","Checked on","Remark"];
+    const dt = iso=>iso ? fpDate(String(iso).slice(0,10)) : "";
+    const rows = list.map((r,i)=>{ const ch = fdItem(r, "cheque"), id = fdItem(r, "idcard"), ad = fdItem(r, "addr");
+      return [i+1, dt(r.createdAt), techName(r.by), r.role || "", r.sn || "", r.name || "", r.phone || "", r.address || "", r.bpNo || "", r.formNo || "",
+        ...FD_ITEMS.map(it=>{ const s = fdItem(r, it.k); return s.ok ? `YES${(s.ph||[]).length ? " (" + s.ph.length + " photo)" : ""}` : "NO"; }),
+        ch.no || "", ch.bank || "", ch.amt ? pcNum(ch.amt) : "", ch.date ? fpDate(ch.date) : "", id.type || "", id.no || "", ad.type || "",
+        `${fdDone(r)}/${FD_ITEMS.length}`, fdPhotoCount(r), FD_ST_TXT[r.status] || r.status || "", dt(r.completeAt), r.adminNote || "", r.checkedBy ? techName(r.checkedBy) : "", dt(r.checkedAt), r.remark || ""]; });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([["FORM COLLECTION - customer documents  |  M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED"], [`Total ${list.length}  |  complete ${list.filter(r=>r.status==="complete" || r.status==="accepted").length}  |  ${pgDate(new Date())}`], [], head, ...rows]);
+    ws["!cols"] = [6,11,16,11,9,22,13,30,12,10, ...FD_ITEMS.map(()=>16), 14,16,11,11,12,16,18,9,9,14,11,24,14,11,30].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws, "Form Collection");
+    hideToast(t);
+    await saveXlsxFile(wb, `Form_Collection_${localISODate()}.xlsx`);
+  }catch(e){ console.error(e); hideToast(t); alert("Excel nahi bani: " + (e && e.message || e)); }
+}
 async function portalDocEdit(key, cid, view){
   const ref = rawDb.doc("portal/" + key);
   let d = {}; try{ const s = await ref.get(); if(s && s.exists) d = s.data() || {}; }catch(e){}
@@ -12412,6 +13338,32 @@ service cloud.firestore {
       allow update: if isDevOwner() && resource.data.status == 'pending'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedBy', 'decidedAt', 'devNote'])
         && request.resource.data.status in ['approved', 'rejected'];
+    }
+    // petty cash daily memo: every employee his own expenses (with the bill photos) and the cash the admin gave him;
+    // he can change or remove an expense only while it waits for the admin; passing / returning / giving cash: admin only
+    match /pettyCash/{id} {
+      allow read: if isStaff() && (resource.data.by == me() || resource.data.to == me());
+      allow create: if isStaff() && request.resource.data.by == me() && request.resource.data.kind == 'exp' && request.resource.data.status == 'pending';
+      allow update: if isStaff() && resource.data.by == me() && resource.data.kind == 'exp' && resource.data.status == 'pending'
+        && request.resource.data.by == me() && request.resource.data.kind == 'exp' && request.resource.data.status == 'pending'
+        && !changed().hasAny(['adminNote', 'decidedBy', 'decidedAt', 'to']);
+      allow delete: if isStaff() && resource.data.by == me() && resource.data.kind == 'exp' && resource.data.status == 'pending';
+    }
+    // form collection (the customer's documents): every employee only what he collected; checking / sending back: admin only
+    match /formDocs/{id} {
+      allow read: if isStaff() && resource.data.by == me();
+      allow create: if isStaff() && request.resource.data.by == me() && request.resource.data.status in ['open', 'complete'];
+      allow update: if isStaff() && resource.data.by == me() && resource.data.status != 'accepted'
+        && request.resource.data.by == me() && request.resource.data.status in ['open', 'complete']
+        && !changed().hasAny(['adminNote', 'checkedBy', 'checkedAt', 'adminSeenAt']);
+    }
+    // the photos of those bills and documents: only the one who took them (and the admin)
+    match /files/{id} {
+      allow get: if isStaff() && resource.data.by == me();
+      allow create: if isStaff() && request.resource.data.by == me() && request.resource.data.pcol in ['pettyCash', 'formDocs'];
+      allow delete: if isStaff() && resource.data.by == me()
+        && ((resource.data.pcol == 'pettyCash' && get(/databases/$(database)/documents/pettyCash/$(resource.data.pid)).data.status == 'pending')
+          || (resource.data.pcol == 'formDocs' && get(/databases/$(database)/documents/formDocs/$(resource.data.pid)).data.status != 'accepted'));
     }
     // public QR form, status-page feedback and PIN requests: anyone may send, only the team reads
     match /leads/{id} {
@@ -12595,6 +13547,9 @@ async function secRoleTest(){
     store: u=>[["chal rahe kaam", C("customers").where("status","==","assigned"), true], ["stock", C("inventory"), true], ["issue history", C("issues"), true],
       ["leads (nahi milne chahiye)", C("leads").limit(1), false]],
   };
+  // v60: every role also its own petty cash memos, the cash given to it and its own form collections — nobody else's
+  Object.keys(plan).forEach(r=>{ const f = plan[r]; plan[r] = u=>[...f(u), ["apne petty cash memo", C("pettyCash").where("by","==",u), true], ["mila hua cash", C("pettyCash").where("to","==",u), true],
+    ["apne form collection", C("formDocs").where("by","==",u), true], ["sab ka petty cash (nahi milna chahiye)", C("pettyCash").limit(1), false], ["sab ke form collection (nahi milne chahiye)", C("formDocs").limit(1), false]]; });
   for(const role of Object.keys(plan)){
     const u = allUsers.find(x=>x.role===role && x.active!==false && x.uid && x.password);
     if(!u){ out.push({role, text:"— is role ka koi secure account nahi"}); continue; }
@@ -12688,7 +13643,7 @@ async function wizGaugeThumb(c, k, imgId){
    no customers, bills or stock.
    Every employee: a 💬 button; topic chips with quick tips (chatbot style); each message carries the app version, screen and the
    last errors on the phone so the developer can find the cause. Each employee reads only his own thread. */
-const APP_VERSION = "v59 · 21.10.2026";
+const APP_VERSION = "v60 · 21.10.2026";
 const DEV_USER = "dev.support";                       // employee usernames are letters + digits only, so no employee can get this one
 // the first password (given to the developer, not in the app — only its salted SHA-256): his first login makes his own account
 const DEV_INIT_SALT = "png-dev-init|v1|";
