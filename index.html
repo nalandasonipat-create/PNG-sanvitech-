@@ -845,8 +845,8 @@ function setupBottomNav(){
   } else if(currentUser.role === "store"){
     title.textContent = t("header_store");
     nav.innerHTML = `
-      <button onclick="setView('inventory')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>${t("nav_inventory")}</button>
-      <button onclick="setView('issue')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🚚</span>${t("nav_issue")}</button>
+      <button onclick="setView('inventory')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>${t("nav_inventory")}<span id="navBadge_inv" class="nav-badge hidden"></span></button>
+      <button onclick="setView('issue')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">🚚</span>${t("nav_issue")}<span id="navBadge_issue" class="nav-badge hidden"></span></button>
       <button onclick="setView('history')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📜</span>${t("nav_history")}</button>
       <button onclick="setView('petty')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_memo")}</button>
       <button onclick="setView('docs')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">📂</span>${t("nav_docs")}<span id="navBadge_docs" class="nav-badge hidden"></span></button>`;
@@ -855,7 +855,7 @@ function setupBottomNav(){
     title.textContent = t("header_technician");
     nav.innerHTML = `
       <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_customers")}</button>
-      <button onclick="setView('stock')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🎒</span>${t("nav_stock")}</button>
+      <button onclick="setView('stock')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">🎒</span>${t("nav_stock")}<span id="navBadge_stock" class="nav-badge hidden"></span></button>
       <button onclick="setView('myjobs')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📋</span>${t("nav_myjobs")}</button>
       <button onclick="setView('petty')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_memo")}</button>
       <button onclick="setView('docs')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">📂</span>${t("nav_docs")}<span id="navBadge_docs" class="nav-badge hidden"></span></button>`;
@@ -875,7 +875,7 @@ function setupBottomNav(){
       <button onclick="setView('overview')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">📊</span>${t("nav_overview")}<span id="navBadge_overview" class="nav-badge hidden"></span></button>
       <button onclick="setView('customers')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">🧾</span>${t("nav_customers_plain")}</button>
       <button onclick="setView('employees')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">👥</span>${t("nav_employees")}</button>
-      <button onclick="setView('storereport')" class="nav-btn flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>${t("nav_store")}</button>`;
+      <button onclick="setView('storereport')" class="nav-btn relative flex flex-col items-center text-xs font-bold"><span class="text-xl">📦</span>${t("nav_store")}<span id="navBadge_store" class="nav-badge hidden"></span></button>`;
     currentView = "overview";
   } else if(currentUser.role === "telecaller"){
     title.textContent = t("header_telecaller");
@@ -927,9 +927,12 @@ function updateNavBadges(){
   if(currentUser.role==="telecaller"){ set("navBadge_leads", leadNewCount()); set("navBadge_tcwork", tcMine().filter(tcNeedsReply).length); set("navBadge_newcall", cfbNewCount()); }
   if(currentUser.role==="developer"){ set("navBadge_dev", devThreads().reduce((n,t)=>n + t.unread, 0)); set("navBadge_devdel", devDelPending().length); }
   if(currentUser.role==="admin") set("navBadge_overview", tcUnreadCount() + leadNewCount() + svyNewCount() + cfbFwdCount() + fdNewCount() + pcPendCount());
+  if(currentUser.role==="admin") set("navBadge_store", stAlertCount() + stPendingReqs().length);
+  if(currentUser.role==="store"){ set("navBadge_inv", stAlertCount()); set("navBadge_issue", stPendingReqs().length); }
+  if(currentUser.role==="technician") set("navBadge_stock", stTechNewAnswers());
   else set("navBadge_docs", fdBackCount());
 }
-const FORM_KEEP_VIEWS = ["addCustomer", "trackA", "storereport", "employees", "security", "inventory", "issue", "devThread", "devSettings", "customers", "petty", "docs"];
+const FORM_KEEP_VIEWS = ["addCustomer", "trackA", "storereport", "employees", "security", "inventory", "issue", "devThread", "devSettings", "customers", "petty", "docs", "stock", "history"];
 let lastMainView = null;
 function formSnap(root){
   const out = {vals:{}, focus:null};
@@ -1407,123 +1410,551 @@ function generatePassword(name){
   return `${cap}${sym}${digits}`;
 }
 
-/* ============ STORE MODULE ============ */
-function renderStoreInventory(){
-  const rows = inventory;
-  if(!rows.length) return renderStoreAddItem() + `<p class="text-gray-400 text-center mt-6 text-sm">Store mein abhi koi item nahi — upar se naya item jodiye.</p>`;
-  return `
-    ${renderStoreAddItem()}
-    <h2 class="font-bold text-gray-800 mb-2">📦 Current Inventory</h2>
-    <div class="space-y-2">
-      ${rows.map(it=>`
-        <div class="bg-white rounded-lg shadow p-3 flex items-center justify-between">
-          <div>
-            <p class="font-bold text-sm">${it.itemName}</p>
-            <p class="text-xs text-gray-500">${it.stockQty} ${it.unit} in stock${it.sapCode ? ` • Code ${wzEsc(it.sapCode)}` : ""}</p>
-          </div>
-          <button onclick="addStock('${it.id}')" class="text-xs bg-[#EA8600] text-white px-3 py-1.5 rounded font-bold">+ Add Stock</button>
-        </div>`).join("")}
-    </div>`;
+/* ============ STORE MODULE (v62: stock management, ideas from "SimplyStock") ============
+   📦 Stock: items by category with a photo, 🟢 ok / 🟠 low (each item's own low-stock level) / 🔴 khatam; edit (incl. physical
+      count correction with a reason), delete, "📥 Stock aaya" = check-in of many items at once with one challan / bill no.
+   🚚 Issue: a cart — pick the technician (and the job), + / − each item (never more than in stock), one "Issue karein" makes one
+      issue slip (PDF) and takes the stock out; technicians' material requests come here and open straight in the cart.
+   📜 History: one register (issue slips, stock aaya, corrections) + 📊 chart of material issued per technician per day / week / month.
+   Every issue line stays one "issues" record (slip no. added), so the technician's balance and the material reconciliation work as before. */
+const ST_CATS = ["GI pipe & fittings","MDPE / PE fittings","Meter & regulator","Valves","Hose & copper","Clamps / sleeves / warning","Consumables","Tools","Safety (PPE)","Stationery","Other"];
+const ST_CAT_ICON = {"GI pipe & fittings":"🔩","MDPE / PE fittings":"🟡","Meter & regulator":"📟","Valves":"🔴","Hose & copper":"🟠","Clamps / sleeves / warning":"📎","Consumables":"🧴","Tools":"🔧","Safety (PPE)":"🦺","Stationery":"🖊️","Other":"📦"};
+const ST_SRC = {gail:"GAIL (SIV / challan)", vendor:"Vendor / market se kharida", ret:"Technician ne wapas kiya", other:"Other"};
+const ST_REQ_ST = {pending:"⏳ Store ke paas", issued:"✅ Mil gaya", part:"🟠 Kuch kam mila", rejected:"❌ Mana", cancelled:"✖ Cancel kiya"};
+let stLog = [], matReqs = [];
+let stUi = {tab:"stock", f:"all", q:"", cat:"", add:false, edit:null, checkin:false, focus:"", issueTab:"cart", histTab:"reg", histType:"", histTech:"", show:60,
+  per:"month", ctech:"", ckey:"", lastSlip:"", showDone:false};
+let stDraft = null, stBusy = false;
+let stCart = {tech:"", job:"", lines:{}, note:"", reqId:""};
+let stReq = {open:false, lines:{}, job:"", note:""};
+const stNum = v=>{ const n = Number(v); return isFinite(n) ? n : 0; };
+const stFmt = v=>{ const n = Math.round(stNum(v)*100)/100; return n.toLocaleString("en-IN", {maximumFractionDigits:2}); };
+const stIsNos = u=>/^nos/i.test(String(u||"Nos"));
+const stDayOf = iso=>{ const d = new Date(iso); return isNaN(d) ? "" : localISODate(d); };
+function stItems(){ return inventory || []; }
+function stCatOf(it){
+  if(it && it.category) return it.category;
+  const n = String((it||{}).itemName||"").toUpperCase();
+  if(/METER|REGULATOR/.test(n)) return "Meter & regulator";
+  if(/VALVE/.test(n)) return "Valves";
+  if(/HOSE|COPPER|SURAKSHA/.test(n)) return "Hose & copper";
+  if(/TEFLON|SEALANT|GITTI|SCREW|PENCH|SOAP|CEMENT|SAND|PASTE|GUM|SOLUTION/.test(n)) return "Consumables";
+  if(/HELMET|GLOVE|JACKET|SHOE|PPE|GOGGLE|MASK/.test(n)) return "Safety (PPE)";
+  if(/WRENCH|SPANNER|DRILL|CUTTER|HAMMER|TOOL|GAUGE|MACHINE|BIT\b/.test(n)) return "Tools";
+  if(/CLAMP|SLEEVE|PLATE|WARNING|\bMAT\b|CASING/.test(n)) return "Clamps / sleeves / warning";
+  if(/MDPE|\bPE\b|SADDLE|TAPPING|\bEF\b|ELECTRO|COUPLER|REDUCER|\b(20|32|63) ?MM/.test(n)) return "MDPE / PE fittings";
+  if(/\bGI\b|ELBOW|TEE|SOCKET|NIPPLE|UNION|PLUG|BUSH|BEND|\bCAP\b|PIPE/.test(n)) return "GI pipe & fittings";
+  return "Other";
 }
-async function addInventoryItem(){
-  if(!currentUser || !["store","admin"].includes(currentUser.role)) return;
-  const g = id=>{ const el = document.getElementById(id); return el ? String(el.value||"").trim() : ""; };
-  const name = g("newItemName").replace(/\s+/g," "), unit = g("newItemUnit") || "Nos", qRaw = g("newItemQty"), qty = qRaw==="" ? 0 : Number(qRaw);
+function stStatus(it){ const q = stNum(it.stockQty), m = stNum(it.minQty); if(q <= 0) return "out"; if(m > 0 && q <= m) return "low"; return "ok"; }
+function stQtyHtml(it){
+  const s = stStatus(it), q = `${stFmt(it.stockQty)} ${wzEsc(it.unit||"")}`;
+  if(s==="out") return `<span class="text-red-600 font-bold">${q} • ⛔ Khatam</span>`;
+  if(s==="low") return `<span class="text-orange-600 font-bold">${q} • 🟠 Low stock</span>`;
+  return `<span class="text-green-700 font-bold">${q}</span>`;
+}
+function stCounts(){ const L = stItems(); return {all:L.length, low:L.filter(it=>stStatus(it)==="low").length, out:L.filter(it=>stStatus(it)==="out").length}; }
+const stAlertCount = ()=>{ const c = stCounts(); return c.low + c.out; };
+const stPendingReqs = ()=>matReqs.filter(r=>r.status==="pending");
+function stGroups(list){
+  const m = {}; list.forEach(it=>{ const c = stCatOf(it); (m[c] = m[c] || []).push(it); });
+  const order = c=>{ const i = ST_CATS.indexOf(c); return i < 0 ? 99 : i; };
+  return Object.keys(m).sort((a,b)=>order(a)-order(b) || a.localeCompare(b)).map(cat=>({cat, items:m[cat].sort((a,b)=>String(a.itemName||"").localeCompare(String(b.itemName||"")))}));
+}
+function stFiltered(){
+  const q = String(stUi.q||"").trim().toLowerCase();
+  return stItems().filter(it=>(stUi.f==="all" || stStatus(it)===stUi.f || (stUi.f==="alert" && stStatus(it)!=="ok")) && (!stUi.cat || stCatOf(it)===stUi.cat)
+    && (!q || [it.itemName, it.sapCode, it.supplier, stCatOf(it)].some(x=>String(x||"").toLowerCase().includes(q))));
+}
+const stThumb = (it, size)=>it.photo ? `<img src="${it.photo}" class="rounded border object-cover shrink-0" style="width:${size}px;height:${size}px">`
+  : `<span class="rounded bg-gray-100 flex items-center justify-center shrink-0" style="width:${size}px;height:${size}px;font-size:${Math.round(size/2)}px">${ST_CAT_ICON[stCatOf(it)] || "📦"}</span>`;
+
+/* ---------------- 📦 Stock ---------------- */
+function renderStoreInventory(){ return renderStStock(); }
+function renderStStock(){
+  const c = stCounts(), list = stFiltered(), canEdit = currentUser && ["store","admin"].includes(currentUser.role);
+  const chip = (k, label, n, cls)=>`<button id="stF_${k}" onclick="stUi.f='${k}'; renderMain()" class="flex-1 text-[11px] font-bold py-2 rounded-lg ${stUi.f===k ? cls : "bg-white text-gray-600 border"}">${label} (${n})</button>`;
+  const cats = [...new Set(stItems().map(stCatOf))].sort((a,b)=>ST_CATS.indexOf(a)-ST_CATS.indexOf(b));
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2 border-l-4 border-[#0D904F]">
+      <p class="font-bold text-sm text-gray-800">📦 Stock — ${c.all} items ${c.low ? `• <span class="text-orange-600">🟠 ${c.low} low</span>` : ""} ${c.out ? `• <span class="text-red-600">⛔ ${c.out} khatam</span>` : ""}</p>
+      <p class="text-[11px] text-gray-500">Category ke hisaab se. Har item ka apna "low stock" level — usse kam hote hi 🟠, khatam hote hi 🔴.</p>
+      ${canEdit ? `<div class="grid grid-cols-3 gap-2 mt-2">
+        <button id="stAddBtn" onclick="stOpenAdd()" class="bg-[#0D904F] text-white text-[11px] font-bold py-2 rounded">➕ Naya item</button>
+        <button id="stCheckinBtn" onclick="stToggleCheckin()" class="${stUi.checkin ? "bg-gray-700" : "bg-[#EA8600]"} text-white text-[11px] font-bold py-2 rounded">${stUi.checkin ? "✖ Check-in band" : "📥 Stock aaya"}</button>
+        <button onclick="stExcel()" class="bg-[#8430CE] text-white text-[11px] font-bold py-2 rounded">⬇ Excel</button></div>` : ""}
+    </div>
+    ${stDraft ? renderStItemForm() : ""}
+    ${stUi.checkin ? renderStCheckinBar() : ""}
+    <div class="flex gap-1 mb-2">${chip("all","Sab",c.all,"bg-[#0D904F] text-white")}${chip("low","🟠 Low",c.low,"bg-orange-500 text-white")}${chip("out","⛔ Khatam",c.out,"bg-red-600 text-white")}</div>
+    <div class="grid grid-cols-2 gap-2 mb-2">
+      <input id="stQ" class="ff-input text-xs" placeholder="🔎 item / code dhoondhein" value="${wzEsc(stUi.q)}" onchange="stUi.q=this.value; renderMain()">
+      <select id="stCat" class="ff-input text-xs" onchange="stUi.cat=this.value; renderMain()"><option value="">Sab category</option>${cats.map(k=>`<option value="${wzEsc(k)}" ${stUi.cat===k ? "selected" : ""}>${ST_CAT_ICON[k]||"📦"} ${wzEsc(k)}</option>`).join("")}</select>
+    </div>
+    ${stGroups(list).map(g=>`<p class="text-xs font-bold text-gray-600 mt-3 mb-1">${ST_CAT_ICON[g.cat]||"📦"} ${wzEsc(g.cat)} <span class="font-normal text-gray-400">(${g.items.length})</span></p>
+      ${g.items.map(it=>renderStItemCard(it, canEdit)).join("")}`).join("") || `<p class="text-gray-400 text-center mt-6 text-sm">${stItems().length ? "Is filter me koi item nahi." : "Store mein abhi koi item nahi — ➕ Naya item se jodiye."}</p>`}
+    ${stUi.checkin ? `<div class="h-16"></div>` : ""}`;
+}
+function renderStItemCard(it, canEdit){
+  const s = stStatus(it);
+  return `<div id="stItem_${it.id}" class="bg-white rounded-lg shadow p-2.5 mb-1.5 flex items-center gap-2.5 ${s==="out" ? "border-l-4 border-red-500" : s==="low" ? "border-l-4 border-orange-400" : ""} ${stUi.focus===it.id ? "ring-2 ring-[#EA8600]" : ""}">
+    ${stThumb(it, 46)}
+    <div class="flex-1 min-w-0">
+      <p class="text-[13px] font-bold text-gray-800">${wzEsc(it.itemName||"")}</p>
+      <p class="text-[11px]">${stQtyHtml(it)}</p>
+      <p class="text-[10px] text-gray-500">${stNum(it.minQty) > 0 ? `Low level: ${stFmt(it.minQty)} ${wzEsc(it.unit||"")}` : "Low level set nahi"}${it.sapCode ? " • Code " + wzEsc(it.sapCode) : ""}${it.supplier ? " • " + wzEsc(it.supplier) : ""}
+        ${it.url ? ` • <a href="${wzEsc(it.url)}" target="_blank" rel="noopener" class="text-blue-700 underline">🔗 Order link</a>` : ""}</p>
+    </div>
+    ${stUi.checkin ? `<div class="shrink-0 text-right"><p class="text-[9px] text-gray-500">Kitna aaya</p><input id="stIn_${it.id}" type="number" min="0" step="any" inputmode="decimal" class="ff-input text-sm text-center" style="width:74px" placeholder="0"></div>`
+      : canEdit ? `<div class="flex flex-col gap-1 shrink-0">
+        <button onclick="stToggleCheckin('${it.id}')" class="text-[11px] bg-[#EA8600] text-white font-bold px-2 py-1 rounded">+ Stock</button>
+        <div class="flex gap-1"><button onclick="stOpenEdit('${it.id}')" class="text-[11px] bg-white border font-bold px-2 py-1 rounded" title="Badlein">✏️</button><button onclick="stDeleteItem('${it.id}')" class="text-[11px] bg-white border text-red-600 font-bold px-2 py-1 rounded" title="Hatayein">🗑</button></div>
+      </div>` : ""}
+  </div>`;
+}
+// ---- add / edit an item ----
+function stNewDraft(it){
+  return it ? {id:it.id, itemName:it.itemName||"", category:stCatOf(it), unit:it.unit||"Nos", minQty:it.minQty==null ? "" : String(it.minQty), sapCode:it.sapCode||"", url:it.url||"", supplier:it.supplier||"",
+      note:it.note||"", photo:it.photo||"", count:String(stNum(it.stockQty)), reason:""}
+    : {id:null, itemName:"", category:"", unit:"Nos", minQty:"", sapCode:"", url:"", supplier:"", note:"", photo:"", qty:"", ref:""};
+}
+function stOpenAdd(){ stDraft = stNewDraft(null); stUi.checkin = false; renderMain(); setTimeout(()=>{ const el = document.getElementById("stForm"); if(el && el.scrollIntoView) el.scrollIntoView({block:"start"}); }, 60); }
+function stOpenEdit(id){ const it = stItems().find(x=>x.id===id); if(!it) return; stDraft = stNewDraft(it); stUi.checkin = false; renderMain(); setTimeout(()=>{ const el = document.getElementById("stForm"); if(el && el.scrollIntoView) el.scrollIntoView({block:"start"}); }, 60); }
+function stCloseForm(){ stDraft = null; renderMain(); }
+function stSet(k, v){ if(stDraft) stDraft[k] = v; }
+async function stMakeThumb(file){
+  const img = await mediaReadImage(file);
+  let w = img.width || 320, h = img.height || 320; const max = 320;
+  if(w >= h && w > max){ h = Math.round(h*max/w); w = max; } else if(h > max){ w = Math.round(w*max/h); h = max; }
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+  const ctx = cv.getContext("2d"); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+  return cv.toDataURL("image/jpeg", 0.62);
+}
+function stPickPhoto(){
+  const d = stDraft; if(!d) return;
+  filePick(async f=>{ try{ const p = await stMakeThumb(f); if(stDraft===d){ d.photo = p; renderMain(); } }catch(e){ console.error(e); alert("Photo process nahi ho payi, dobara try karein."); } });
+}
+function renderStItemForm(){
+  const d = stDraft, v = k=>wzEsc(d[k]==null ? "" : String(d[k])), isNew = !d.id;
+  return `<div id="stForm" class="bg-white rounded-lg shadow p-3 mb-3 border-l-4 border-[#0D904F]">
+    <p class="font-bold text-sm mb-2">${isNew ? "➕ Naya item store me jodein" : "✏️ Item badlein"}</p>
+    <div class="flex gap-3 mb-2 items-center">
+      ${d.photo ? `<img src="${d.photo}" class="w-16 h-16 rounded border object-cover">` : `<span class="w-16 h-16 rounded bg-gray-100 flex items-center justify-center text-2xl">${ST_CAT_ICON[d.category]||"📦"}</span>`}
+      <div class="flex flex-col gap-1"><button id="stPhotoBtn" onclick="stPickPhoto()" class="text-[11px] bg-white border border-[#0D904F] text-[#0D904F] font-bold px-2 py-1.5 rounded">📷 Photo ${d.photo ? "badlein" : "lagayein"}</button>
+        ${d.photo ? `<button onclick="stSet('photo',''); renderMain()" class="text-[11px] text-red-600 font-bold">✖ Photo hatayein</button>` : ""}</div>
+    </div>
+    <label class="ff-label">Item ka naam *</label><input id="stfName" class="ff-input text-sm mb-2" value="${v("itemName")}" oninput="stSet('itemName', this.value)" placeholder='jaise: Elbow 3/4"'>
+    <div class="grid grid-cols-2 gap-2">
+      <div><label class="ff-label">Category</label><select id="stfCat" class="ff-input text-sm" onchange="stSet('category', this.value); renderMain()"><option value="">— apne aap —</option>${ST_CATS.map(k=>`<option value="${wzEsc(k)}" ${d.category===k ? "selected" : ""}>${ST_CAT_ICON[k]} ${wzEsc(k)}</option>`).join("")}</select></div>
+      <div><label class="ff-label">Unit</label><input id="stfUnit" list="storeUnitList" class="ff-input text-sm" value="${v("unit")}" oninput="stSet('unit', this.value)"><datalist id="storeUnitList">${STORE_UNITS.map(u=>`<option value="${u}">`).join("")}</datalist></div>
+      ${isNew ? `<div><label class="ff-label">Opening stock</label><input id="stfQty" type="number" min="0" step="any" class="ff-input text-sm" value="${v("qty")}" oninput="stSet('qty', this.value)" placeholder="0"></div>`
+        : `<div><label class="ff-label">Stock (ginti karke)</label><input id="stfCount" type="number" min="0" step="any" class="ff-input text-sm" value="${v("count")}" oninput="stSet('count', this.value)"></div>`}
+      <div><label class="ff-label">🟠 Low stock level</label><input id="stfMin" type="number" min="0" step="any" class="ff-input text-sm" value="${v("minQty")}" oninput="stSet('minQty', this.value)" placeholder="jaise 10"></div>
+      <div><label class="ff-label">SAP / material code</label><input id="stfCode" class="ff-input text-sm" value="${v("sapCode")}" oninput="stSet('sapCode', this.value)"></div>
+      <div><label class="ff-label">Supplier / kahan se</label><input id="stfSup" class="ff-input text-sm" value="${v("supplier")}" oninput="stSet('supplier', this.value)" placeholder="GAIL / vendor"></div>
+    </div>
+    <label class="ff-label mt-2">🔗 Order / reorder link (optional)</label><input id="stfUrl" class="ff-input text-sm mb-2" value="${v("url")}" oninput="stSet('url', this.value)" placeholder="https://...">
+    ${isNew ? `<label class="ff-label">Challan / bill no. (opening stock ka, optional)</label><input id="stfRef" class="ff-input text-sm mb-2" value="${v("ref")}" oninput="stSet('ref', this.value)">`
+      : `<label class="ff-label">Stock badla to wajah (ginti me farak)</label><input id="stfReason" class="ff-input text-sm mb-2" value="${v("reason")}" oninput="stSet('reason', this.value)" placeholder="jaise: physical verification, toota hua nikla">`}
+    <div class="flex gap-2 mt-1"><button onclick="stCloseForm()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg text-sm">✖ Band</button>
+      <button id="stfSave" onclick="stSaveItem()" class="flex-[2] bg-[#0D904F] text-white font-bold py-2.5 rounded-lg text-sm">💾 ${isNew ? "Item jodein" : "Save karein"}</button></div>
+  </div>`;
+}
+function stLogAdd(rec){ if(!rawDb) return Promise.resolve(); return rawDb.collection("stockLog").add({...rec, by:currentUser.username, at:rec.at || new Date().toISOString()}).catch(e=>console.error(e)); }
+async function stSaveItem(){
+  const d = stDraft; if(!d || !currentUser || !["store","admin"].includes(currentUser.role) || stBusy) return;
+  const name = String(d.itemName||"").trim().replace(/\s+/g, " "), unit = String(d.unit||"").trim() || "Nos";
   if(!name){ alert("Item ka naam bharein."); return; }
-  if(isNaN(qty) || qty < 0){ alert("Opening stock sahi number mein bharein."); return; }
-  if(/^nos/i.test(unit) && qty !== Math.floor(qty)){ alert("Nos wali cheez ka stock poori ginti mein bharein."); return; }
-  const pool = inventory.length ? inventory : SEED_INVENTORY;
-  const dup = pool.find(it=>invKey(it.itemName)===invKey(name));
-  if(dup){ alert(`"${dup.itemName}" pehle se store mein hai (${dup.stockQty||0} ${dup.unit||""}). Stock badhane ke liye uske saamne "+ Stock" dabayein.`); return; }
-  const code = g("newItemCode"), ref = g("newItemRef"), now = new Date().toISOString();
-  const item = {itemName:name, unit, stockQty:qty, ...(code ? {sapCode:code} : {}), addedBy:currentUser.username, addedAt:now};
-  if(db){
-    try{
-      const r0 = await db.collection("inventory").add(item);
-      if(qty > 0){ try{ await db.collection("stockLog").add({type:"receipt", itemId:(r0 && r0.id) || "", itemName:name, unit, qty, ref: ref || "Opening stock", before:0, after:qty, by:currentUser.username, at:now}); }catch(e){ console.error(e); } }
-    }catch(e){ console.error(e); alert("Item save nahi hua, dobara try karein."); return; }
-  } else {
-    if(!inventory.length) inventory = SEED_INVENTORY.map((it,i)=>({id:"seed"+i, ...it}));
-    inventory.push({id:"local_"+Date.now(), ...item});
-  }
-  ["newItemName","newItemUnit","newItemQty","newItemCode","newItemRef"].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ""; });
-  showToast(`"${name}" store mein jud gaya${qty ? ` — ${qty} ${unit}` : ""}.`);
+  const minQty = String(d.minQty).trim()==="" ? null : Number(d.minQty);
+  if(minQty!==null && (!isFinite(minQty) || minQty < 0)){ alert("Low stock level sahi number mein bharein."); return; }
+  const url = String(d.url||"").trim();
+  if(url && !/^https?:\/\//i.test(url)){ alert("Order link https:// se shuru hona chahiye."); return; }
+  const dup = stItems().find(it=>it.id!==d.id && invKey(it.itemName)===invKey(name));
+  if(dup){ alert(`"${dup.itemName}" pehle se store mein hai (${stFmt(dup.stockQty)} ${dup.unit||""}).`); return; }
+  const now = new Date().toISOString();
+  const base = {itemName:name, unit, category:d.category || stCatOf({itemName:name}), minQty, sapCode:String(d.sapCode||"").trim(), url, supplier:String(d.supplier||"").trim(), photo:d.photo || "", updatedAt:now, updatedBy:currentUser.username};
+  stBusy = true;
+  try{
+    if(!d.id){
+      const qty = String(d.qty).trim()==="" ? 0 : Number(d.qty);
+      if(!isFinite(qty) || qty < 0){ alert("Opening stock sahi number mein bharein."); return; }
+      if(stIsNos(unit) && qty!==Math.floor(qty)){ alert("Nos wali cheez ka stock poori ginti mein bharein."); return; }
+      const ref = await rawDb.collection("inventory").add({...base, stockQty:qty, addedBy:currentUser.username, addedAt:now});
+      if(qty > 0) await stLogAdd({type:"receipt", itemId:(ref && ref.id) || "", itemName:name, unit, qty, ref:String(d.ref||"").trim() || "Opening stock", src:"other", before:0, after:qty, at:now});
+      showToast(`"${name}" store mein jud gaya${qty ? ` — ${stFmt(qty)} ${unit}` : ""}.`);
+    } else {
+      const it = stItems().find(x=>x.id===d.id); if(!it){ alert("Item nahi mila — list dobara kholiye."); return; }
+      const count = Number(d.count), before = stNum(it.stockQty), patch = {...base};
+      if(String(d.count).trim()!=="" && isFinite(count) && count!==before){
+        if(count < 0){ alert("Stock minus nahi ho sakta."); return; }
+        if(stIsNos(unit) && count!==Math.floor(count)){ alert("Nos wali cheez ka stock poori ginti mein bharein."); return; }
+        if(!String(d.reason||"").trim()){ alert("Stock badal rahe hain — wajah likhiye (jaise physical verification)."); return; }
+        patch.stockQty = count;
+      }
+      await rawDb.doc("inventory/" + d.id).update(patch);
+      if("stockQty" in patch) await stLogAdd({type:"adjust", itemId:d.id, itemName:name, unit, qty:Math.round((count - before)*100)/100, before, after:count, reason:String(d.reason).trim(), at:now});
+      showToast(`"${name}" save ho gaya.`);
+    }
+    stDraft = null;
+  }catch(e){ console.error(e); alert("Save nahi hua — internet check karke dobara try karein."); }
+  finally{ stBusy = false; }
   renderMain();
 }
-async function addStock(id){
-  const item = inventory.find(i=>i.id===id);
-  if(!item) return;
-  const qty = parseFloat(prompt(`${item.itemName}: kitna stock aaya? (abhi ${item.stockQty||0} ${item.unit||""})`));
-  if(!qty || qty<=0) return;
-  const ref = (prompt("Challan / bill no. (optional)") || "").trim();
-  const newQty = (item.stockQty||0) + qty;
-  if(db){
-    await db.doc("inventory/"+id).update({stockQty:newQty});
-    try{ await db.collection("stockLog").add({type:"receipt", itemId:id, itemName:item.itemName, unit:item.unit||"", qty, ref, before:item.stockQty||0, after:newQty, by:currentUser.username, at:new Date().toISOString()}); }catch(e){ console.error(e); }
-    showToast(`${item.itemName}: +${qty} ${item.unit||""} stock mein jud gaya`);
+async function stDeleteItem(id){
+  if(!currentUser || !["store","admin"].includes(currentUser.role)) return;
+  const it = stItems().find(x=>x.id===id); if(!it) return;
+  const q = stNum(it.stockQty);
+  if(!confirm(`"${it.itemName}" ko store se hatana hai?${q > 0 ? `\n⚠️ Abhi ${stFmt(q)} ${it.unit||""} stock me hai — wo bhi list se hat jayega.` : ""}\n(Purani issue / aaya history rahegi.)`)) return;
+  try{ await rawDb.doc("inventory/" + id).delete(); await stLogAdd({type:"delete", itemId:id, itemName:it.itemName, unit:it.unit||"", qty:-q, before:q, after:0}); showToast(`"${it.itemName}" hata diya.`); }
+  catch(e){ console.error(e); alert("Hata nahi paya."); }
+  renderMain();
+}
+// ---- 📥 stock aaya: many items at once, one challan / bill ----
+function stToggleCheckin(focusId){
+  if(focusId && !stUi.checkin){ stUi.checkin = true; stUi.focus = focusId; }
+  else if(focusId){ stUi.focus = focusId; }
+  else { stUi.checkin = !stUi.checkin; stUi.focus = ""; }
+  stDraft = null; renderMain();
+  if(stUi.checkin && stUi.focus) setTimeout(()=>{ const el = document.getElementById("stIn_" + stUi.focus); if(el){ if(el.scrollIntoView) el.scrollIntoView({block:"center"}); if(el.focus) el.focus(); } }, 80);
+}
+function renderStCheckinBar(){
+  return `<div id="stCheckinBar" class="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-2">
+    <p class="font-bold text-sm text-orange-800">📥 Stock aaya (check-in)</p>
+    <p class="text-[11px] text-orange-700 mb-2">Har item ke saamne kitna aaya likhiye, phir neeche "✅ Check in" — sab ek challan / bill ke saath jud jayenge.</p>
+    <div class="grid grid-cols-2 gap-2">
+      <input id="stInRef" class="ff-input text-xs" placeholder="Challan / bill / SIV no.">
+      <select id="stInSrc" class="ff-input text-xs">${Object.keys(ST_SRC).map(k=>`<option value="${k}">${ST_SRC[k]}</option>`).join("")}</select>
+      <input id="stInDate" type="date" class="ff-input text-xs" value="${localISODate()}">
+      <input id="stInNote" class="ff-input text-xs" placeholder="Note (optional)">
+    </div>
+    <div class="bg-white border-t p-3 flex gap-2" style="position:fixed;left:0;right:0;bottom:56px;z-index:30">
+      <button onclick="stToggleCheckin()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg text-sm">✖ Band</button>
+      <button id="stCheckinSave" onclick="stCheckIn()" class="flex-[2] bg-[#EA8600] text-white font-bold py-2.5 rounded-lg text-sm">✅ Check in karein</button>
+    </div>
+  </div>`;
+}
+async function stCheckIn(){
+  if(!currentUser || !["store","admin"].includes(currentUser.role) || stBusy) return;
+  const g = id=>String((document.getElementById(id)||{}).value||"").trim();
+  const lines = [];
+  for(const it of stItems()){
+    const raw = g("stIn_" + it.id); if(raw==="") continue;
+    const q = Number(raw);
+    if(!isFinite(q) || q < 0){ alert(`${it.itemName}: quantity sahi likhiye.`); return; }
+    if(q===0) continue;
+    if(stIsNos(it.unit) && q!==Math.floor(q)){ alert(`${it.itemName}: Nos wali cheez poori ginti mein.`); return; }
+    lines.push({it, q});
   }
-  else { item.stockQty = newQty; renderMain(); }
+  if(!lines.length){ alert("Kisi item ke saamne kitna aaya — likhiye."); return; }
+  const ref = g("stInRef"), src = g("stInSrc") || "other", day = g("stInDate"), note = g("stInNote");
+  if(!confirm(`${lines.length} items ka stock jodna hai?${ref ? "\nChallan / bill: " + ref : ""}\n` + lines.map(x=>`• ${x.it.itemName}: +${stFmt(x.q)} ${x.it.unit||""}`).join("\n"))) return;
+  stBusy = true;
+  const now = new Date(), at = (day && day!==localISODate(now)) ? new Date(day + "T12:00:00").toISOString() : now.toISOString(), batch = "in_" + now.getTime().toString(36);
+  let n = 0;
+  try{
+    for(const {it, q} of lines){
+      const before = stNum(it.stockQty), after = Math.round((before + q)*1000)/1000;
+      await rawDb.doc("inventory/" + it.id).update({stockQty:after, updatedAt:now.toISOString(), updatedBy:currentUser.username});
+      await stLogAdd({type:"receipt", itemId:it.id, itemName:it.itemName, unit:it.unit||"", qty:q, ref, src, note, batch, before, after, at});
+      n++;
+    }
+    showToast(`📥 ${n} items ka stock jud gaya.`);
+    stUi.checkin = false; stUi.focus = "";
+  }catch(e){ console.error(e); alert(`Beech me ruk gaya (${n} items jude) — internet check karke dobara try karein.`); }
+  finally{ stBusy = false; }
+  renderMain();
 }
 
-let storeIssueSel = {tech:"", item:"", job:""};
+/* ---------------- 🚚 Issue: cart + requests ---------------- */
 function renderStoreIssue(){
-  const techs = activeTechnicianList();
-  const jobs = customers.filter(c=>c.status!=="completed" && c.assignedTechnician).sort((a,b)=>(Number(a.sn)||9999)-(Number(b.sn)||9999));
-  const rows = inventory;
-  if(!rows.length) return `<p class="text-gray-400 text-center mt-10 text-sm">Store mein abhi koi item nahi — Inventory mein item jodiye.</p>`;
-  return `
-    <div class="bg-white rounded-lg shadow p-4">
-      <h2 class="font-bold text-gray-800 mb-3">🚚 Issue Material to Technician</h2>
-      <label class="ff-label">Technician</label>
-      <select id="issueTech" class="ff-input mb-3">${techs.map(t=>`<option value="${t.username}" ${storeIssueSel.tech===t.username?"selected":""}>${t.name} (${t.username})</option>`).join("")}</select>
-      <label class="ff-label">Kis customer ke kaam ke liye (optional)</label>
-      <select id="issueJob" class="ff-input mb-3"><option value="">— general stock (kisi ek kaam ka nahi) —</option>${jobs.map(c=>`<option value="${c.id}" ${storeIssueSel.job===c.id?"selected":""}>${wzEsc(c.name)} • S.No ${c.sn||"—"} • BP ${wzEsc(c.bpNo||"—")} • ${wzEsc(techName(c.assignedTechnician))}</option>`).join("")}</select>
-      <label class="ff-label">Item</label>
-      <select id="issueItem" class="ff-input mb-3">${rows.map(it=>`<option value="${it.id}" ${storeIssueSel.item===it.id?"selected":""}>${wzEsc(it.itemName)} — ${it.stockQty} ${it.unit} avail</option>`).join("")}</select>
-      <label class="ff-label">Quantity</label>
-      <input id="issueQty" type="number" class="ff-input mb-3" placeholder="Qty to issue">
-      <button onclick="issueMaterial()" class="w-full bg-[#0D904F] text-white py-2.5 rounded-lg font-bold">Issue Material</button>
-    </div>`;
+  const pend = stPendingReqs().length;
+  const tab = (k, l)=>`<button id="stIt_${k}" onclick="stUi.issueTab='${k}'; renderMain()" class="flex-1 text-xs font-bold py-2 rounded-lg ${stUi.issueTab===k ? "bg-[#0D904F] text-white" : "bg-white text-gray-600 border"}">${l}</button>`;
+  return `<div class="flex gap-1 mb-2">${tab("cart", "🛒 Cart se issue")}${tab("req", `📥 Requests${pend ? ` <span class="bg-red-600 text-white rounded-full px-1.5">${pend}</span>` : ""}`)}</div>
+    ${stUi.issueTab==="req" ? renderStRequests() : renderStCart()}`;
 }
-async function issueMaterial(){
-  const techUsername = document.getElementById("issueTech").value;
-  const itemId = document.getElementById("issueItem").value;
-  const qty = parseFloat(document.getElementById("issueQty").value);
-  if(!techUsername || !itemId || !qty || qty<=0){ alert("Fill all fields correctly"); return; }
-  const item = inventory.find(i=>i.id===itemId);
-  if(!item){ alert("Ye item store mein nahi mila — list dobara kholiye."); return; }
-  if(/^nos/i.test(item.unit||"") && qty !== Math.floor(qty)){ alert("Nos wali cheez poori ginti mein hi issue hoti hai."); return; }
-  const jobEl = document.getElementById("issueJob"), jobId = jobEl ? jobEl.value : "", job = jobId ? customers.find(c=>c.id===jobId) : null;
-  storeIssueSel = {tech: techUsername, item: itemId, job: jobId};
-  if(qty > (item.stockQty||0)){ alert("Not enough stock! Available: "+item.stockQty); return; }
-  const record = {
-    technicianUsername: techUsername, itemName: item.itemName, unit: item.unit||"Nos",
-    qty, issuedAt: new Date().toISOString(), issuedBy: currentUser.username,
-    ...(job ? {customerId: job.id, customerName: job.name||"", bpNo: job.bpNo||"", sn: job.sn||null} : {})
-  };
-  if(db){
-    await db.collection("issues").add(record);
-    await db.doc("inventory/"+itemId).update({stockQty: item.stockQty - qty});
-    showToast("Material issued!");
-  } else {
-    issues.push({id:"local_"+Date.now(), ...record});
-    item.stockQty -= qty;
-    renderMain();
+const stCartCount = ()=>Object.values(stCart.lines).filter(q=>stNum(q) > 0).length;
+function stCartAdd(id, delta){
+  const it = stItems().find(x=>x.id===id); if(!it) return;
+  const cur = stNum(stCart.lines[id]), max = stNum(it.stockQty);
+  let n = Math.round((cur + delta)*1000)/1000;
+  if(n > max){ n = max; showToast(`${it.itemName}: stock me sirf ${stFmt(max)} ${it.unit||""} hai`); }
+  if(n <= 0) delete stCart.lines[id]; else stCart.lines[id] = n;
+  renderMain();
+}
+function stCartSet(id, v){
+  const it = stItems().find(x=>x.id===id); if(!it) return;
+  let n = Number(v); if(!isFinite(n) || n <= 0){ delete stCart.lines[id]; renderMain(); return; }
+  if(n > stNum(it.stockQty)){ n = stNum(it.stockQty); showToast(`${it.itemName}: stock me sirf ${stFmt(n)} ${it.unit||""} hai`); }
+  stCart.lines[id] = n; renderMain();
+}
+function stCartClear(){ stCart = {tech:stCart.tech, job:"", lines:{}, note:"", reqId:""}; renderMain(); }
+function stJobsFor(tech){
+  const run = customers.filter(c=>c.status!=="completed" && c.assignedTechnician);
+  return [...run.filter(c=>techsOf(c.assignedTechnician, c.allotted).includes(tech)), ...run.filter(c=>!techsOf(c.assignedTechnician, c.allotted).includes(tech))].slice(0, 300);
+}
+function renderStCart(){
+  const techs = activeTechnicianList(), q = String(stUi.q||"").trim().toLowerCase();
+  const items = stItems().filter(it=>!q || [it.itemName, it.sapCode, stCatOf(it)].some(x=>String(x||"").toLowerCase().includes(q)));
+  const lines = Object.keys(stCart.lines).map(id=>({it:stItems().find(x=>x.id===id), q:stNum(stCart.lines[id])})).filter(x=>x.it && x.q > 0);
+  const req = stCart.reqId ? matReqs.find(r=>r.id===stCart.reqId) : null;
+  const jobs = stJobsFor(stCart.tech);
+  const last = stUi.lastSlip ? issues.filter(i=>i.slipNo===stUi.lastSlip) : [];
+  return `${last.length ? `<div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-2"><p class="text-sm font-bold text-green-800">✅ Slip ${wzEsc(stUi.lastSlip)} ban gayi — ${last.length} items ${wzEsc(techName(last[0].technicianUsername))} ko</p>
+      <div class="flex gap-2 mt-2"><button onclick="stSlipPdf('${stUi.lastSlip}')" class="flex-1 bg-[#0D904F] text-white text-xs font-bold py-2 rounded">🖨 Issue slip PDF</button><button onclick="stUi.lastSlip=''; renderMain()" class="px-3 bg-white border text-xs font-bold py-2 rounded">✖</button></div></div>` : ""}
+    <div class="bg-white rounded-lg shadow p-3 mb-2 border-l-4 border-[#0D904F]">
+      <p class="font-bold text-sm text-gray-800">🛒 Cart | Issue — technician ko material</p>
+      ${req ? `<p class="text-[11px] bg-blue-50 text-blue-800 rounded p-1.5 mt-1">📥 ${wzEsc(techName(req.by))} ki request se bhara hai — kam / zyada kar sakte hain. <button onclick="stCartClear()" class="underline font-bold">hatayein</button></p>` : ""}
+      <label class="ff-label mt-1">👷 Technician *</label>
+      <select id="issueTech" class="ff-input text-sm mb-2" onchange="stCart.tech=this.value; renderMain()"><option value="">— chuniye —</option>${techs.map(t=>`<option value="${t.username}" ${stCart.tech===t.username ? "selected" : ""}>${wzEsc(t.name)} (${t.username})</option>`).join("")}</select>
+      <label class="ff-label">Kis customer ke kaam ke liye (optional)</label>
+      <select id="issueJob" class="ff-input text-sm mb-1" onchange="stCart.job=this.value"><option value="">— general stock (kisi ek kaam ka nahi) —</option>${jobs.map(c=>`<option value="${c.id}" ${stCart.job===c.id ? "selected" : ""}>${wzEsc(c.name)} • S.No ${c.sn||"—"}${c.bpNo ? " • BP " + wzEsc(c.bpNo) : ""} • ${wzEsc(techName(c.assignedTechnician))}</option>`).join("")}</select>
+    </div>
+    <div class="bg-white rounded-lg shadow p-3 mb-2">
+      <p class="text-xs font-bold text-gray-700 mb-1">🛒 Cart me (${lines.length})</p>
+      ${lines.length ? lines.map(({it, q})=>`<div class="flex items-center gap-2 border-b border-gray-100 py-1.5">${stThumb(it, 32)}
+          <div class="flex-1 min-w-0"><p class="text-xs font-bold truncate">${wzEsc(it.itemName)}</p><p class="text-[10px] text-gray-500">stock ${stFmt(it.stockQty)} ${wzEsc(it.unit||"")}</p></div>
+          <button onclick="stCartAdd('${it.id}', -1)" class="w-8 h-8 rounded bg-red-600 text-white font-bold">−</button>
+          <input id="stCq_${it.id}" type="number" min="0" step="any" class="ff-input text-sm text-center" style="width:64px" value="${stFmt(q).replace(/,/g,"")}" onchange="stCartSet('${it.id}', this.value)">
+          <button onclick="stCartAdd('${it.id}', 1)" class="w-8 h-8 rounded bg-[#1a73e8] text-white font-bold">+</button></div>`).join("")
+        : '<p class="text-[11px] text-gray-400">Neeche se item ke saamne ➕ dabayein.</p>'}
+      ${lines.length ? `<input id="stCartNote" class="ff-input text-xs mt-2" placeholder="Note (optional)" value="${wzEsc(stCart.note)}" oninput="stCart.note=this.value">
+        <div class="flex gap-2 mt-2"><button onclick="stCartClear()" class="flex-1 bg-gray-100 text-gray-700 text-xs font-bold py-2.5 rounded">🗑 Cart khaali</button>
+        <button id="stCheckoutBtn" onclick="stCheckout()" class="flex-[2] bg-[#0D904F] text-white text-sm font-bold py-2.5 rounded">✅ Issue karein (${lines.length} items)</button></div>` : ""}
+    </div>
+    <input id="stQ2" class="ff-input text-xs mb-2" placeholder="🔎 item dhoondhein" value="${wzEsc(stUi.q)}" onchange="stUi.q=this.value; renderMain()">
+    ${stGroups(items).map(g=>`<p class="text-xs font-bold text-gray-600 mt-2 mb-1">${ST_CAT_ICON[g.cat]||"📦"} ${wzEsc(g.cat)}</p>${g.items.map(it=>{ const inCart = stNum(stCart.lines[it.id]), out = stNum(it.stockQty) <= 0;
+        return `<div class="bg-white rounded-lg shadow p-2 mb-1 flex items-center gap-2 ${out ? "opacity-60" : ""}">${stThumb(it, 38)}
+          <div class="flex-1 min-w-0"><p class="text-[13px] font-bold text-gray-800 truncate">${wzEsc(it.itemName)}</p><p class="text-[11px]">${stQtyHtml(it)}${inCart ? ` <span class="text-blue-700 font-bold">• 🛒 ${stFmt(inCart)}</span>` : ""}</p></div>
+          <button id="stAdd_${it.id}" onclick="stCartAdd('${it.id}', 1)" ${out ? "disabled" : ""} class="w-10 h-10 rounded-lg ${out ? "bg-gray-300" : "bg-[#1a73e8]"} text-white text-xl font-bold">+</button></div>`; }).join("")}`).join("") || '<p class="text-xs text-gray-400 text-center py-4">Koi item nahi.</p>'}`;
+}
+function stSlipNo(){ const d = new Date(), p = n=>String(n).padStart(2,"0"); return `IS-${String(d.getFullYear()).slice(2)}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
+async function stCheckout(){
+  if(!currentUser || !["store","admin"].includes(currentUser.role) || stBusy) return;
+  const tech = stCart.tech || (document.getElementById("issueTech")||{}).value || "";
+  if(!tech){ alert("Technician chuniye."); return; }
+  const lines = Object.keys(stCart.lines).map(id=>({it:stItems().find(x=>x.id===id), q:stNum(stCart.lines[id])})).filter(x=>x.it && x.q > 0);
+  if(!lines.length){ alert("Cart khaali hai."); return; }
+  for(const {it, q} of lines){
+    if(q > stNum(it.stockQty)){ alert(`${it.itemName}: stock me sirf ${stFmt(it.stockQty)} ${it.unit||""} hai.`); return; }
+    if(stIsNos(it.unit) && q!==Math.floor(q)){ alert(`${it.itemName}: Nos wali cheez poori ginti mein hi issue hoti hai.`); return; }
   }
-  document.getElementById("issueQty").value = "";
+  const jobId = stCart.job || (document.getElementById("issueJob")||{}).value || "", job = jobId ? customers.find(c=>c.id===jobId) : null;
+  if(!confirm(`${techName(tech)} ko ${lines.length} items issue karne hain?\n` + lines.map(x=>`• ${x.it.itemName}: ${stFmt(x.q)} ${x.it.unit||""}`).join("\n"))) return;
+  stBusy = true;
+  const slipNo = stSlipNo(), now = new Date().toISOString(), req = stCart.reqId ? matReqs.find(r=>r.id===stCart.reqId) : null;
+  let n = 0;
+  try{
+    for(const [k, {it, q}] of lines.entries()){
+      await rawDb.collection("issues").add({technicianUsername:tech, itemName:it.itemName, unit:it.unit||"Nos", qty:q, issuedAt:now, issuedBy:currentUser.username,
+        slipNo, slipLine:k+1, itemId:it.id, category:stCatOf(it), ...(stCart.note ? {note:stCart.note} : {}), ...(req ? {reqId:req.id} : {}),
+        ...(job ? {customerId:job.id, customerName:job.name||"", bpNo:job.bpNo||"", sn:job.sn||null} : {})});
+      await rawDb.doc("inventory/" + it.id).update({stockQty:Math.round((stNum(it.stockQty) - q)*1000)/1000, updatedAt:now, updatedBy:currentUser.username});
+      n++;
+    }
+    if(req){
+      const given = {}; lines.forEach(({it, q})=>{ given[it.id] = q; });
+      const short = (req.items||[]).some(x=>stNum(given[x.itemId]) < stNum(x.qty));
+      await rawDb.doc("matRequests/" + req.id).update({status: short ? "part" : "issued", slipNo, given, doneBy:currentUser.username, doneAt:now});
+    }
+    stCart = {tech, job:"", lines:{}, note:"", reqId:""}; stUi.lastSlip = slipNo;
+    showToast(`✅ Slip ${slipNo}: ${n} items ${techName(tech)} ko issue ho gaye.`);
+  }catch(e){ console.error(e); alert(`Beech me ruk gaya (${n} items issue hue) — internet check karke dobara try karein.`); }
+  finally{ stBusy = false; }
+  renderMain();
+}
+// ---- 📥 technicians' requests ----
+function renderStRequests(){
+  const pend = stPendingReqs().sort((a,b)=>String(a.at||"").localeCompare(String(b.at||""))), done = matReqs.filter(r=>r.status!=="pending").sort((a,b)=>String(b.doneAt||b.at||"").localeCompare(String(a.doneAt||a.at||"")));
+  const card = r=>{ const items = r.items||[];
+    return `<div class="bg-white rounded-lg shadow p-3 mb-2 ${r.status==="pending" ? "border-l-4 border-[#1a73e8]" : ""}">
+      <div class="flex justify-between items-start gap-2"><div><p class="text-sm font-bold">👷 ${wzEsc(techName(r.by))}</p><p class="text-[11px] text-gray-500">${r.at ? `${pgDate(new Date(r.at))} ${pgTime(new Date(r.at))}` : ""}${r.customerName ? ` • ${wzEsc(r.customerName)}${r.sn ? " (S.No " + wzEsc(r.sn) + ")" : ""}` : ""}</p></div>
+        <span class="text-[10px] font-bold px-2 py-1 rounded bg-gray-100">${ST_REQ_ST[r.status]||wzEsc(r.status||"")}</span></div>
+      <div class="mt-1">${items.map(x=>{ const it = stItems().find(i=>i.id===x.itemId), av = it ? stNum(it.stockQty) : 0, given = r.given ? stNum(r.given[x.itemId]) : null;
+        return `<div class="flex justify-between text-[11px] border-b border-gray-100 py-0.5"><span>${wzEsc(x.itemName)}</span><span><b>${stFmt(x.qty)} ${wzEsc(x.unit||"")}</b>${r.status==="pending" ? ` <span class="${av >= stNum(x.qty) ? "text-green-700" : "text-red-600"}">(stock ${stFmt(av)})</span>` : given!==null ? ` → mila ${stFmt(given)}` : ""}</span></div>`; }).join("")}</div>
+      ${r.note ? `<p class="text-[11px] bg-gray-50 rounded p-1 mt-1">📝 ${wzEsc(r.note)}</p>` : ""}
+      ${r.storeNote ? `<p class="text-[11px] text-red-700 mt-1">Store: ${wzEsc(r.storeNote)}</p>` : ""}${r.slipNo ? `<p class="text-[11px] text-green-700 mt-1">Slip ${wzEsc(r.slipNo)}</p>` : ""}
+      ${r.status==="pending" ? `<div class="flex gap-2 mt-2"><button onclick="stReqToCart('${r.id}')" class="flex-[2] bg-[#0D904F] text-white text-xs font-bold py-2 rounded">🛒 Cart me daal ke issue karein</button><button onclick="stReqReject('${r.id}')" class="flex-1 bg-red-50 text-red-700 text-xs font-bold py-2 rounded">❌ Mana</button></div>` : ""}
+    </div>`; };
+  return `${pend.map(card).join("") || '<p class="text-xs text-gray-400 text-center py-4">Koi nayi request nahi.</p>'}
+    ${done.length ? `<details class="mt-2" ${stUi.showDone ? "open" : ""} ontoggle="stUi.showDone=this.open"><summary class="text-xs font-bold text-gray-600 py-1">Purani requests (${done.length}) ▾</summary>${done.slice(0, 40).map(card).join("")}</details>` : ""}`;
+}
+function stReqToCart(id){
+  const r = matReqs.find(x=>x.id===id); if(!r) return;
+  const lines = {}; let short = 0;
+  (r.items||[]).forEach(x=>{ const it = stItems().find(i=>i.id===x.itemId); if(!it) { short++; return; } const q = Math.min(stNum(x.qty), stNum(it.stockQty)); if(q < stNum(x.qty)) short++; if(q > 0) lines[it.id] = q; });
+  stCart = {tech:r.by, job:r.customerId || "", lines, note:r.note || "", reqId:r.id}; stUi.issueTab = "cart"; stUi.lastSlip = "";
+  if(short) showToast(`${short} item stock me kam hain — cart me jitna hai utna daala.`);
+  if(currentView!=="issue" && currentView!=="storereport") setView("issue"); else renderMain();
+}
+async function stReqReject(id){
+  if(!currentUser || !["store","admin"].includes(currentUser.role)) return;
+  const r = matReqs.find(x=>x.id===id); if(!r) return;
+  const note = prompt(`${techName(r.by)} ki request mana karne ki wajah (technician ko dikhegi):`, "");
+  if(note===null) return;
+  if(!String(note).trim()){ alert("Wajah likhiye."); return; }
+  try{ await rawDb.doc("matRequests/" + id).update({status:"rejected", storeNote:String(note).trim(), doneBy:currentUser.username, doneAt:new Date().toISOString()}); showToast("Request mana kar di."); }
+  catch(e){ console.error(e); alert("Save nahi hua."); }
+  renderMain();
+}
+// ---- the issue slip PDF ----
+async function stSlipPdf(slipNo){
+  const lines = issues.filter(i=>i.slipNo===slipNo).sort((a,b)=>(stNum(a.slipLine)-stNum(b.slipLine)) || String(a.itemName).localeCompare(String(b.itemName)));
+  if(!lines.length) return;
+  const tt = showToast("Issue slip PDF ban rahi hai...");
+  try{ await ensurePdfLibs(); }catch(e){ hideToast(tt); alert("PDF engine load nahi hua."); return; }
+  let pdf;
+  try{
+    pdf = new window.jspdf.jsPDF("p","mm","a4");
+    const L = 12, R = 198, W = R - L, GREEN = [13,144,79], INK = [30,41,59], GREY = [100,116,139], LINE = [203,213,225], S = chkPdfSafe;
+    const col = (a, f)=>pdf[f](a[0], a[1], a[2]);
+    const txt = (s, x, y, size, bold, color, opt)=>{ pdf.setFont("helvetica", bold ? "bold" : "normal"); pdf.setFontSize(size); col(color||INK, "setTextColor"); pdf.text(S(s), x, y, opt||{}); };
+    const f = lines[0];
+    col(GREEN, "setFillColor"); pdf.rect(0, 0, 210, 22, "F");
+    txt("MATERIAL ISSUE SLIP", L, 10, 14, true, [255,255,255]);
+    txt("M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED  |  PNG connection, Sonipat  |  Store", L, 17, 8.5, false, [220,252,231]);
+    txt(slipNo, R, 10, 9, true, [220,252,231], {align:"right"});
+    let y = 31;
+    const info = [["Slip no.", slipNo], ["Date / time", f.issuedAt ? `${pgDate(new Date(f.issuedAt))} ${pgTime(new Date(f.issuedAt))}` : ""], ["Technician", techName(f.technicianUsername)],
+      ["Customer / job", f.customerName ? `${f.customerName}${f.sn ? " (S.No " + f.sn + ")" : ""}${f.bpNo ? " BP " + f.bpNo : ""}` : "General stock"], ["Issued by", techName(f.issuedBy)], ["Note", f.note || "-"]];
+    info.forEach(([l, v], i)=>{ const x = i % 2 ? L + W/2 + 2 : L, yy = y + Math.floor(i/2)*7; col(LINE, "setDrawColor"); pdf.setLineWidth(0.3); pdf.rect(x, yy, W/2 - 2, 7); txt(l, x + 1.8, yy + 4.7, 7.6, true, GREY); txt(String(v).slice(0, 48), x + 27, yy + 4.7, 8.5, false); });
+    y += Math.ceil(info.length/2)*7 + 7;
+    const cols = [["S.No", 12], ["Item", 86], ["Code", 30], ["Qty", 28], ["Unit", 30]], xs = []; let x0 = L; cols.forEach(([, w])=>{ xs.push(x0); x0 += w; });
+    col([238,242,246], "setFillColor"); pdf.rect(L, y, W, 7, "F"); col(LINE, "setDrawColor"); pdf.rect(L, y, W, 7); cols.forEach(([l], k)=>txt(l, xs[k] + 1.6, y + 4.8, 8.2, true)); y += 7;
+    lines.forEach((ln, i)=>{ if(y > 250){ pdf.addPage(); y = 20; } const it = stItems().find(x=>x.id===ln.itemId) || {};
+      col(LINE, "setDrawColor"); pdf.rect(L, y, W, 7); xs.slice(1).forEach(xx=>pdf.line(xx, y, xx, y + 7));
+      txt(String(i+1), xs[0] + 1.6, y + 4.8, 8.5); txt(String(ln.itemName||"").slice(0, 52), xs[1] + 1.6, y + 4.8, 8.5, true); txt(it.sapCode || "-", xs[2] + 1.6, y + 4.8, 8.2);
+      txt(stFmt(ln.qty), xs[3] + cols[3][1] - 2, y + 4.8, 9, true, INK, {align:"right"}); txt(ln.unit || "", xs[4] + 1.6, y + 4.8, 8.5); y += 7; });
+    y += 4; txt(`Total: ${lines.length} items`, L, y, 9, true); y += 16;
+    const sw = (W - 8)/3;
+    ["Store keeper (sign)", "Technician - material mila (sign)", "Checked by"].forEach((l, k)=>{ const sx = L + k*(sw + 4); col(LINE, "setDrawColor"); pdf.rect(sx, y, sw, 20); txt(l, sx + 2, y + 18, 7.5, false, GREY); });
+    txt(`PNG Enterprise  |  issue slip ${slipNo}  |  generated ${pgDate(new Date())} ${pgTime(new Date())}`, L, 290, 7, false, GREY);
+  }catch(e){ console.error(e); hideToast(tt); alert("PDF nahi ban payi: " + (e && e.message || e)); return; }
+  hideToast(tt);
+  await savePdfFile(pdf, `Issue_Slip_${slipNo}.pdf`);
 }
 
+/* ---------------- 📜 History: register + 📊 chart ---------------- */
 function renderStoreHistory(){
-  const sorted = [...issues].sort((a,b)=>(b.issuedAt||"").localeCompare(a.issuedAt||""));
-  if(sorted.length===0) return `<p class="text-gray-400 text-center mt-10">No issues recorded yet.</p>`;
-  return `<h2 class="font-bold text-gray-800 mb-3">📜 Issue History</h2>
-    <div class="space-y-2">
-      ${sorted.map(i=>`
-        <div class="bg-white rounded-lg shadow p-3">
-          <p class="font-bold text-sm">${i.itemName} — ${i.qty} ${i.unit||""}</p>
-          <p class="text-xs text-gray-500">To: ${techName(i.technicianUsername)} • ${i.issuedAt ? new Date(i.issuedAt).toLocaleString() : ""}</p>
-        </div>`).join("")}
-    </div>`;
+  const tab = (k, l)=>`<button id="stHt_${k}" onclick="stUi.histTab='${k}'; renderMain()" class="flex-1 text-xs font-bold py-2 rounded-lg ${stUi.histTab===k ? "bg-[#0D904F] text-white" : "bg-white text-gray-600 border"}">${l}</button>`;
+  return `<div class="flex gap-1 mb-2">${tab("reg", "📜 Register")}${tab("chart", "📊 Kharch chart")}</div>
+    ${stUi.histTab==="chart" ? renderStChart() : renderStRegister()}`;
+}
+function stEvents(){
+  const ev = [], slips = {};
+  issues.forEach(i=>{ const k = i.slipNo || ("one_" + i.id); (slips[k] = slips[k] || {kind:"issue", key:k, slipNo:i.slipNo||"", at:i.issuedAt||"", tech:i.technicianUsername, by:i.issuedBy, cust:i.customerName||"", sn:i.sn||"", lines:[]}).lines.push(i); });
+  Object.values(slips).forEach(s=>ev.push(s));
+  const ins = {};
+  stLog.forEach(l=>{
+    if(l.type==="receipt"){ const k = l.batch || ("r_" + l.id); (ins[k] = ins[k] || {kind:"in", key:k, at:l.at||"", ref:l.ref||"", src:l.src||"", by:l.by, note:l.note||"", lines:[]}).lines.push(l); }
+    else if(l.type==="adjust" || l.type==="delete") ev.push({kind:l.type, key:l.id, at:l.at||"", by:l.by, lines:[l]});
+  });
+  Object.values(ins).forEach(s=>ev.push(s));
+  return ev.sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+}
+function renderStRegister(){
+  const all = stEvents(), techs = [...new Set(issues.map(i=>i.technicianUsername).filter(Boolean))];
+  const list = all.filter(e=>(!stUi.histType || e.kind===stUi.histType || (stUi.histType==="adjust" && e.kind==="delete")) && (!stUi.histTech || (e.kind==="issue" && e.tech===stUi.histTech)));
+  const shown = list.slice(0, stUi.show);
+  const icon = {issue:"🚚", in:"📥", adjust:"🔢", delete:"🗑"};
+  const head = e=>e.kind==="issue" ? `${e.slipNo ? "Slip " + wzEsc(e.slipNo) : "Issue"} → ${wzEsc(techName(e.tech))}${e.cust ? ` <span class="font-normal text-gray-500">• ${wzEsc(e.cust)}${e.sn ? " (S.No " + wzEsc(e.sn) + ")" : ""}</span>` : ""}`
+    : e.kind==="in" ? `Stock aaya${e.ref ? " • " + wzEsc(e.ref) : ""} <span class="font-normal text-gray-500">• ${wzEsc(ST_SRC[e.src] || "")}</span>`
+    : e.kind==="adjust" ? `Stock sahi kiya (ginti)` : `Item hataya`;
+  return `<div class="grid grid-cols-2 gap-2 mb-2">
+      <select id="stHType" class="ff-input text-xs" onchange="stUi.histType=this.value; stUi.show=60; renderMain()">${[["","Sab entries"],["issue","🚚 Issue slips"],["in","📥 Stock aaya"],["adjust","🔢 Correction / hataya"]].map(([k,l])=>`<option value="${k}" ${stUi.histType===k ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <select id="stHTech" class="ff-input text-xs" onchange="stUi.histTech=this.value; stUi.show=60; renderMain()"><option value="">👷 Sab technicians</option>${techs.map(u=>`<option value="${u}" ${stUi.histTech===u ? "selected" : ""}>${wzEsc(techName(u))}</option>`).join("")}</select>
+    </div>
+    <button onclick="stExcel()" class="w-full bg-[#8430CE] text-white text-xs font-bold py-2 rounded mb-2">⬇ Stock register Excel (stock + aaya + issue + correction)</button>
+    ${shown.map(e=>`<div class="bg-white rounded-lg shadow p-2.5 mb-1.5">
+      <div class="flex items-start gap-2"><span class="text-lg">${icon[e.kind]}</span><div class="flex-1 min-w-0">
+        <p class="text-xs font-bold text-gray-800">${head(e)}</p>
+        <p class="text-[10px] text-gray-500">${e.at ? `${pgDate(new Date(e.at))} ${pgTime(new Date(e.at))}` : ""}${e.by ? " • " + wzEsc(techName(e.by)) : ""}</p>
+        <p class="text-[11px] text-gray-700 mt-0.5">${e.lines.map(l=>`${wzEsc(l.itemName||"")}: <b>${e.kind==="in" ? "+" : e.kind==="issue" ? "" : (stNum(l.qty) > 0 ? "+" : "")}${stFmt(l.qty)}</b> ${wzEsc(l.unit||"")}${e.kind==="adjust" ? ` (${stFmt(l.before)} → ${stFmt(l.after)}${l.reason ? ", " + wzEsc(l.reason) : ""})` : ""}`).join(" • ")}</p>
+      </div>${e.kind==="issue" && e.slipNo ? `<button onclick="stSlipPdf('${e.slipNo}')" class="text-[10px] bg-gray-100 font-bold px-2 py-1 rounded shrink-0">🖨 PDF</button>` : ""}</div>
+    </div>`).join("") || '<p class="text-xs text-gray-400 text-center py-6">Abhi koi entry nahi.</p>'}
+    ${list.length > shown.length ? `<button onclick="stUi.show += 60; renderMain()" class="w-full bg-white border text-xs font-bold py-2 rounded-lg">⬇ Aur dikhayein (${list.length - shown.length})</button>` : ""}`;
+}
+function stPerKey(iso, per){
+  const d = new Date(iso); if(isNaN(d)) return "";
+  if(per==="day") return localISODate(d);
+  if(per==="month") return localISODate(d).slice(0,7);
+  const m = new Date(d.getFullYear(), d.getMonth(), d.getDate()); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return localISODate(m);
+}
+function stPerLabel(key, per){
+  if(per==="day") return fpDate(key);
+  if(per==="month") return pcMonLabel(key);
+  const a = new Date(key + "T00:00:00"), b = new Date(a); b.setDate(b.getDate() + 6); return `${fpDate(key)} – ${fpDate(localISODate(b))}`;
+}
+function renderStChart(){
+  const per = stUi.per, admin = currentUser && currentUser.role==="admin";
+  const techs = [...new Set(issues.map(i=>i.technicianUsername).filter(Boolean))].sort((a,b)=>String(techName(a)).localeCompare(String(techName(b))));
+  const mine = issues.filter(i=>!stUi.ctech || i.technicianUsername===stUi.ctech);
+  const keys = [...new Set(mine.map(i=>stPerKey(i.issuedAt, per)).filter(Boolean))].sort().reverse();
+  const key = keys.includes(stUi.ckey) ? stUi.ckey : (keys[0] || "");
+  const inPer = mine.filter(i=>stPerKey(i.issuedAt, per)===key);
+  const agg = {};
+  inPer.forEach(i=>{ const k = invKey(i.itemName); (agg[k] = agg[k] || {name:i.itemName, unit:i.unit||"", issued:0, used:admin ? 0 : null}).issued += stNum(i.qty); });
+  if(admin) consumption.filter(c=>(!stUi.ctech || c.technicianUsername===stUi.ctech) && stPerKey(c.consumedAt || c.at, per)===key).forEach(c=>{ const k = invKey(c.itemName); (agg[k] = agg[k] || {name:c.itemName, unit:c.unit||"", issued:0, used:0}).used += stNum(c.qty); });
+  const rows = Object.values(agg).sort((a,b)=>b.issued - a.issued || (b.used||0) - (a.used||0)), max = Math.max(1, ...rows.map(r=>Math.max(r.issued, r.used||0)));
+  const perBtn = (k, l)=>`<button id="stPer_${k}" onclick="stUi.per='${k}'; stUi.ckey=''; renderMain()" class="flex-1 text-[11px] font-bold py-1.5 rounded ${per===k ? "bg-[#1a73e8] text-white" : "bg-white border text-gray-600"}">${l}</button>`;
+  const byTech = {}; inPer.forEach(i=>{ (byTech[i.technicianUsername] = byTech[i.technicianUsername] || {lines:0, slips:new Set()}); byTech[i.technicianUsername].lines++; byTech[i.technicianUsername].slips.add(i.slipNo || i.id); });
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2">
+      <p class="font-bold text-sm text-gray-800 mb-2">📊 Kharch chart — kisne kitna material liya</p>
+      <div class="flex gap-1 mb-2">${perBtn("day","Daily")}${perBtn("week","Weekly")}${perBtn("month","Monthly")}</div>
+      <div class="grid grid-cols-2 gap-2">
+        <select id="stCTech" class="ff-input text-xs" onchange="stUi.ctech=this.value; stUi.ckey=''; renderMain()"><option value="">👷 Sab technicians</option>${techs.map(u=>`<option value="${u}" ${stUi.ctech===u ? "selected" : ""}>${wzEsc(techName(u))}</option>`).join("")}</select>
+        <select id="stCKey" class="ff-input text-xs" onchange="stUi.ckey=this.value; renderMain()">${keys.map(k=>`<option value="${k}" ${k===key ? "selected" : ""}>📅 ${wzEsc(stPerLabel(k, per))}</option>`).join("") || '<option value="">— koi data nahi —</option>'}</select>
+      </div>
+    </div>
+    ${key ? `<div class="bg-white rounded-lg shadow p-3 mb-2">
+      <p class="text-xs font-bold text-gray-700 mb-2">${wzEsc(stUi.ctech ? techName(stUi.ctech) : "Sab technicians")} | ${wzEsc(stPerLabel(key, per))} — items issued${admin ? ' <span class="font-normal text-gray-500">(🟦 issue • 🟧 site par lagaya, forms se)</span>' : ""}</p>
+      ${rows.map(r=>`<div class="mb-2"><div class="flex justify-between text-[11px] gap-2"><span class="font-bold text-gray-700 truncate">${wzEsc(r.name)}</span><span class="text-gray-600 shrink-0">${stFmt(r.issued)} ${wzEsc(r.unit)}${r.used!==null && r.used!==undefined ? ` • lagaya ${stFmt(r.used)}` : ""}</span></div>
+        <div class="h-3 bg-gray-100 rounded overflow-hidden"><div class="h-3 bg-[#1a73e8] rounded" style="width:${Math.max(r.issued > 0 ? 2 : 0, Math.round(r.issued/max*100))}%"></div></div>
+        ${r.used!==null && r.used!==undefined ? `<div class="h-1.5 bg-gray-100 rounded overflow-hidden mt-0.5"><div class="h-1.5 bg-[#EA8600] rounded" style="width:${Math.max(r.used > 0 ? 2 : 0, Math.round(r.used/max*100))}%"></div></div>` : ""}</div>`).join("") || '<p class="text-xs text-gray-400">Is period me kuch issue nahi hua.</p>'}
+      ${!stUi.ctech && Object.keys(byTech).length ? `<p class="text-[11px] font-bold text-gray-600 mt-3 mb-1">👷 Technician-wise</p>${Object.keys(byTech).sort((a,b)=>byTech[b].lines - byTech[a].lines).map(u=>`<div class="flex justify-between text-[11px] border-b border-gray-100 py-0.5"><button onclick="stUi.ctech='${u}'; renderMain()" class="text-blue-700 font-bold">${wzEsc(techName(u))}</button><span>${byTech[u].slips.size} slip • ${byTech[u].lines} lines</span></div>`).join("")}` : ""}
+    </div>` : '<p class="text-xs text-gray-400 text-center py-6">Abhi tak koi material issue nahi hua.</p>'}`;
+}
+
+/* ---------------- ⬇ Excel: stock register ---------------- */
+async function stExcel(){
+  if(!currentUser || !["store","admin"].includes(currentUser.role)) return;
+  const t = showToast("Excel ban rahi hai...");
+  try{ await ensureXlsxLib(); }catch(e){ hideToast(t); alert("Excel engine load nahi hua."); return; }
+  try{
+    const dt = iso=>iso ? `${pgDate(new Date(iso))} ${pgTime(new Date(iso))}` : "";
+    const items = stGroups(stItems()).flatMap(g=>g.items);
+    const wb = XLSX.utils.book_new();
+    const st = {ok:"OK", low:"LOW STOCK", out:"OUT OF STOCK"};
+    const ws1 = XLSX.utils.aoa_to_sheet([["STOCK - M/S TEJASAV ENTERPRISES INDIA PRIVATE LIMITED (store)"], [`${pgDate(new Date())} ${pgTime(new Date())}  |  ${items.length} items  |  low ${stCounts().low}  |  out ${stCounts().out}`], [],
+      ["S.No","Category","Item","SAP / code","Unit","Current stock","Low stock level","Status","Supplier","Order link"],
+      ...items.map((it,i)=>[i+1, stCatOf(it), it.itemName||"", it.sapCode||"", it.unit||"", stNum(it.stockQty), it.minQty==null ? "" : stNum(it.minQty), st[stStatus(it)], it.supplier||"", it.url||""])]);
+    ws1["!cols"] = [6,22,30,14,8,13,14,14,18,30].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws1, "Stock");
+    const rec = stLog.filter(l=>l.type==="receipt").sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+    const ws2 = XLSX.utils.aoa_to_sheet([["STOCK AAYA (receipts / check-in)"], [], ["S.No","Date","Item","Qty","Unit","Challan / bill no.","Source","Note","Before","After","By"],
+      ...rec.map((l,i)=>[i+1, dt(l.at), l.itemName||"", stNum(l.qty), l.unit||"", l.ref||"", ST_SRC[l.src]||l.src||"", l.note||"", l.before==null ? "" : stNum(l.before), l.after==null ? "" : stNum(l.after), techName(l.by)])]);
+    ws2["!cols"] = [6,17,30,9,8,18,22,20,9,9,14].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws2, "Stock aaya");
+    const iss = [...issues].sort((a,b)=>String(a.issuedAt).localeCompare(String(b.issuedAt)) || stNum(a.slipLine) - stNum(b.slipLine));
+    const ws3 = XLSX.utils.aoa_to_sheet([["MATERIAL ISSUE (slips)"], [], ["S.No","Date","Slip no.","Technician","Item","Qty","Unit","Customer","S.No (customer)","BP No","Issued by","Note"],
+      ...iss.map((x,i)=>[i+1, dt(x.issuedAt), x.slipNo||"", techName(x.technicianUsername), x.itemName||"", stNum(x.qty), x.unit||"", x.customerName||"", x.sn||"", x.bpNo||"", techName(x.issuedBy), x.note||""])]);
+    ws3["!cols"] = [6,17,18,16,30,9,8,20,10,13,14,20].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws3, "Issue");
+    const adj = stLog.filter(l=>l.type==="adjust" || l.type==="delete").sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+    const ws4 = XLSX.utils.aoa_to_sheet([["STOCK CORRECTION / ITEM HATAYA"], [], ["S.No","Date","Item","Type","Before","After","Change","Reason","By"],
+      ...adj.map((l,i)=>[i+1, dt(l.at), l.itemName||"", l.type==="delete" ? "Item hataya" : "Ginti / correction", stNum(l.before), stNum(l.after), stNum(l.qty), l.reason||"", techName(l.by)])]);
+    ws4["!cols"] = [6,17,30,18,9,9,9,30,14].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws4, "Correction");
+    hideToast(t);
+    await saveXlsxFile(wb, `Stock_Register_${localISODate()}.xlsx`);
+  }catch(e){ console.error(e); hideToast(t); alert("Excel nahi bani: " + (e && e.message || e)); }
+}
+
+/* ---------------- admin: the same store tools ---------------- */
+function renderAdminStoreReport(){
+  const pend = stPendingReqs().length, al = stAlertCount();
+  const tab = (k, l)=>`<button id="stAt_${k}" onclick="stUi.tab='${k}'; renderMain()" class="flex-1 text-xs font-bold py-2 rounded-lg ${stUi.tab===k ? "bg-[#0D904F] text-white" : "bg-white text-gray-600 border"}">${l}</button>`;
+  return `<h2 class="font-bold text-gray-800 mb-2">📦 Store — stock management</h2>
+    <div class="flex gap-1 mb-2">${tab("stock", `📦 Stock${al ? ` <span class="bg-orange-500 text-white rounded-full px-1.5">${al}</span>` : ""}`)}${tab("issue", `🚚 Issue${pend ? ` <span class="bg-red-600 text-white rounded-full px-1.5">${pend}</span>` : ""}`)}${tab("hist", "📜 History / 📊")}</div>
+    ${stUi.tab==="issue" ? renderStoreIssue() : stUi.tab==="hist" ? renderStoreHistory() : renderStStock()}`;
 }
 
 /* ============ TECHNICIAN: STOCK ============ */
@@ -1544,20 +1975,93 @@ function getTechBalances(username){
     balance: (issuedMap[name].issued||0) - (issuedMap[name].consumed||0)
   }));
 }
+/* v62: technician — 🛒 ask the store for material (a cart of store items, never more than in stock), see the answer
+   (✅ mila with the slip / 🟠 kam mila / ❌ mana with the reason), cancel while it waits; and what he holds (issued − used). */
+function stTechSeenAt(){ try{ return localStorage.getItem("st_seen_" + ((currentUser||{}).username||"")) || ""; }catch(e){ return ""; } }
+function stTechNewAnswers(){ const seen = stTechSeenAt(); return matReqs.filter(r=>currentUser && r.by===currentUser.username && ["issued","part","rejected"].includes(r.status) && String(r.doneAt||"") > seen).length; }
 function renderTechStock(){
-  const bal = getTechBalances(currentUser.username);
-  if(bal.length===0) return `<p class="text-gray-400 text-center mt-10">Abhi tak koi material issue nahi hua. Store se contact karein.</p>`;
-  return `<h2 class="font-bold text-gray-800 mb-3">🎒 My Issued Material</h2>
-    <div class="space-y-2">
-      ${bal.map(b=>`
-        <div class="bg-white rounded-lg shadow p-3">
-          <div class="flex justify-between items-center">
-            <p class="font-bold text-sm">${b.itemName}</p>
-            <span class="text-xs font-bold ${b.balance>0?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'} px-2 py-1 rounded">${b.balance} ${b.unit} left</span>
-          </div>
-          <p class="text-xs text-gray-500 mt-1">Issued: ${b.issued} • Used: ${b.consumed}</p>
-        </div>`).join("")}
-    </div>`;
+  const me = currentUser.username, bal = getTechBalances(me);
+  if(stTechNewAnswers()) setTimeout(()=>{ try{ localStorage.setItem("st_seen_" + me, new Date().toISOString()); }catch(e){} try{ updateNavBadges(); }catch(e){} }, 0);
+  const mineReq = matReqs.filter(r=>r.by===me).sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")));
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2 border-l-4 border-[#1a73e8]">
+      <p class="font-bold text-sm text-gray-800">🎒 Mera material</p>
+      <p class="text-[11px] text-gray-500">Store se material chahiye to 🛒 cart bana ke request bhejiye — store keeper issue karega aur aapke "Mere paas" me jud jayega.</p>
+      ${stReq.open ? "" : `<button id="stReqOpen" onclick="stReq.open=true; renderMain()" class="w-full bg-[#1a73e8] text-white font-bold py-2.5 rounded-lg mt-2 text-sm">🛒 Store se material maangein</button>`}
+    </div>
+    ${stReq.open ? renderStReqCart() : ""}
+    ${mineReq.length ? `<p class="text-xs font-bold text-gray-700 mt-3 mb-1">📨 Meri requests (${mineReq.length})</p>${mineReq.slice(0, 20).map(r=>`<div class="bg-white rounded-lg shadow p-2.5 mb-1.5 ${r.status==="pending" ? "border-l-4 border-[#1a73e8]" : r.status==="rejected" ? "border-l-4 border-red-400" : ""}">
+        <div class="flex justify-between gap-2"><p class="text-[11px] text-gray-500">${r.at ? `${pgDate(new Date(r.at))} ${pgTime(new Date(r.at))}` : ""}${r.customerName ? " • " + wzEsc(r.customerName) : ""}</p><span class="text-[10px] font-bold">${ST_REQ_ST[r.status]||wzEsc(r.status||"")}</span></div>
+        <p class="text-[11px] text-gray-700">${(r.items||[]).map(x=>`${wzEsc(x.itemName)}: <b>${stFmt(x.qty)}</b>${r.given ? ` → ${stFmt(r.given[x.itemId]||0)}` : ""} ${wzEsc(x.unit||"")}`).join(" • ")}</p>
+        ${r.storeNote ? `<p class="text-[11px] text-red-700">Store: ${wzEsc(r.storeNote)}</p>` : ""}${r.slipNo ? `<p class="text-[11px] text-green-700">Slip ${wzEsc(r.slipNo)}</p>` : ""}
+        ${r.status==="pending" ? `<button onclick="stReqCancel('${r.id}')" class="text-[11px] text-red-600 font-bold mt-1">✖ Request cancel karein</button>` : ""}
+      </div>`).join("")}` : ""}
+    <p class="text-xs font-bold text-gray-700 mt-3 mb-1">🎒 Mere paas (issue − lagaya)</p>
+    ${bal.length ? `<div class="space-y-2">${bal.map(b=>`<div class="bg-white rounded-lg shadow p-3">
+        <div class="flex justify-between items-center"><p class="font-bold text-sm">${wzEsc(b.itemName)}</p>
+          <span class="text-xs font-bold ${b.balance>0 ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"} px-2 py-1 rounded">${stFmt(b.balance)} ${wzEsc(b.unit)} left</span></div>
+        <p class="text-xs text-gray-500 mt-1">Issued: ${stFmt(b.issued)} • Used: ${stFmt(b.consumed)}</p></div>`).join("")}</div>`
+      : `<p class="text-gray-400 text-center mt-4 text-sm">Abhi tak koi material issue nahi hua.</p>`}`;
+}
+function stReqAdd(id, delta){
+  const it = stItems().find(x=>x.id===id); if(!it) return;
+  let n = Math.round((stNum(stReq.lines[id]) + delta)*1000)/1000, max = stNum(it.stockQty);
+  if(n > max){ n = max; showToast(`${it.itemName}: store me sirf ${stFmt(max)} ${it.unit||""} hai`); }
+  if(n <= 0) delete stReq.lines[id]; else stReq.lines[id] = n;
+  renderMain();
+}
+function stReqSet(id, v){
+  const it = stItems().find(x=>x.id===id); if(!it) return;
+  let n = Number(v); if(!isFinite(n) || n <= 0){ delete stReq.lines[id]; renderMain(); return; }
+  if(n > stNum(it.stockQty)){ n = stNum(it.stockQty); showToast(`${it.itemName}: store me sirf ${stFmt(n)} ${it.unit||""} hai`); }
+  stReq.lines[id] = n; renderMain();
+}
+function renderStReqCart(){
+  const lines = Object.keys(stReq.lines).map(id=>({it:stItems().find(x=>x.id===id), q:stNum(stReq.lines[id])})).filter(x=>x.it && x.q > 0);
+  const jobs = customers.filter(c=>c.status!=="completed");
+  const q = String(stUi.q||"").trim().toLowerCase();
+  const items = stItems().filter(it=>!q || [it.itemName, it.sapCode, stCatOf(it)].some(x=>String(x||"").toLowerCase().includes(q)));
+  return `<div class="bg-white rounded-lg shadow p-3 mb-2">
+      <p class="text-xs font-bold text-gray-700 mb-1">🛒 Request cart (${lines.length})</p>
+      ${lines.length ? lines.map(({it, q})=>`<div class="flex items-center gap-2 border-b border-gray-100 py-1.5">${stThumb(it, 30)}
+          <p class="flex-1 min-w-0 text-xs font-bold truncate">${wzEsc(it.itemName)}</p>
+          <button onclick="stReqAdd('${it.id}', -1)" class="w-8 h-8 rounded bg-red-600 text-white font-bold">−</button>
+          <input id="stRq_${it.id}" type="number" min="0" step="any" class="ff-input text-sm text-center" style="width:60px" value="${stFmt(q).replace(/,/g,"")}" onchange="stReqSet('${it.id}', this.value)">
+          <button onclick="stReqAdd('${it.id}', 1)" class="w-8 h-8 rounded bg-[#1a73e8] text-white font-bold">+</button><span class="text-[10px] text-gray-500 w-8">${wzEsc(it.unit||"")}</span></div>`).join("")
+        : '<p class="text-[11px] text-gray-400">Neeche item ke saamne ➕ dabayein.</p>'}
+      <label class="ff-label mt-2">Kis customer ke kaam ke liye (optional)</label>
+      <select id="stReqJob" class="ff-input text-xs" onchange="stReq.job=this.value"><option value="">— general —</option>${jobs.map(c=>`<option value="${c.id}" ${stReq.job===c.id ? "selected" : ""}>${wzEsc(c.name)} • S.No ${c.sn||"—"}</option>`).join("")}</select>
+      <input id="stReqNote" class="ff-input text-xs mt-2" placeholder="Note (kab chahiye / kyun)" value="${wzEsc(stReq.note)}" oninput="stReq.note=this.value">
+      <div class="flex gap-2 mt-2"><button onclick="stReq = {open:false, lines:{}, job:'', note:''}; renderMain()" class="flex-1 bg-gray-100 text-gray-700 text-xs font-bold py-2.5 rounded">✖ Band</button>
+        <button id="stReqSend" onclick="stReqSend()" class="flex-[2] bg-[#0D904F] text-white text-sm font-bold py-2.5 rounded ${lines.length ? "" : "opacity-50"}">📤 Store ko request bhejein</button></div>
+    </div>
+    <input id="stQ3" class="ff-input text-xs mb-2" placeholder="🔎 item dhoondhein" value="${wzEsc(stUi.q)}" onchange="stUi.q=this.value; renderMain()">
+    ${stGroups(items).map(g=>`<p class="text-xs font-bold text-gray-600 mt-2 mb-1">${ST_CAT_ICON[g.cat]||"📦"} ${wzEsc(g.cat)}</p>${g.items.map(it=>{ const inCart = stNum(stReq.lines[it.id]), out = stNum(it.stockQty) <= 0;
+        return `<div class="bg-white rounded-lg shadow p-2 mb-1 flex items-center gap-2 ${out ? "opacity-60" : ""}">${stThumb(it, 36)}
+          <div class="flex-1 min-w-0"><p class="text-[13px] font-bold text-gray-800 truncate">${wzEsc(it.itemName)}</p><p class="text-[11px]">${stQtyHtml(it)}${inCart ? ` <span class="text-blue-700 font-bold">• 🛒 ${stFmt(inCart)}</span>` : ""}</p></div>
+          <button id="stRqAdd_${it.id}" onclick="stReqAdd('${it.id}', 1)" ${out ? "disabled" : ""} class="w-10 h-10 rounded-lg ${out ? "bg-gray-300" : "bg-[#1a73e8]"} text-white text-xl font-bold">+</button></div>`; }).join("")}`).join("") || '<p class="text-xs text-gray-400 text-center py-4">Store me abhi koi item nahi.</p>'}`;
+}
+async function stReqSend(){
+  if(!currentUser || stBusy) return;
+  const lines = Object.keys(stReq.lines).map(id=>({it:stItems().find(x=>x.id===id), q:stNum(stReq.lines[id])})).filter(x=>x.it && x.q > 0);
+  if(!lines.length){ alert("Cart me koi item nahi."); return; }
+  const jobId = stReq.job || (document.getElementById("stReqJob")||{}).value || "", job = jobId ? customers.find(c=>c.id===jobId) : null;
+  stBusy = true;
+  try{
+    await rawDb.collection("matRequests").add({by:currentUser.username, byName:currentUser.name || "", role:currentUser.role, at:new Date().toISOString(), status:"pending",
+      items:lines.map(({it, q})=>({itemId:it.id, itemName:it.itemName, unit:it.unit||"", qty:q})), note:String(stReq.note||"").trim(),
+      ...(job ? {customerId:job.id, customerName:job.name||"", sn:job.sn||null} : {})});
+    stReq = {open:false, lines:{}, job:"", note:""};
+    showToast("📤 Request store ko chali gayi — issue hote hi yahan dikhega.");
+  }catch(e){ console.error(e); alert("Request nahi gayi — internet check karke dobara try karein."); }
+  finally{ stBusy = false; }
+  renderMain();
+}
+async function stReqCancel(id){
+  const r = matReqs.find(x=>x.id===id); if(!r || !currentUser || r.by!==currentUser.username || r.status!=="pending") return;
+  if(!confirm("Ye request cancel karni hai?")) return;
+  try{ await rawDb.doc("matRequests/" + id).update({status:"cancelled", cancelledAt:new Date().toISOString()}); showToast("Request cancel ho gayi."); }
+  catch(e){ console.error(e); alert("Cancel nahi hui."); }
+  renderMain();
 }
 
 /* ============ TECHNICIAN: MY CUSTOMERS (forms live inside each customer, not a separate menu) ============ */
@@ -4873,23 +5377,6 @@ function viewEmployeeDetailInner(username){
       </div>
     </div>`;
   document.getElementById("empDetailModal").innerHTML = html;
-}
-
-function renderAdminStoreReport(){
-  const rows = inventory.length ? inventory : SEED_INVENTORY.map((it,i)=>({id:"seed"+i, ...it}));
-  const sortedIssues = [...issues].sort((a,b)=>(b.issuedAt||"").localeCompare(a.issuedAt||""));
-  return `<h2 class="font-bold text-gray-800 mb-3">📦 Store Inventory Report</h2>
-    ${renderStoreAddItem()}
-    <div class="space-y-2 mb-5">
-      ${rows.map(it=>`<div class="bg-white rounded-lg shadow p-3 flex justify-between items-center gap-2"><div><span class="font-bold text-sm">${wzEsc(it.itemName)}</span>${it.sapCode ? `<p class="text-[10px] text-gray-400">Code ${wzEsc(it.sapCode)}</p>` : ""}</div><div class="flex items-center gap-2"><span class="text-sm whitespace-nowrap">${it.stockQty} ${it.unit} in stock</span>${inventory.length ? `<button onclick="addStock('${it.id}')" class="text-xs bg-[#EA8600] text-white px-2 py-1 rounded font-bold">+ Stock</button>` : ""}</div></div>`).join("")}
-    </div>
-    <h2 class="font-bold text-gray-800 mb-3">🚚 Recent Issues</h2>
-    <div class="space-y-2">
-      ${sortedIssues.slice(0,15).map(i=>`<div class="bg-white rounded-lg shadow p-3">
-        <p class="font-bold text-sm">${i.itemName} — ${i.qty} ${i.unit||""}</p>
-        <p class="text-xs text-gray-500">To: ${techName(i.technicianUsername)} • ${i.issuedAt?new Date(i.issuedAt).toLocaleString():""}</p>
-      </div>`).join("") || '<p class="text-gray-400 text-sm">No issues yet.</p>'}
-    </div>`;
 }
 
 /* ============ EXCEL EXPORT (all data) ============ */
@@ -11742,7 +12229,7 @@ async function cfbPdf(id){
      surveyor   customers he added or was given for survey
      telecaller customers given to him or whose calls he logged, QR leads, customer feedback, PIN requests,
                 and a phone / BP / name search (25 results at a time) for customers who call in
-     store      stock, issues, and the running jobs (to tag an issue to a job)
+     store      stock, issues, the stock log, technicians' material requests, and the running jobs (to tag an issue to a job)
      customer   only his own status page (portal/<key>, key = hash of mobile + PIN), never the customer list
      developer  the problem chat + the Security setup console (employee login records), nothing else
      every staff login also: his own petty cash memos (+ the cash given to him) and his own form collections, with their photos
@@ -11940,6 +12427,8 @@ function dataStop(){
 function dataReset(){   // nothing the last user saw stays in memory on this phone
   allUsers = []; inventory = []; issues = []; consumption = []; submissions = []; customers = []; attendance = []; safetyChecks = []; raBills = [];
   leads = []; custFeedbacks = []; portalRequests = []; staffDir = {}; custExtra = {}; lookupCache = {}; safetyHist = {}; layingRows = [];
+  stLog = []; matReqs = []; stDraft = null; stCart = {tech:"", job:"", lines:{}, note:"", reqId:""}; stReq = {open:false, lines:{}, job:"", note:""};
+  stUi = {tab:"stock", f:"all", q:"", cat:"", add:false, edit:null, checkin:false, focus:"", issueTab:"cart", histTab:"reg", histType:"", histTech:"", show:60, per:"month", ctech:"", ckey:"", lastSlip:"", showDone:false};
   pcList = []; pcSrc = {by:[], to:[]}; pcDraft = null; pcUi = {add:false, month:"", who:"", cat:"", st:"", give:false, balOpen:false};
   fdList = []; fdDraft = null; fdLoaded = false; fdUi = {tab:"", q:""}; svyBulkUi = {u:"", redo:false};
   tcAdmUi = {tc:"", st:"", q:"", only:"", open:{}, show:40}; tcUpdTab = "new";
@@ -12029,6 +12518,8 @@ async function dataStart(){
     custListen("all", cust());
     listen(C("inventory"), into(l=>{ inventory = l; }), "inventory");
     listen(C("issues"), into(l=>{ issues = l; }), "issues");
+    listen(C("stockLog"), into(l=>{ stLog = l; }), "stockLog");
+    listen(C("matRequests"), into(l=>{ matReqs = l; }), "matRequests");
     listen(C("consumption"), into(l=>{ consumption = l; }), "consumption");
     listen(C("submissions"), into(l=>{ submissions = l; }), "submissions");
     listen(C("attendance"), into(l=>{ attendance = l; }), "attendance");
@@ -12044,6 +12535,7 @@ async function dataStart(){
     custListen("asg", cust().where("assignedTechnician","==",me));
     WS_STAGES.forEach(st=>custListen(AL_FIELDS[st], cust().where(AL_FIELDS[st],"==",me)));
     listen(C("issues").where("technicianUsername","==",me), into(l=>{ issues = l; }), "issues");
+    listen(C("matRequests").where("by","==",me), into(l=>{ matReqs = l; }), "matRequests");
     listen(C("consumption").where("technicianUsername","==",me), into(l=>{ consumption = l; }), "consumption");
     listen(C("submissions").where("technicianUsername","==",me), into(l=>{ submissions = l; }), "submissions");
     listen(C("inventory"), into(l=>{ inventory = l; }), "inventory");
@@ -12062,6 +12554,8 @@ async function dataStart(){
     custListen("run", cust().where("status","==","assigned"));
     listen(C("inventory"), into(l=>{ inventory = l; }), "inventory");
     listen(C("issues"), into(l=>{ issues = l; }), "issues");
+    listen(C("stockLog"), into(l=>{ stLog = l; }), "stockLog");
+    listen(C("matRequests"), into(l=>{ matReqs = l; }), "matRequests");
   }
   if(role!=="admin"){                 // v60: his own petty cash memos + the cash the admin gave him + his own form collections
     listen(C("pettyCash").where("by","==",me), into(l=>{ pcSrc.by = l; pcMerge(); }), "pettyCash");
@@ -13382,7 +13876,7 @@ service cloud.firestore {
     }
     match /inventory/{id} {
       allow read: if isStaff();
-      allow create, update: if isRole('store');
+      allow create, update, delete: if isRole('store');
     }
     match /stockLog/{id} {
       allow read, create: if isRole('store');
@@ -13459,6 +13953,14 @@ service cloud.firestore {
       allow delete: if isStaff() && resource.data.by == me()
         && ((resource.data.pcol == 'pettyCash' && get(/databases/$(database)/documents/pettyCash/$(resource.data.pid)).data.status == 'pending')
           || (resource.data.pcol == 'formDocs' && get(/databases/$(database)/documents/formDocs/$(resource.data.pid)).data.status != 'accepted'));
+    }
+    // material requests: a technician asks the store (only his own, only while waiting he may cancel); the store keeper answers all
+    match /matRequests/{id} {
+      allow read: if isRole('store') || (isStaff() && resource.data.by == me());
+      allow create: if isStaff() && request.resource.data.by == me() && request.resource.data.status == 'pending';
+      allow update: if isRole('store') && request.resource.data.by == resource.data.by;
+      allow update: if isStaff() && resource.data.by == me() && resource.data.status == 'pending' && request.resource.data.status == 'cancelled'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']);
     }
     // public QR form, status-page feedback and PIN requests: anyone may send, only the team reads
     match /leads/{id} {
@@ -13629,7 +14131,7 @@ async function secRoleTest(){
   const plan = {
     technician: u=>[["apne customers (main)", C("customers").where("assignedTechnician","==",u), true], ["SL ke customers", C("customers").where("alSL","==",u), true], ["GI ke customers", C("customers").where("alGI","==",u), true],
       ["NG ke customers", C("customers").where("alNG","==",u), true], ["Restoration ke customers", C("customers").where("alREST","==",u), true],
-      ["apna material", C("issues").where("technicianUsername","==",u), true], ["apne forms", C("submissions").where("technicianUsername","==",u), true],
+      ["apna material", C("issues").where("technicianUsername","==",u), true], ["apni material requests", C("matRequests").where("by","==",u), true], ["sab ki material requests (nahi milni chahiye)", C("matRequests").limit(1), false], ["apne forms", C("submissions").where("technicianUsername","==",u), true],
       ["aaj ka safety check", C("safety_checks").where("username","==",u).where("date","==",day), true], ["stock list", C("inventory"), true], ["team list", C("staffPublic"), true],
       ["forms ki fixed details", fs.doc("settings/formDefaults"), true], ["invoice / bank details (nahi milne chahiye)", fs.doc("settings/invoiceCfg"), false], ["developer chat (apna)", C("devChat").where("threadId","==",u), true],
       ["login records (nahi milne chahiye)", C("users").limit(1), false], ["sab customers (nahi milne chahiye)", C("customers").limit(1), false]],
@@ -13640,6 +14142,7 @@ async function secRoleTest(){
       ["payout rates", fs.doc("settings/payoutRates"), true],
       ["bills (nahi milne chahiye)", C("bills").limit(1), false]],
     store: u=>[["chal rahe kaam", C("customers").where("status","==","assigned"), true], ["stock", C("inventory"), true], ["issue history", C("issues"), true],
+      ["stock aaya / correction", C("stockLog"), true], ["technicians ki material requests", C("matRequests"), true],
       ["leads (nahi milne chahiye)", C("leads").limit(1), false]],
   };
   // v60: every role also its own petty cash memos, the cash given to it and its own form collections — nobody else's
@@ -13738,7 +14241,7 @@ async function wizGaugeThumb(c, k, imgId){
    no customers, bills or stock.
    Every employee: a 💬 button; topic chips with quick tips (chatbot style); each message carries the app version, screen and the
    last errors on the phone so the developer can find the cause. Each employee reads only his own thread. */
-const APP_VERSION = "v61 · 21.10.2026";
+const APP_VERSION = "v62 · 23.10.2026";
 const DEV_USER = "dev.support";                       // employee usernames are letters + digits only, so no employee can get this one
 // the first password (given to the developer, not in the app — only its salted SHA-256): his first login makes his own account
 const DEV_INIT_SALT = "png-dev-init|v1|";
