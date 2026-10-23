@@ -4586,7 +4586,7 @@ function renderAdminOverview(){
     <button onclick="setView('docs')" class="w-full bg-[#1a73e8] text-white font-bold py-2.5 rounded-lg mb-2">📂 Form collection — documents + photos (PDF / Excel) ${fdNewCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${fdNewCount()} naye poore</span>` : ""}</button>
     <button onclick="setView('petty')" class="w-full bg-[#8430CE] text-white font-bold py-2.5 rounded-lg mb-2">🧾 Petty cash — daily memo + bill ${pcPendCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${pcPendCount()} pass karne hain</span>` : ""}</button>
     <button onclick="setView('master')" class="w-full bg-[#0D904F] text-white font-bold py-2.5 rounded-lg mb-2">🗂 Master Sheet (live) + Forms status</button>
-    <button onclick="setView('tcupdates')" class="w-full bg-[#1a73e8] text-white font-bold py-2.5 rounded-lg mb-2">📞 Telecaller updates ${tcUnreadCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${tcUnreadCount()} naye</span>` : ""}</button>
+    <button onclick="setView('tcupdates')" class="w-full bg-[#1a73e8] text-white font-bold py-2.5 rounded-lg mb-2">📞 Telecaller updates + diye customers ${tcUnreadCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${tcUnreadCount()} naye</span>` : ""}</button>
     <button onclick="setView('cfbAdmin')" class="w-full bg-yellow-500 text-white font-bold py-2.5 rounded-lg mb-2">⭐ Customer feedback (Excel / PDF) ${cfbFwdCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${cfbFwdCount()} naye</span>` : ""}</button>
     <button onclick="setView('surveys')" class="w-full bg-[#EA8600] text-white font-bold py-2.5 rounded-lg mb-2">🧭 Survey reports (preview / PDF) ${svyNewCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${svyNewCount()} naye</span>` : ""}</button>
     <button onclick="setView('leads')" class="w-full bg-teal-600 text-white font-bold py-2.5 rounded-lg mb-2">📥 QR connection forms + QR code ${leadNewCount() ? `<span class="bg-red-600 rounded-full px-2 ml-1 text-xs">${leadNewCount()} naye</span>` : ""}</button>
@@ -9724,7 +9724,8 @@ function usersOfRole(role){ const fromDb = allUsers.filter(u=>u.role===role); re
 const userOpts = (role, sel)=>usersOfRole(role).map(u=>`<option value="${u.username}" ${sel===u.username?"selected":""}>${wzEsc(u.name)} (${u.username})</option>`).join("");
 
 /* ---------- admin -> telecaller: assign customers (status call / reverify), telecaller replies, admin confirms ---------- */
-const TC_TASK = {status:"Status call + feedback", reverify:"Reverify (details dobara confirm)"};
+const TC_TASK = {status:"Status call + feedback", reverify:"Reverify (details dobara confirm)", review:"Review (admin ke sawal par dobara call)"};
+const TC_TASK_SHORT = {status:"Status call", reverify:"Reverify", review:"Review"};
 const TC_CONF = {done:"✅ Ho gaya", pending:"⏳ Baaki", problem:"⚠ Problem"};
 const TC_MOOD = {happy:"Khush", ok:"Theek", upset:"Naraz"};
 const TC_ASK = [["SL","SL (service line)"],["GI","GI piping"],["MTR","Meter"],["NG","Gas chalu (NG)"],["REST","Restoration"]];
@@ -9737,7 +9738,7 @@ async function tcAssignOne(cid){
   const u = (document.getElementById("tcSel_"+cid)||{}).value || "", kind = (document.getElementById("tcKind_"+cid)||{}).value || "status";
   if(!u){ alert("Telecaller chuniye."); return; }
   if(!(await saveJobField(cid, tcPatch(u, kind, "")))) return;
-  showToast(`${c.name}: ${techName(u)} ko ${kind==="reverify" ? "reverify" : "status call"} ke liye diya`);
+  showToast(`${c.name}: ${techName(u)} ko ${TC_TASK_SHORT[kind] || "status call"} ke liye diya`);
   renderMain();
 }
 let tcBulkUi = {u:"", kind:"status", note:""};
@@ -9766,11 +9767,11 @@ async function tcAssignBulk(){
 function tcChip(c){
   if(!c.tcAssigned && !(c.tcFeedback||[]).length) return "";
   const fb = c.tcFeedback || [], last = fb[fb.length-1], unread = fb.filter(f=>!f.ackAt).length;
-  return `<p class="text-[11px] mt-1 bg-blue-50 text-blue-800 rounded px-2 py-1">📞 ${c.tcAssigned ? `${wzEsc(techName(c.tcAssigned))} • ${TC_TASK[c.tcTask]||"Status call"}` : "Telecaller"}${last ? ` • last reply ${fpDate(String(last.at).slice(0,10))}: ${wzEsc(TC_RESULT[last.result]||last.result||"")}` : " • reply abhi nahi"}${unread ? ` <b class="text-red-600">(${unread} naya)</b>` : ""}</p>`;
+  return `<p class="text-[11px] mt-1 bg-blue-50 text-blue-800 rounded px-2 py-1">📞 ${c.tcAssigned ? `${wzEsc(techName(c.tcAssigned))} • ${TC_TASK[c.tcTask]||"Status call"}` : "Telecaller"}${last ? ` • last reply ${fpDate(String(last.at).slice(0,10))}: ${wzEsc(TC_RESULT[last.result]||last.result||"")}` : " • reply abhi nahi"}${unread ? ` <b class="text-red-600">(${unread} naya)</b>` : ""}</p>${currentUser && currentUser.role==="admin" && c.tcAssigned ? `<button onclick="tcAdmOpen('${c.id}')" class="w-full text-xs bg-blue-50 text-blue-800 font-bold py-1.5 rounded mt-1">📞 Telecaller ka reply dekhein / ↩ wapas bhejein</button>` : ""}`;
 }
 function tcAssignRow(c){
   return `<div class="flex gap-1 mt-2"><select id="tcSel_${c.id}" class="ff-input text-xs flex-1"><option value="">📞 telecaller…</option>${userOpts("telecaller", c.tcAssigned||"")}</select>
-    <select id="tcKind_${c.id}" class="ff-input text-xs" style="width:110px">${Object.keys(TC_TASK).map(k=>`<option value="${k}" ${(c.tcTask||(c.status==="pending"?"reverify":"status"))===k?"selected":""}>${k==="reverify"?"Reverify":"Status call"}</option>`).join("")}</select>
+    <select id="tcKind_${c.id}" class="ff-input text-xs" style="width:110px">${Object.keys(TC_TASK).map(k=>`<option value="${k}" ${(c.tcTask||(c.status==="pending"?"reverify":"status"))===k?"selected":""}>${TC_TASK_SHORT[k]}</option>`).join("")}</select>
     <button onclick="tcAssignOne('${c.id}')" class="bg-[#1a73e8] text-white text-xs font-bold px-2 rounded">Dein</button></div>`;
 }
 
@@ -9797,9 +9798,9 @@ function tcCard(c){
       <div><p class="font-bold text-sm">${wzEsc(c.name)} <span class="text-[11px] text-gray-400">S.No ${c.sn||"—"}</span></p>
         <p class="text-[11px] text-gray-500">${wzEsc(c.address||c.area||"")}</p>
         <p class="text-[11px] text-gray-400">📞 ${wzEsc(c.phone||"—")} ${c.bpNo?"• BP "+wzEsc(c.bpNo):""}</p></div>
-      <span class="text-[10px] font-bold px-2 py-1 rounded ${c.tcTask==="reverify"?"bg-purple-100 text-purple-700":"bg-blue-100 text-blue-700"}">${c.tcTask==="reverify"?"Reverify":"Status call"}</span>
+      <span class="text-[10px] font-bold px-2 py-1 rounded ${c.tcTask==="reverify" || c.tcTask==="review" ?"bg-purple-100 text-purple-700":"bg-blue-100 text-blue-700"}">${TC_TASK_SHORT[c.tcTask]||"Status call"}</span>
     </div>
-    ${c.tcNote ? `<p class="text-[11px] bg-yellow-50 rounded p-1 mt-1">Admin: ${wzEsc(c.tcNote)}</p>` : ""}
+    ${tcBackBanner(c) || (c.tcNote ? `<p class="text-[11px] bg-yellow-50 rounded p-1 mt-1">Admin: ${wzEsc(c.tcNote)}</p>` : "")}
     <div class="flex gap-2 my-2">${call?`<a href="${call}" class="flex-1 text-center bg-blue-600 text-white text-xs font-bold py-1.5 rounded">📞 Call</a>`:""}${wa?`<a href="${wa}" target="_blank" class="flex-1 text-center bg-green-600 text-white text-xs font-bold py-1.5 rounded">💬 WhatsApp</a>`:""}
       <button onclick="openChk('${c.id}')" class="flex-1 bg-[#1b365d] text-white text-xs font-bold py-1.5 rounded">📋 Checklist</button></div>
     ${portalPinBtn(c)}
@@ -9849,23 +9850,115 @@ let tcUpdTab = "new";
 function tcAllFeedback(){ const out = []; customers.forEach(c=>(c.tcFeedback||[]).forEach(f=>out.push({c, f}))); return out.sort((a,b)=>String(b.f.at).localeCompare(String(a.f.at))); }
 function tcUnreadCount(){ return customers.reduce((n,c)=>n + (c.tcFeedback||[]).filter(f=>!f.ackAt).length, 0); }
 function renderTcUpdates(){
-  const all = tcAllFeedback(), unread = all.filter(x=>!x.f.ackAt), list = tcUpdTab==="new" ? unread : all;
-  const tab = (k, l, n)=>`<button onclick="tcUpdTab='${k}'; renderMain()" class="flex-1 text-xs font-bold py-2 rounded ${tcUpdTab===k?"bg-[#1a73e8] text-white":"bg-white border text-gray-600"}">${l} (${n})</button>`;
-  const assigned = customers.filter(c=>c.tcAssigned), waiting = assigned.filter(tcNeedsReply);
+  const all = tcAllFeedback(), unread = all.filter(x=>!x.f.ackAt), assigned = customers.filter(c=>c.tcAssigned), waiting = assigned.filter(tcNeedsReply);
+  const tab = (k, l, n)=>`<button id="tcTab_${k}" onclick="tcUpdTab='${k}'; renderMain()" class="flex-1 text-[11px] font-bold py-2 rounded ${tcUpdTab===k?"bg-[#1a73e8] text-white":"bg-white border text-gray-600"}">${l} (${n})</button>`;
+  let body;
+  if(tcUpdTab==="cust") body = renderTcAdmCustomers(assigned);
+  else { const list = tcUpdTab==="new" ? unread : all;
+    body = `${unread.length ? `<button onclick="tcAckAll()" class="w-full bg-white border border-[#1a73e8] text-[#1a73e8] text-xs font-bold py-2 rounded mb-2">✓ Saare naye dekh liye</button>` : ""}
+      ${list.length ? `<div class="space-y-2">${list.slice(0,150).map(({c,f})=>tcUpdCard(c,f)).join("")}</div>` : `<p class="text-gray-400 text-center mt-8 text-sm">Koi update nahi.</p>`}`; }
   return `<button onclick="setView('overview')" class="text-sm text-[#0D904F] font-bold mb-2">← Back</button>
     <h2 class="font-bold text-gray-800 mb-1">📞 Telecaller updates</h2>
     <p class="text-[11px] text-gray-500 mb-2">${assigned.length} customers telecallers ko diye hain • ${waiting.length} ka reply abhi baaki. Customer ki baat app ke status se alag ho to laal dikhega.</p>
-    <div class="flex gap-1 mb-2">${tab("new","Naye",unread.length)}${tab("all","Sab",all.length)}</div>
-    ${unread.length ? `<button onclick="tcAckAll()" class="w-full bg-white border border-[#1a73e8] text-[#1a73e8] text-xs font-bold py-2 rounded mb-2">✓ Saare naye dekh liye</button>` : ""}
-    ${list.length ? `<div class="space-y-2">${list.slice(0,150).map(({c,f})=>tcUpdCard(c,f)).join("")}</div>` : `<p class="text-gray-400 text-center mt-8 text-sm">Koi update nahi.</p>`}`;
+    <div class="flex gap-1 mb-2">${tab("new","🆕 Naye reply",unread.length)}${tab("cust","📋 Diye customers",assigned.length)}${tab("all","🗂 Saare reply",all.length)}</div>
+    ${body}`;
 }
-function tcUpdCard(c, f){
+/* v61: admin — every customer given to a telecaller in one place (per telecaller: reply waiting / new reply / confirmed /
+   sent back), with all of the telecaller's replies; the admin confirms, or gives it back to the telecaller to reverify
+   or review with a note (it comes on top of the telecaller's "Reply baaki" list with that note). */
+let tcAdmUi = {tc:"", st:"", q:"", only:"", open:{}, show:40};
+const TC_ADM_ST = {new:"🆕 Naya reply — dekhna hai", back:"↩ Wapas bheja — reply baaki", wait:"⏳ Reply baaki", ok:"✅ Confirm ho gaya"};
+const TC_ADM_ORDER = {new:0, back:1, wait:2, ok:3};
+function tcIsBack(c){ return !!(c && c.tcBackAt && tcNeedsReply(c) && String(c.tcBackAt) >= String(c.tcAssignedAt||"")); }
+function tcAdmState(c){
+  if(tcNeedsReply(c)) return tcIsBack(c) ? "back" : "wait";
+  const fb = c.tcFeedback||[], last = fb[fb.length-1];
+  return last && !last.ackAt ? "new" : "ok";
+}
+function tcAdmOpen(cid){
+  tcAdmUi = {tc:"", st:"", q:"", only:cid, open:{[cid]:true}, show:40}; tcUpdTab = "cust";
+  if(currentView!=="tcupdates") setView("tcupdates"); else renderMain();
+}
+function renderTcAdmCustomers(assigned){
+  const tcs = [...new Set(assigned.map(c=>c.tcAssigned))].sort((a,b)=>String(techName(a)).localeCompare(String(techName(b))));
+  const q = String(tcAdmUi.q||"").trim().toLowerCase(), qd = q.replace(/\D/g,"");
+  const match = c=>(!tcAdmUi.only || c.id===tcAdmUi.only) && (!tcAdmUi.tc || c.tcAssigned===tcAdmUi.tc) && (!tcAdmUi.st || tcAdmState(c)===tcAdmUi.st)
+    && (!q || [c.name, c.bpNo, c.area, c.address].some(x=>String(x||"").toLowerCase().includes(q)) || String(c.sn||"")===q || (qd.length>=5 && [c.phone, c.altPhone].some(p=>String(p||"").replace(/\D/g,"").includes(qd))));
+  const list = assigned.filter(match).sort((a,b)=>(TC_ADM_ORDER[tcAdmState(a)] - TC_ADM_ORDER[tcAdmState(b)]) || String(b.tcLastAt||b.tcAssignedAt||"").localeCompare(String(a.tcLastAt||a.tcAssignedAt||"")));
+  const shown = list.slice(0, tcAdmUi.show);
+  const sum = tcs.map(u=>{ const mine = assigned.filter(c=>c.tcAssigned===u), n = k=>mine.filter(c=>tcAdmState(c)===k).length;
+    return `<button onclick="tcAdmUi.tc = tcAdmUi.tc==='${u}' ? '' : '${u}'; tcAdmUi.only=''; tcAdmUi.show=40; renderMain()" class="text-left bg-white rounded-lg shadow p-2 ${tcAdmUi.tc===u ? "ring-2 ring-[#1a73e8]" : ""}">
+      <p class="text-xs font-bold text-gray-800">📞 ${wzEsc(techName(u))}</p>
+      <p class="text-[10px] text-gray-500">${mine.length} diye • ⏳ ${n("wait") + n("back")} • 🆕 ${n("new")} • ✅ ${n("ok")}</p></button>`; }).join("");
+  return `${tcAdmUi.only ? `<button onclick="tcAdmUi.only=''; renderMain()" class="w-full bg-white border text-xs font-bold py-2 rounded-lg mb-2">✖ Sirf ek customer dikh raha hai — saare dikhayein</button>` : ""}
+    <div class="grid grid-cols-2 gap-2 mb-2">${sum || '<p class="text-xs text-gray-400 col-span-2">Abhi kisi telecaller ko customer nahi diye — Customers screen se "📞 telecaller ko dein".</p>'}</div>
+    <div class="grid grid-cols-2 gap-2 mb-2">
+      <select id="tcAdmSt" class="ff-input text-xs" onchange="tcAdmUi.st=this.value; tcAdmUi.show=40; renderMain()"><option value="">Sab status</option>${Object.keys(TC_ADM_ST).map(k=>`<option value="${k}" ${tcAdmUi.st===k?"selected":""}>${TC_ADM_ST[k]}</option>`).join("")}</select>
+      <input id="tcAdmQ" class="ff-input text-xs" placeholder="🔎 naam / phone / BP / S.No" value="${wzEsc(tcAdmUi.q)}" onchange="tcAdmUi.q=this.value; tcAdmUi.only=''; tcAdmUi.show=40; renderMain()">
+    </div>
+    <p class="text-[11px] text-gray-500 mb-2">${list.length} customers${tcAdmUi.tc ? " — " + wzEsc(techName(tcAdmUi.tc)) : ""}. Customer par tap karein — telecaller ka reply dekhein, ✅ confirm karein ya ↩ reverify / review ke liye wapas telecaller ko dein.</p>
+    ${shown.map(tcAdmRow).join("") || '<p class="text-xs text-gray-400 text-center py-4">Is filter me koi customer nahi.</p>'}
+    ${list.length > shown.length ? `<button onclick="tcAdmUi.show += 40; renderMain()" class="w-full bg-white border text-xs font-bold py-2 rounded-lg mt-1">⬇ Aur dikhayein (${list.length - shown.length} baaki)</button>` : ""}`;
+}
+function tcAdmRow(c){
+  const st = tcAdmState(c), open = !!tcAdmUi.open[c.id], fb = c.tcFeedback||[], last = fb[fb.length-1];
+  const cls = {new:"bg-red-100 text-red-700", back:"bg-purple-100 text-purple-700", wait:"bg-orange-100 text-orange-700", ok:"bg-green-100 text-green-800"}[st];
+  return `<div class="bg-white rounded-lg shadow mb-1.5 ${open ? "ring-1 ring-[#1a73e8]" : ""}">
+    <button id="tcrow_${c.id}" onclick="tcAdmUi.open['${c.id}'] = !tcAdmUi.open['${c.id}']; renderMain()" class="w-full text-left px-2.5 py-2 flex items-center gap-2">
+      <span class="flex-1 min-w-0">
+        <span class="block text-[13px] font-bold text-gray-800 truncate">${wzEsc(c.name||"—")} <span class="font-normal text-[10px] text-gray-500">S.No ${wzEsc(c.sn||"—")}${c.bpNo ? " • BP " + wzEsc(c.bpNo) : ""}</span></span>
+        <span class="block text-[10px] text-gray-500 truncate">📞 ${wzEsc(techName(c.tcAssigned))} • ${TC_TASK_SHORT[c.tcTask]||"Status call"} • diya ${fpDate(String(c.tcAssignedAt||"").slice(0,10))}${last ? " • reply: " + wzEsc(TC_RESULT[last.result]||last.result||"") : ""}</span>
+      </span>
+      <span class="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${cls}">${TC_ADM_ST[st]}</span>
+      <span class="text-gray-400 text-xs shrink-0">${open ? "▴" : "▾"}</span>
+    </button>
+    ${open ? `<div class="px-3 pb-3 border-t">${tcAdmDetail(c)}</div>` : ""}
+  </div>`;
+}
+function tcAdmDetail(c){
+  const fb = c.tcFeedback||[];
+  return `<p class="text-[11px] text-gray-600 mt-2">📍 ${wzEsc(c.address||c.area||"—")} • 📞 ${wzEsc(c.phone||"—")}</p>
+    ${c.tcNote ? `<p class="text-[11px] bg-yellow-50 rounded p-1 mt-1">Telecaller ko aapka note: ${wzEsc(c.tcNote)}</p>` : ""}
+    ${tcIsBack(c) ? `<p class="text-[11px] bg-purple-50 text-purple-800 rounded p-1 mt-1 font-bold">↩ ${fpDate(String(c.tcBackAt).slice(0,10))} ko ${TC_TASK_SHORT[c.tcTask]||""} ke liye wapas bheja — telecaller ka reply baaki</p>` : ""}
+    <div class="bg-gray-50 rounded p-2 mt-2"><p class="text-[11px] font-bold text-gray-600 mb-1">Kaam ka status (app ke hisaab se)</p>${custStagesHtml(c)}</div>
+    <p class="text-[11px] font-bold text-gray-700 mt-2">🗂 Telecaller ke reply (${fb.length})</p>
+    ${fb.length ? `<div class="space-y-2 mt-1">${[...fb].reverse().slice(0, 8).map(f=>tcUpdCard(c, f, true)).join("")}</div>` : '<p class="text-[11px] text-gray-400">Abhi koi reply nahi aaya.</p>'}
+    <div class="mt-2 border-t pt-2">
+      <p class="text-[11px] font-bold text-gray-700 mb-1">↩ Telecaller ko wapas dein — reverify / review</p>
+      <div class="grid grid-cols-2 gap-1">
+        <select id="tcbK_${c.id}" class="ff-input text-xs">${["reverify","review","status"].map(k=>`<option value="${k}">${TC_TASK[k]}</option>`).join("")}</select>
+        <select id="tcbU_${c.id}" class="ff-input text-xs">${userOpts("telecaller", c.tcAssigned||"")}</select>
+      </div>
+      <input id="tcbN_${c.id}" class="ff-input text-xs mt-1" placeholder="Kya dobara check / confirm karna hai? (telecaller ko dikhega) *">
+      <button onclick="tcSendBack('${c.id}')" class="w-full bg-[#8430CE] text-white text-xs font-bold py-2 rounded mt-1">↩ Wapas telecaller ko bhejein</button>
+    </div>`;
+}
+async function tcSendBack(cid){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const c = customers.find(x=>x.id===cid); if(!c) return;
+  const g = id=>String((document.getElementById(id)||{}).value||"").trim();
+  const u = g("tcbU_"+cid) || c.tcAssigned || "", kind = TC_TASK[g("tcbK_"+cid)] ? g("tcbK_"+cid) : "reverify", note = g("tcbN_"+cid);
+  if(!u){ alert("Telecaller chuniye."); return; }
+  if(!note){ alert("Telecaller ko kya dobara check karna hai — note likhiye."); return; }
+  const now = new Date().toISOString();
+  const fb = (c.tcFeedback||[]).map(f=>f.ackAt ? f : {...f, ackAt:now, ackBy:currentUser.username, ackNote:"↩ Wapas bheja: " + note});
+  const patch = {...tcPatch(u, kind, note), tcAssignedAt:now, tcBackAt:now, tcBackBy:currentUser.username, tcBackNote:note, tcRound:(Number(c.tcRound)||1) + 1, tcFeedback:fb};
+  if(!(await saveJobField(cid, patch))) return;
+  const el = document.getElementById("tcbN_"+cid); if(el) el.value = "";
+  showToast(`↩ ${c.name}: ${techName(u)} ko ${TC_TASK_SHORT[kind]} ke liye wapas bheja`); renderMain();
+}
+// telecaller's card: what the admin sent back and why
+function tcBackBanner(c){
+  if(!tcIsBack(c)) return "";
+  return `<p class="text-[11px] bg-purple-50 text-purple-800 rounded p-1.5 mt-1 font-bold">↩ Admin ne wapas bheja (${TC_TASK_SHORT[c.tcTask]||"Reverify"}) — ${fpDate(String(c.tcBackAt).slice(0,10))}: ${wzEsc(c.tcBackNote || c.tcNote || "")}</p>`;
+}
+function tcUpdCard(c, f, inDetail){
   const rows = TC_ASK.filter(([k])=>f.conf && f.conf[k]).map(([k,l])=>{ const said = f.conf[k], appDone = !!(f.app||{})[k];
     const clash = (said==="done" && !appDone) || (said==="pending" && appDone) || said==="problem";
     return `<div class="flex justify-between text-[11px] border-b border-gray-100 py-0.5 ${clash?"text-red-600 font-bold":""}"><span>${l}</span><span>App: ${appDone?"Done":"Pending"} • Customer: ${TC_CONF[said]}</span></div>`; }).join("");
   return `<div class="bg-white rounded-lg shadow p-3 ${f.ackAt?"":"border-l-4 border-red-400"}">
     <div class="flex justify-between items-start"><div><p class="font-bold text-sm">${wzEsc(c.name)} <span class="text-[11px] text-gray-400">S.No ${c.sn||"—"} ${c.bpNo?"• BP "+wzEsc(c.bpNo):""}</span></p>
-      <p class="text-[11px] text-gray-500">${wzEsc(techName(f.by))} • ${new Date(f.at).toLocaleString("en-IN")} • ${f.kind==="reverify"?"Reverify":"Status call"}</p></div>
+      <p class="text-[11px] text-gray-500">${wzEsc(techName(f.by))} • ${new Date(f.at).toLocaleString("en-IN")} • ${TC_TASK_SHORT[f.kind]||"Status call"}</p></div>
       <span class="text-[10px] font-bold px-2 py-1 rounded bg-gray-100">${wzEsc(TC_RESULT[f.result]||f.result||"")}</span></div>
     ${f.verify ? `<p class="text-[11px] mt-1 ${f.verify==="wrong"?"text-red-600 font-bold":"text-green-700"}">Details: ${f.verify==="wrong"?"kuch galat hai":"sab sahi"}</p>` : ""}
     ${rows ? `<div class="mt-1">${rows}</div>` : ""}
@@ -9874,6 +9967,7 @@ function tcUpdCard(c, f){
     ${f.next ? `<p class="text-[11px] mt-1">Agli call: <b>${fpDate(f.next)}</b></p>` : ""}
     ${f.ackAt ? `<p class="text-[11px] text-green-700 mt-1">✓ ${wzEsc(techName(f.ackBy))} ne dekha ${fpDate(String(f.ackAt).slice(0,10))}${f.ackNote?": "+wzEsc(f.ackNote):""}</p>`
       : `<div class="flex gap-1 mt-2"><input id="ackNote_${f.id}" class="ff-input text-xs flex-1" placeholder="Telecaller ko jawab (optional)"><button onclick="tcAck('${c.id}','${f.id}')" class="bg-[#0D904F] text-white text-xs font-bold px-3 rounded">✅ Confirm</button></div>`}
+    ${inDetail ? "" : `<button onclick="tcAdmOpen('${c.id}')" class="w-full text-[11px] bg-purple-50 text-purple-800 font-bold py-1.5 rounded mt-1">↩ Reverify / review ke liye wapas telecaller ko</button>`}
   </div>`;
 }
 async function tcAck(cid, fid){
@@ -11848,6 +11942,7 @@ function dataReset(){   // nothing the last user saw stays in memory on this pho
   leads = []; custFeedbacks = []; portalRequests = []; staffDir = {}; custExtra = {}; lookupCache = {}; safetyHist = {}; layingRows = [];
   pcList = []; pcSrc = {by:[], to:[]}; pcDraft = null; pcUi = {add:false, month:"", who:"", cat:"", st:"", give:false, balOpen:false};
   fdList = []; fdDraft = null; fdLoaded = false; fdUi = {tab:"", q:""}; svyBulkUi = {u:"", redo:false};
+  tcAdmUi = {tc:"", st:"", q:"", only:"", open:{}, show:40}; tcUpdTab = "new";
   try{ Object.keys(fileCache).forEach(k=>delete fileCache[k]); }catch(e){}
   delReqs = []; custHidden = []; devDel = []; delBusy = {}; custUi = {tab:"", add:false, open:{}, more:{}, show:40, filterOpen:false, allotOpen:false}; scopeUiState = {}; scopeOpenId = null;
   secUi = {busy:false, fresh:true, results:null, check:null, msg:"", sub:false, loadErr:""};      // new passwords of the last setup: gone at logout
@@ -13643,7 +13738,7 @@ async function wizGaugeThumb(c, k, imgId){
    no customers, bills or stock.
    Every employee: a 💬 button; topic chips with quick tips (chatbot style); each message carries the app version, screen and the
    last errors on the phone so the developer can find the cause. Each employee reads only his own thread. */
-const APP_VERSION = "v60 · 21.10.2026";
+const APP_VERSION = "v61 · 21.10.2026";
 const DEV_USER = "dev.support";                       // employee usernames are letters + digits only, so no employee can get this one
 // the first password (given to the developer, not in the app — only its salted SHA-256): his first login makes his own account
 const DEV_INIT_SALT = "png-dev-init|v1|";
